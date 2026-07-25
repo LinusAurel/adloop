@@ -50,6 +50,21 @@ das Strategist und Copywriter direkt verwenden können.
 - VoC-Sprache ist Rohstoff für Hooks: Der beste Hook klingt wie der Kunde,
   nicht wie die Marke.
 
+## Außensicht (Web-Recherche)
+
+Zusätzlich zur Website-Extraktion liefert die Recherche Suchtreffer und
+gescrapte fremde Fundstellen (Reviews, Foren, Vergleichsseiten). Daraus die
+optionalen Außensicht-Sektionen füllen — nur wenn Material vorhanden ist:
+
+- **`competitorProfiles`:** Wettbewerber und deren Positionierung (Angle,
+  Promise), nüchtern beschrieben — kein Bashing, keine Erfindungen.
+- **`externalObjections`:** Einwände aus der Außensicht — was Reviews und
+  Foren kritisch sehen, im Gegensatz zur Selbstdarstellung der Website.
+- **`marketContext`:** Markt-Kontext und Sophistication in 2-3 Sätzen (welche
+  Claims sind totgespielt, wie werben die Alternativen).
+- VoC-Zitate bevorzugt aus diesen externen Fundstellen übernehmen — wörtlich,
+  Originalsprache, mit erkennbarer Quelle.
+
 ## Evidence-Disziplin
 
 - Jede Aussage taggen: `real` (eigene Daten), `external` (belegte Fremdquelle

@@ -1,11 +1,12 @@
-// Stage 1 — Scout (SPEC §3/§5): URL -> Firecrawl scrape (JSON extraction) +
-// optional review search (non-blocking) -> LLM research doc (skill
-// research.md) -> brand row + evidence rows (tags hypothesis/external).
+// Stage 1 — Scout (SPEC §3/§5): URL -> Firecrawl scrape (JSON extraction) ->
+// Web-Recherche (#19: gezielte Suchen + Scrapes fremder Fundstellen,
+// non-blocking) -> LLM research doc (skill research.md) -> brand row +
+// evidence rows (tags hypothesis/external).
 // New brands get NO Meta publisher fields — publish stays disabled until a
 // human configures account, page and budget (Hard Stops 2/4).
 
 import { completeStructured, isMockMode, mockModeHint } from "../connectors/anthropic.ts";
-import { scrapeJson, searchWeb } from "../connectors/firecrawl.ts";
+import { firecrawlSearch, scrapeJson, type SearchHit } from "../connectors/firecrawl.ts";
 import { scoutResearchSchema, type ScoutResearch } from "../schemas.ts";
 import { loadSkill } from "../skills.ts";
 import {
@@ -19,6 +20,12 @@ import {
 import type { Brand, Evidence, EvidenceTag, Run } from "../types.ts";
 
 const AGENT = "Scout";
+
+// Hartes Budget pro Onboarding (#19): Web-Recherche darf Latenz kosten (der
+// Scout läuft als async Job hinter 202+runId), aber nie unbegrenzt.
+const MAX_SEARCHES = 4;
+const MAX_EXTRA_SCRAPES = 3;
+const RESULTS_PER_SEARCH = 5;
 
 export interface OnboardInput {
   url: string;
@@ -67,6 +74,10 @@ const SCRAPE_SCHEMA: Record<string, unknown> = {
   properties: {
     brandName: { type: "string", description: "Name der Marke/Firma" },
     product: { type: "string", description: "Was wird verkauft (Produkt/Service, konkret)" },
+    category: {
+      type: "string",
+      description: "Produkt-/Marktkategorie in 2-4 Worten (z. B. Ökostrom-Wechselservice)",
+    },
     targetAudience: { type: "string", description: "Erkennbare Zielgruppe der Website" },
     valueProposition: { type: "string", description: "Zentrales Nutzenversprechen" },
     pricingModel: { type: "string", description: "Preismodell (Einmalkauf, Abo, Preisspanne)" },
@@ -78,10 +89,56 @@ const SCRAPE_SCHEMA: Record<string, unknown> = {
 interface ScrapeExtraction {
   brandName?: string;
   product?: string;
+  category?: string;
   targetAudience?: string;
   valueProposition?: string;
   pricingModel?: string;
   tonality?: string;
+}
+
+// Extraktion pro externer Fundstelle (#19): kompakt genug für den Prompt,
+// wörtliche Zitate bleiben erhalten (VoC-Rohstoff, nicht glätten).
+const EXTERNAL_SOURCE_SCHEMA: Record<string, unknown> = {
+  type: "object",
+  properties: {
+    summary: {
+      type: "string",
+      description: "Kernaussage der Seite zur Marke bzw. Kategorie in 2-3 Sätzen",
+    },
+    customerQuotes: {
+      type: "array",
+      items: { type: "string" },
+      description: "Wörtliche Kundenzitate (Reviews, Foren) in Originalsprache, nicht glätten",
+    },
+    complaints: {
+      type: "array",
+      items: { type: "string" },
+      description: "Kritikpunkte, Einwände und negative Erfahrungen",
+    },
+    competitorsMentioned: {
+      type: "array",
+      items: { type: "string" },
+      description: "Genannte Wettbewerber/Alternativen inklusive deren Positionierung",
+    },
+  },
+  required: ["summary"],
+};
+
+interface ExternalExtraction {
+  summary?: string;
+  customerQuotes?: string[];
+  complaints?: string[];
+  competitorsMentioned?: string[];
+}
+
+interface ExternalSource {
+  url: string;
+  extraction: ExternalExtraction;
+}
+
+export interface WebResearch {
+  hits: SearchHit[];
+  sources: ExternalSource[];
 }
 
 // Minimal brand row for a freshly onboarded brand. No Meta publisher fields:
@@ -130,10 +187,126 @@ function addEvidence(
   return row;
 }
 
+// Gezielte Suchanfragen aus Brand-Name und (falls extrahiert) Kategorie —
+// hart auf MAX_SEARCHES begrenzt. Exportiert für Tests.
+export function buildResearchQueries(brandName: string, category?: string): string[] {
+  const queries = [
+    `${brandName} Erfahrungen`,
+    `${brandName} Bewertung`,
+    `${brandName} Alternative`,
+  ];
+  const cat = category?.trim();
+  if (cat) queries.push(`${cat} Anbieter Vergleich`);
+  return queries.slice(0, MAX_SEARCHES);
+}
+
+// Eigene Domain (inkl. Subdomains) aus den Treffern filtern — die Außensicht
+// soll aus fremden Quellen kommen, nicht von der Brand-Website selbst.
+function isOwnDomain(hitUrl: string, brandHost: string): boolean {
+  try {
+    const host = new URL(hitUrl).hostname.toLowerCase().replace(/^www\./, "");
+    return host === brandHost || host.endsWith(`.${brandHost}`);
+  } catch {
+    return true; // kaputte URLs gar nicht erst scrapen
+  }
+}
+
+// Research-Phase (#19): max. MAX_SEARCHES Suchen, danach die relevantesten
+// fremden Treffer (round-robin über die Queries, beste Position zuerst)
+// zusätzlich scrapen — max. MAX_EXTRA_SCRAPES. Fehler je Suche/Treffer werden
+// toleriert und geloggt; die Phase liefert schlimmstenfalls leere Listen.
+async function runWebResearch(
+  brandName: string,
+  category: string | undefined,
+  brandUrl: string,
+  runId: string,
+): Promise<WebResearch> {
+  const queries = buildResearchQueries(brandName, category);
+  const brandHost = new URL(brandUrl).hostname.toLowerCase().replace(/^www\./, "");
+
+  const perQuery: SearchHit[][] = [];
+  const seen = new Set<string>();
+  const hits: SearchHit[] = [];
+
+  for (const [i, query] of queries.entries()) {
+    appendRunLog(runId, AGENT, `Suche ${i + 1}/${queries.length}: ${query} …`);
+    try {
+      const results = await firecrawlSearch(query, RESULTS_PER_SEARCH);
+      const fresh = results.filter((hit) => {
+        if (seen.has(hit.url)) return false;
+        seen.add(hit.url);
+        return true;
+      });
+      hits.push(...fresh);
+      perQuery.push(fresh.filter((hit) => !isOwnDomain(hit.url, brandHost)));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      appendRunLog(
+        runId,
+        AGENT,
+        `Suche „${query}“ fehlgeschlagen (${message}) — weiter mit den übrigen`,
+        "warn",
+      );
+      perQuery.push([]);
+    }
+  }
+
+  // Round-robin über die Queries: erst die Top-Treffer jeder Suche, dann die
+  // zweiten usw., bis das Scrape-Budget erreicht ist.
+  const targets: SearchHit[] = [];
+  for (let rank = 0; targets.length < MAX_EXTRA_SCRAPES; rank += 1) {
+    let any = false;
+    for (const list of perQuery) {
+      const hit = list[rank];
+      if (!hit) continue;
+      any = true;
+      if (targets.length < MAX_EXTRA_SCRAPES && !targets.some((t) => t.url === hit.url)) {
+        targets.push(hit);
+      }
+    }
+    if (!any) break;
+  }
+
+  appendRunLog(
+    runId,
+    AGENT,
+    `Web-Recherche: ${hits.length} Treffer, ${targets.length} fremde Fundstellen werden gelesen`,
+  );
+
+  const sources: ExternalSource[] = [];
+  for (const [i, target] of targets.entries()) {
+    let host = target.url;
+    try {
+      host = new URL(target.url).hostname;
+    } catch {
+      // URL kam aus der Suche; im Zweifel die Roh-URL loggen.
+    }
+    appendRunLog(runId, AGENT, `liest Fundstelle ${i + 1}/${targets.length}: ${host} …`);
+    try {
+      const extraction = ((await scrapeJson(
+        target.url,
+        EXTERNAL_SOURCE_SCHEMA,
+        `Extrahiere, was diese Seite über „${brandName}“ bzw. die Produktkategorie sagt: Kernaussage, wörtliche Kundenzitate, Kritikpunkte, genannte Wettbewerber.`,
+      )) ?? {}) as ExternalExtraction;
+      sources.push({ url: target.url, extraction });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      appendRunLog(
+        runId,
+        AGENT,
+        `Fundstelle ${host} nicht lesbar (${message}) — übersprungen`,
+        "warn",
+      );
+    }
+  }
+
+  return { hits, sources };
+}
+
 function buildResearchPrompt(
   brand: Brand,
   extraction: ScrapeExtraction,
-  reviewSnippets: string[],
+  research: WebResearch,
 ): string {
   const parts: string[] = [];
   parts.push(`# Onboarding: ${brand.name} (${brand.url})`);
@@ -141,63 +314,53 @@ function buildResearchPrompt(
     "## Website-Extraktion (Firecrawl, strukturiert)\n" +
       JSON.stringify(extraction, null, 2),
   );
-  if (reviewSnippets.length > 0) {
+
+  if (research.hits.length > 0) {
     parts.push(
-      "## Fundstücke aus der Review-Suche (Web, ungefiltert)\n" +
-        reviewSnippets.map((s, i) => `### Quelle ${i + 1}\n${s}`).join("\n\n"),
+      "## Suchtreffer aus der Web-Recherche (Titel und Beschreibung)\n" +
+        research.hits
+          .slice(0, 12)
+          .map((hit) => `- ${hit.title} — ${hit.description} (${hit.url})`)
+          .join("\n"),
     );
-  } else {
+  }
+  if (research.sources.length > 0) {
     parts.push(
-      "## Review-Suche\nKeine externen Fundstücke verfügbar — arbeite nur mit " +
+      "## Externe Fundstellen (gescrapt, fremde Domains)\n" +
+        research.sources
+          .map(
+            (source, i) =>
+              `### Quelle ${i + 1}: ${source.url}\n` +
+              JSON.stringify(source.extraction, null, 2),
+          )
+          .join("\n\n"),
+    );
+  }
+  if (research.hits.length === 0 && research.sources.length === 0) {
+    parts.push(
+      "## Web-Recherche\nKeine externen Fundstücke verfügbar — arbeite nur mit " +
         "der Website-Extraktion und kennzeichne entsprechend mehr als Hypothese.",
     );
   }
+
   parts.push(
     "## Auftrag\nErstelle das Unified Research Document nach dem Skill und dem " +
       "vorgegebenen Schema: 2-4 Segmente mit Psychographie und Schmerzen, " +
       "geschätzte Awareness-Verteilung in Prozent (Summe ~100, explizit eine " +
       "Hypothese ohne Datenbasis), Competitor-Hinweise, wörtliche VoC-Sprache " +
-      "(nur aus den Fundstücken zitieren, nichts erfinden) und Einwände. Deutsch. " +
+      "(nur aus den Fundstücken zitieren, nichts erfinden) und Einwände. " +
+      "Fülle zusätzlich die Außensicht-Sektionen, sofern die Recherche Material " +
+      "liefert (sonst weglassen): competitorProfiles (Wettbewerber und deren " +
+      "Positionierung, nüchtern), externalObjections (Einwände aus der " +
+      "Außensicht: was Reviews und Foren kritisch sehen), marketContext " +
+      "(Markt-Kontext und Sophistication in 2-3 Sätzen). Voice of Customer " +
+      "heißt: wörtliche Kundenformulierungen aus den externen Fundstellen " +
+      "übernehmen, Originalsprache erhalten. Deutsch. " +
       "WICHTIG: kompakt schreiben — 1-3 Sätze pro Feld, keine Absätze, " +
-      "Gesamtdokument unter 500 Wörter. Das Doc ist Arbeitsgrundlage für den " +
+      "Gesamtdokument unter 600 Wörter. Das Doc ist Arbeitsgrundlage für den " +
       "Strategist, kein Bericht.",
   );
   return parts.join("\n\n");
-}
-
-// Non-blocking review search (SPEC §5: the scout path never dies on
-// Firecrawl) — failures are logged and tolerated.
-async function collectReviewSnippets(
-  brandName: string,
-  runId: string,
-): Promise<string[]> {
-  try {
-    const result = await searchWeb(`${brandName} Bewertungen Erfahrungen`, 4);
-    const docs = (result as { web?: { markdown?: string; url?: string }[] }).web ?? [];
-    const snippets = docs
-      .map((d) => {
-        const body = (d.markdown ?? "").trim();
-        if (!body) return null;
-        return `${d.url ?? "unbekannte Quelle"}\n${body.slice(0, 2500)}`;
-      })
-      .filter((s): s is string => s !== null)
-      .slice(0, 4);
-    appendRunLog(
-      runId,
-      AGENT,
-      `Review-Suche: ${snippets.length} verwertbare Fundstücke`,
-    );
-    return snippets;
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    appendRunLog(
-      runId,
-      AGENT,
-      `Review-Suche fehlgeschlagen (${message}) — weiter ohne externe Quellen`,
-      "warn",
-    );
-    return [];
-  }
 }
 
 function persistEvidence(
@@ -208,6 +371,8 @@ function persistEvidence(
 ): number {
   let count = 0;
   const site = brand.url;
+  const externalTag: EvidenceTag = hasExternalSources ? "external" : "hypothesis";
+  const externalSource = hasExternalSources ? "scout:web-search" : "scout:research";
 
   addEvidence(
     brand.slug,
@@ -247,18 +412,34 @@ function persistEvidence(
     count += 1;
   }
   for (const phrase of research.vocPhrases) {
-    addEvidence(
-      brand.slug,
-      hasExternalSources ? "external" : "hypothesis",
-      hasExternalSources ? "scout:web-search" : "scout:research",
-      `VoC-Sprache: ${phrase}`,
-    );
+    addEvidence(brand.slug, externalTag, externalSource, `VoC-Sprache: ${phrase}`);
     count += 1;
   }
   for (const objection of research.objections) {
     addEvidence(brand.slug, "hypothesis", "scout:research", `Einwand: ${objection}`);
     count += 1;
   }
+
+  // Außensicht-Sektionen (#19) — optional im Schema; getaggt als external,
+  // sobald fremde Quellen im Spiel waren.
+  for (const comp of research.competitorProfiles ?? []) {
+    addEvidence(
+      brand.slug,
+      externalTag,
+      externalSource,
+      `Wettbewerber „${comp.name}“: ${comp.positioning}`,
+    );
+    count += 1;
+  }
+  for (const objection of research.externalObjections ?? []) {
+    addEvidence(brand.slug, externalTag, externalSource, `Einwand (Außensicht): ${objection}`);
+    count += 1;
+  }
+  if (research.marketContext) {
+    addEvidence(brand.slug, externalTag, externalSource, `Markt-Kontext: ${research.marketContext}`);
+    count += 1;
+  }
+
   appendRunLog(runId, AGENT, `${count} Evidence-Einträge gespeichert (hypothesis/external)`);
   return count;
 }
@@ -284,7 +465,7 @@ export async function runScout(
     const extraction = ((await scrapeJson(
       url,
       SCRAPE_SCHEMA,
-      "Extrahiere Marke, Produkt, Zielgruppe, Nutzenversprechen, Preismodell und Tonalität dieser Website.",
+      "Extrahiere Marke, Produkt, Kategorie, Zielgruppe, Nutzenversprechen, Preismodell und Tonalität dieser Website.",
     )) ?? {}) as ScrapeExtraction;
     appendRunLog(
       run.id,
@@ -293,14 +474,17 @@ export async function runScout(
     );
 
     const brandName = input.name?.trim() || extraction.brandName?.trim() || slug;
-    appendRunLog(run.id, AGENT, `sucht Bewertungen und Erfahrungen zu „${brandName}“ …`);
-    const reviewSnippets = await collectReviewSnippets(brandName, run.id);
+    // Deep Research (#19): non-blocking — Fehler je Suche/Fundstelle werden
+    // innerhalb von runWebResearch toleriert, der Scout-Pfad stirbt nie daran.
+    appendRunLog(run.id, AGENT, `startet Web-Recherche zu „${brandName}“ …`);
+    const webResearch = await runWebResearch(brandName, extraction.category, url, run.id);
+    const hasExternalSources = webResearch.sources.length > 0;
 
     appendRunLog(run.id, AGENT, "destilliert das Unified Research Document …");
     const research = await completeStructured({
       role: "scout",
       system: loadSkill("research"),
-      prompt: buildResearchPrompt({ ...brand, name: brandName }, extraction, reviewSnippets),
+      prompt: buildResearchPrompt({ ...brand, name: brandName }, extraction, webResearch),
       schema: scoutResearchSchema,
       schemaName: "scout_research",
       // German prose is token-hungry; a truncated doc must never kill the
@@ -316,7 +500,7 @@ export async function runScout(
     upsert("brands", brand);
     appendRunLog(run.id, AGENT, `Brand „${brand.name}“ (${brand.slug}) im Store aktualisiert`);
 
-    persistEvidence(brand, research, reviewSnippets.length > 0, run.id);
+    persistEvidence(brand, research, hasExternalSources, run.id);
     appendRunLog(
       run.id,
       AGENT,

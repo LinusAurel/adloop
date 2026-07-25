@@ -105,6 +105,12 @@ Look: dunkel, wenige große Zahlen, Mint-Akzent (#00FF7F) — Lenn entscheidet f
 - **Stream D (Lenn):** UI-Polish, Deck, Video-Regie
 - Reihenfolge-Prinzip: **Der Demo-Pfad wird von hinten nach vorne abgesichert** — Publish zuerst beweisen, dann verschönern.
 
+## 7b. Deploy & Demo-URL
+
+- **Live-Läufe laufen LOKAL** (JSON-State + lange Runs vertragen kein Serverless). Lenn schaut über LAN/Hotspot zu (`--hostname 0.0.0.0`).
+- **Vercel = Showcase-Deploy am Nachmittag:** derselbe Code im Read-only-Modus (`SHOWCASE=1`), Daten-Snapshot eines echten Laufs wird zur Build-Zeit eingebacken — Board, Studio, Economics voll sichtbar, Mutations-Routen deaktiviert. Das ist die stabile Demo-URL für die Submission (Online-Erstbewertung!).
+- **`pitch/`** (HTML-Deck) wird mit deployt — eine URL für Demo und Deck.
+
 ## 8. Fallbacks (vorab entschieden, keine Tages-Diskussion)
 
 | Risiko | Fallback |

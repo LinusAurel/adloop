@@ -1,0 +1,28 @@
+# Ein Workflow, ein Job: dasselbe Gate wie lokal (scripts/verify.sh).
+# Kein Deploy, keine Matrix — CI beweist nur, dass der Stand baubar ist.
+name: ci
+
+on:
+  push:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: |
+          if [ ! -f package.json ]; then
+            echo "kein package.json — nichts zu installieren"
+            exit 0
+          fi
+          corepack enable
+          if [ -f pnpm-lock.yaml ]; then pnpm install --frozen-lockfile
+          elif [ -f package-lock.json ]; then npm ci
+          else npm install
+          fi
+      - name: Verify
+        run: bash scripts/verify.sh full

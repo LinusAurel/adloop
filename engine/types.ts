@@ -65,6 +65,11 @@ export interface Brand {
   targetCpa: number | null;
   guardrails: string[];
   copyRules?: CopyRules;
+  // Landing-page CTA (#17) — brand data, never hard-coded in engine/ or app/.
+  cta?: { label: string; subline?: string };
+  // Publisher fallback when an approved static has no companion ad_copy
+  // asset (#17); without it, neutral product/name texts are used.
+  fallbackCopy?: { message: string; headline: string };
   designTokens: Record<string, string>;
   meta: BrandMeta;
 }

@@ -37,7 +37,8 @@ Angle      { id, brandSlug, name, segment, pain, mechanism, hookDirection,
 Asset      { id, angleId, kind: 'ad_copy'|'static'|'lp', payload(json),
              criticScore?, criticNotes?, status: 'draft'|'approved'|'rejected'|'published',
              metaIds?: { creativeId?, adId? } }
-Run        { id, brandSlug, stage, log(jsonl), startedAt, finishedAt }   // füttert Live-Ticker
+Run        { id, brandSlug, stage, angleId?, log(jsonl), startedAt, finishedAt,
+             status?: 'running'|'finished'|'failed', error?, result? }   // füttert Live-Ticker + Job-Status (#7)
 Learning   { id, brandSlug, source: 'meta_insights'|'human_review',
              pattern, evidenceRefs, appliedToSkill? }
 ```
@@ -54,6 +55,8 @@ Angle-Diversität ist Schema-Pflicht: Der Strategist muss `hookDirection`/`segme
 - `POST /api/brands/:slug/publish` → Publisher: fehlende Kampagne/AdSet anlegen (einmalig, IDs in Brand speichern), approved Assets als Ads PAUSED. Idempotent: Idempotency-Key pro Asset, `status: PAUSED` wird SERVERSEITIG erzwungen (Request-Werte werden ignoriert), Doppel-Klick/Retry erzeugt keine Duplikate
 - `POST /api/brands/:slug/optimize` → Analyst/Mining (auch Ziel des n8n-Schedulers)
 - `GET  /api/brands/:slug/state` → alles fürs UI (polling reicht; SSE nur wenn trivial)
+
+Job-Muster für lange Läufe (#7): `angles/generate`, `assets/generate`, `publish` und `optimize` antworten sofort mit `202 { ok, runId }`; die Arbeit läuft als Fire-and-forget-Promise im Node-Prozess weiter (lokal/Render, kein Serverless). Status (`running`/`finished`/`failed` inkl. `error`) und beim Analyst das Ergebnis (`run.result`) stehen am Run und sind über `GET /state` sichtbar — die UI wartet nie auf die HTTP-Response.
 
 ## 3. Pipeline-Stufen: Verträge & Abnahme
 

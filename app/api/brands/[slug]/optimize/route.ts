@@ -1,11 +1,16 @@
 import { NextResponse } from "next/server";
 import { analyzeBrand, type AnalyzeOptions } from "@/engine/agents/analyst";
 import { requireAdmin } from "@/lib/guard";
+import { createRun, ensureBrandSeed, finishRun } from "@/engine/store";
+
+export const dynamic = "force-dynamic";
 
 // POST /api/brands/:slug/optimize -> Analyst/Mining (SPEC §2, Stufe 7).
 // Body optional: { mode: "auto" | "live" | "fixture" } — auto liest erst
 // echte Insights (Konnektivitätsbeweis) und fällt bei leerem Konto auf die
 // klar gelabelte Demo-Fixture zurück. Auch Ziel des n8n-Schedulers.
+// Job-Muster (#7): antwortet sofort mit 202 + runId; das AnalysisResult
+// landet als run.result im Store und ist über GET /state lesbar.
 export async function POST(
   req: Request,
   ctx: { params: Promise<{ slug: string }> },
@@ -22,12 +27,17 @@ export async function POST(
   } catch {
     // kein/ungültiger Body -> auto
   }
-  try {
-    const result = await analyzeBrand(slug, { mode });
-    return NextResponse.json({ ok: true, ...result });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    const status = message.startsWith("brand_not_found") ? 404 : 500;
-    return NextResponse.json({ ok: false, error: message }, { status });
+  if (!ensureBrandSeed(slug)) {
+    return NextResponse.json(
+      { ok: false, error: "brand_not_found" },
+      { status: 404 },
+    );
   }
+  const run = createRun(slug, "optimize");
+  // Backstop: the agent marks its own failures; this catches anything thrown
+  // before its try block and prevents an unhandled rejection.
+  void analyzeBrand(slug, { mode, run }).catch((err) => {
+    finishRun(run.id, err instanceof Error ? err.message : String(err));
+  });
+  return NextResponse.json({ ok: true, runId: run.id }, { status: 202 });
 }

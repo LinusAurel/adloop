@@ -69,6 +69,14 @@
   .mint { color: var(--mint); }
   .mono { font-family: var(--mono); }
 
+  /* Compact fallback for short laptop windows; projector (1080p) keeps full scale. */
+  @media (max-height: 860px) {
+    h1 { font-size: clamp(38px, 5vw, 72px); margin-bottom: 24px; }
+    p, li { font-size: clamp(21px, 1.8vw, 28px); }
+    .kicker { font-size: 18px; margin-bottom: 18px; }
+    .closing { font-size: clamp(32px, 3.8vw, 56px); }
+  }
+
   /* Slide 2: text + loop diagram side by side */
   .split { display: grid; grid-template-columns: 1.05fr 1fr; gap: 4vw; align-items: center; }
   .split svg { width: 100%; height: auto; max-height: 78vh; }

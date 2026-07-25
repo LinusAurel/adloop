@@ -107,12 +107,13 @@ function RowLine({ row }: { row: ClassifiedAdRow }) {
 
 export function EconomicsTab({ state }: { state: BrandState | null }) {
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [pendingRunId, setPendingRunId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const ranOnce = useRef(false);
 
+  // Job-Muster (#7): die Route antwortet sofort mit 202 + runId, das
+  // Ergebnis kommt als run.result über das bestehende /state-Polling.
   const run = useCallback(async (mode: "auto" | "live" | "fixture") => {
-    setLoading(true);
     setError(null);
     try {
       const res = await fetch(`/api/brands/loyft/optimize`, {
@@ -120,13 +121,13 @@ export function EconomicsTab({ state }: { state: BrandState | null }) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ mode }),
       });
-      const json = (await res.json()) as ({ ok: true } & AnalysisResult) | { ok: false; error: string };
+      const json = (await res.json()) as
+        | { ok: true; runId: string }
+        | { ok: false; error: string };
       if (!json.ok) throw new Error(json.error);
-      setAnalysis(json);
+      setPendingRunId(json.runId);
     } catch (e) {
       setError(e instanceof Error ? e.message : "unbekannter Fehler");
-    } finally {
-      setLoading(false);
     }
   }, []);
 
@@ -135,6 +136,22 @@ export function EconomicsTab({ state }: { state: BrandState | null }) {
     ranOnce.current = true;
     run("auto");
   }, [run]);
+
+  // Resolve the pending run from the polled state prop (MissionControl polls
+  // /state every 5s): finished -> result, failed -> error text.
+  useEffect(() => {
+    if (!pendingRunId) return;
+    const pending = state?.runs.find((r) => r.id === pendingRunId);
+    if (!pending || !pending.finishedAt) return;
+    if (pending.status === "failed") {
+      setError(pending.error ?? "Analyse fehlgeschlagen");
+    } else if (pending.result) {
+      setAnalysis(pending.result as AnalysisResult);
+    }
+    setPendingRunId(null);
+  }, [pendingRunId, state]);
+
+  const loading = pendingRunId !== null;
 
   const rows = analysis?.rows ?? [];
   const winners = rows.filter((r) => r.classification === "winner");

@@ -9,6 +9,7 @@ import type {
   AngleStatus,
   Asset,
   BrandState,
+  Run,
   RunLogEntry,
 } from "@/engine/types";
 import type { CopyVariant } from "@/engine/schemas";
@@ -45,7 +46,26 @@ function formatCpl(value?: number): string {
   return value === undefined || value === null ? "—" : `${value} €`;
 }
 
-function AngleCard({ angle, onChanged }: { angle: Angle; onChanged: () => void }) {
+// Mutations answer 202 + runId (#7); progress comes from /state polling.
+// The age cap keeps buttons usable if a server crash orphans a running run.
+const RUN_ACTIVE_MAX_AGE_MS = 15 * 60 * 1000;
+
+function isRunActive(run: Run): boolean {
+  if (run.finishedAt) return false;
+  return Date.now() - new Date(run.startedAt).getTime() < RUN_ACTIVE_MAX_AGE_MS;
+}
+
+function AngleCard({
+  angle,
+  pipelineRunning,
+  onChanged,
+}: {
+  angle: Angle;
+  // True while a run of stage "assets" for this angle is active in the store —
+  // survives reloads, cleared by /state polling once the run finishes (#7).
+  pipelineRunning: boolean;
+  onChanged: () => void;
+}) {
   const [busy, setBusy] = useState<string | null>(null);
 
   const act = async (action: "approve" | "kill") => {
@@ -61,12 +81,15 @@ function AngleCard({ angle, onChanged }: { angle: Angle; onChanged: () => void }
   const generateAssets = async () => {
     setBusy("assets");
     try {
+      // Route answers 202 immediately (#7); onChanged picks up the new run.
       await fetch(`/api/angles/${angle.id}/assets/generate`, { method: "POST" });
       onChanged();
     } finally {
       setBusy(null);
     }
   };
+
+  const assetsBusy = busy === "assets" || pipelineRunning;
 
   return (
     <Card className="bg-zinc-900 border-zinc-800">
@@ -104,11 +127,15 @@ function AngleCard({ angle, onChanged }: { angle: Angle; onChanged: () => void }
           <div className="pt-1">
             <Button
               size="sm"
-              disabled={busy !== null}
+              disabled={busy !== null || pipelineRunning}
               style={{ backgroundColor: MINT, color: "#002429" }}
               onClick={generateAssets}
             >
-              {busy === "assets" ? "Pipeline läuft …" : "Assets generieren"}
+              {assetsBusy ? (
+                <span className="animate-pulse">Pipeline läuft …</span>
+              ) : (
+                "Assets generieren"
+              )}
             </Button>
           </div>
         )}
@@ -261,12 +288,31 @@ export function MissionControl() {
   const generateAngles = async () => {
     setGenerating(true);
     try {
+      // Route answers 202 immediately (#7); load() picks up the running run,
+      // the 5s polling shows progress until it finishes.
       await fetch(`/api/brands/${BRAND_SLUG}/angles/generate`, { method: "POST" });
       await load();
     } finally {
       setGenerating(false);
     }
   };
+
+  const runs = state?.runs ?? [];
+  const strategistRunning = runs.some(
+    (r) => r.stage === "strategist" && isRunActive(r),
+  );
+  // Angles with an active assets run — drives the per-card busy state.
+  const runningAssetAngleIds = new Set(
+    runs
+      .filter((r) => r.stage === "assets" && isRunActive(r))
+      .map((r) => r.angleId),
+  );
+  // Subtle failure hint: only for the most recently started run, so the hint
+  // disappears as soon as a newer run starts or succeeds.
+  const latestRun = [...runs].sort((a, b) =>
+    b.startedAt.localeCompare(a.startedAt),
+  )[0];
+  const failedRun = latestRun?.status === "failed" ? latestRun : undefined;
 
   const tickerLines: (RunLogEntry & { runId: string })[] = (state?.runs ?? [])
     .flatMap((run) => run.log.map((entry) => ({ ...entry, runId: run.id })))
@@ -297,6 +343,12 @@ export function MissionControl() {
             {state ? `Brand: ${state.brand.name}` : "lädt …"}
             {error ? ` · Fehler: ${error}` : ""}
           </p>
+          {failedRun ? (
+            <p className="text-xs text-red-400">
+              Letzter Lauf ({failedRun.stage}) fehlgeschlagen:{" "}
+              {failedRun.error ?? "unbekannter Fehler"} — Details im Ticker
+            </p>
+          ) : null}
         </div>
         <Badge variant="outline" className="border-zinc-700 text-zinc-400">
           Ziel-CPA ≤ {state?.brand.targetCpa ?? "—"} €
@@ -315,11 +367,15 @@ export function MissionControl() {
           <div className="mb-4 flex justify-end">
             <Button
               size="sm"
-              disabled={generating}
+              disabled={generating || strategistRunning}
               style={{ backgroundColor: MINT, color: "#002429" }}
               onClick={generateAngles}
             >
-              {generating ? "Strategist läuft …" : "Angles generieren"}
+              {generating || strategistRunning ? (
+                <span className="animate-pulse">Strategist läuft …</span>
+              ) : (
+                "Angles generieren"
+              )}
             </Button>
           </div>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
@@ -337,7 +393,12 @@ export function MissionControl() {
                     </div>
                   ) : (
                     angles.map((a) => (
-                      <AngleCard key={a.id} angle={a} onChanged={load} />
+                      <AngleCard
+                        key={a.id}
+                        angle={a}
+                        pipelineRunning={runningAssetAngleIds.has(a.id)}
+                        onChanged={load}
+                      />
                     ))
                   )}
                 </section>
@@ -378,7 +439,10 @@ export function MissionControl() {
               {tickerLines.map((line, i) => (
                 <li key={`${line.runId}-${i}`}>
                   <span className="text-zinc-600">{line.ts}</span>{" "}
-                  <span style={{ color: MINT }}>{line.agent}</span> {line.message}
+                  <span style={{ color: MINT }}>{line.agent}</span>{" "}
+                  <span className={line.level === "error" ? "text-red-400" : undefined}>
+                    {line.message}
+                  </span>
                 </li>
               ))}
             </ul>

@@ -67,8 +67,10 @@ function buildPrompt(brand: Brand, evidence: Evidence[], existing: Angle[]): str
 
   parts.push(
     `## Auftrag\nErzeuge genau ${ANGLE_COUNT} diverse Angles nach dem Skill-Schema. ` +
-      "Beachte die Diversitäts-Pflicht (segment, pain, hookDirection paarweise unterschiedlich) " +
-      "und die CPL-Ziele der Brand für expectedCpl.",
+      "Beachte die Diversitäts-Pflicht (segment, pain, hookDirection paarweise unterschiedlich, " +
+      `${ANGLE_COUNT} verschiedene Kategorien aus der Taxonomie) und die CPL-Ziele der Brand ` +
+      "für expectedCpl. Setze für jeden Angle category, awarenessStage und eine " +
+      "falsifizierbare hypothesis nach dem Skill-Muster.",
   );
   return parts.join("\n\n");
 }

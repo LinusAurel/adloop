@@ -67,6 +67,11 @@ export interface Angle {
   id: string;
   brandSlug: string;
   name: string;
+  // Taxonomy fields (#18): optional for rows created before the upgrade;
+  // the strategist skill treats them as mandatory for new angles.
+  category?: string;
+  awarenessStage?: string;
+  hypothesis?: string;
   segment: string;
   pain: string;
   mechanism: string;

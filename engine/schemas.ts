@@ -5,8 +5,36 @@
 
 import { z } from "zod";
 
+// Angle taxonomy (skill angles.md): every angle belongs to exactly one
+// category; the generated set must cover distinct categories.
+export const ANGLE_CATEGORIES = [
+  "pain-point",
+  "desire-outcome",
+  "social-proof",
+  "objection-killer",
+  "identity-status",
+  "mechanism",
+  "urgency-cost-of-waiting",
+] as const;
+export type AngleCategory = (typeof ANGLE_CATEGORIES)[number];
+
+// Eugene Schwartz awareness stages (skill angles.md / research.md).
+export const AWARENESS_STAGES = [
+  "unaware",
+  "problem-aware",
+  "solution-aware",
+  "product-aware",
+  "most-aware",
+] as const;
+export type AwarenessStage = (typeof AWARENESS_STAGES)[number];
+
 export const angleDraftSchema = z.object({
   name: z.string().min(3).max(80),
+  // Optional at schema level so pre-existing rows and mock outputs stay
+  // valid — the strategist skill treats all three as mandatory fields.
+  category: z.enum(ANGLE_CATEGORIES).optional(),
+  awarenessStage: z.enum(AWARENESS_STAGES).optional(),
+  hypothesis: z.string().min(20).max(500).optional(),
   segment: z.string().min(5).max(300),
   pain: z.string().min(10).max(400),
   mechanism: z.string().min(10).max(400),
@@ -38,6 +66,20 @@ export function checkAngleDiversity(angles: AngleDraft[]): string[] {
           );
         }
       }
+    }
+  }
+  // Taxonomy coverage: when categories are present, no two angles may share
+  // one — the set must spread across distinct categories (skill angles.md).
+  const seenCategories = new Map<string, string>();
+  for (const a of angles) {
+    if (!a.category) continue;
+    const prev = seenCategories.get(a.category);
+    if (prev) {
+      violations.push(
+        `Angles „${prev}“ und „${a.name}“ haben dieselbe Kategorie ${a.category}`,
+      );
+    } else {
+      seenCategories.set(a.category, a.name);
     }
   }
   return violations;

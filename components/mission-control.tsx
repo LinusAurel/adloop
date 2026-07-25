@@ -378,7 +378,7 @@ function Sidebar({
   query,
   onQuery,
   brandName,
-  targetCpa,
+  target,
   brands,
   brandSlug,
   onBrand,
@@ -391,7 +391,8 @@ function Sidebar({
   query: string;
   onQuery: (q: string) => void;
   brandName?: string;
-  targetCpa?: number | null;
+  // Resolved campaign target (#17): campaign-level first, brand fallback.
+  target?: { metric: string; value: number } | null;
   brands: { slug: string; name: string }[];
   brandSlug: string;
   onBrand: (slug: string) => void;
@@ -521,7 +522,7 @@ function Sidebar({
               {brandName ?? "lädt …"}
             </span>
             <span className="block truncate text-[0.6875rem] tnum text-text-faint">
-              Ziel-CPA ≤ {targetCpa ?? "—"} €
+              Ziel-{target?.metric ?? "CPA"} ≤ {target?.value ?? "—"} €
             </span>
           </span>
           <ChevronsUpDown
@@ -1243,7 +1244,7 @@ export function MissionControl() {
         query={query}
         onQuery={setQuery}
         brandName={state?.brand.name}
-        targetCpa={state?.brand.targetCpa}
+        target={state?.economics.target}
         brands={brands}
         brandSlug={brandSlug}
         onBrand={switchBrand}

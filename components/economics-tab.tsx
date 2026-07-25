@@ -175,8 +175,9 @@ export function EconomicsTab({
   const learnings = state?.learnings ?? [];
 
   const cpl = analysis?.totals.cpl ?? null;
-  // Onboarded brands may carry targetCpa: null — treat like "no limit set".
-  const target = state?.brand.targetCpa ?? undefined;
+  // Resolved campaign target (#17): campaign-level first, brand fallback.
+  // Freshly onboarded brands may carry none — treat like "no limit set".
+  const target = state?.economics.target?.value ?? undefined;
   const underTarget = cpl !== null && target !== undefined && cpl <= target;
 
   return (

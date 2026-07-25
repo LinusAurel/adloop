@@ -3,6 +3,15 @@
 
 export type ConversionGoal = "website_lead";
 
+// Performance target on campaign level (#17): CPL or CPA plus a value in EUR.
+// brand.targetCpa stays as the brand-level fallback/default for new campaigns.
+export type TargetMetric = "CPL" | "CPA";
+
+export interface CampaignTarget {
+  metric: TargetMetric;
+  value: number;
+}
+
 // Deterministic copy rules per brand (Critic stage). Patterns are plain
 // RegExp sources so they can live in brand.json (data, not code).
 export interface ForbiddenPattern {
@@ -32,6 +41,9 @@ export interface BrandMeta {
   fixedDailyBudgetCents: number | null;
   campaignId?: string;
   adsetId?: string;
+  // Campaign-level target (#17); resolveCampaignTarget falls back to
+  // brand.targetCpa (metric CPA) when unset.
+  campaignTarget?: CampaignTarget;
 }
 
 export interface Brand {
@@ -130,6 +142,12 @@ export interface Learning {
   appliedToSkill?: string;
 }
 
+// Derived economics view (#17): the resolved campaign target the Analyst and
+// the UI work against (campaign target first, brand.targetCpa as fallback).
+export interface EconomicsState {
+  target: CampaignTarget | null;
+}
+
 export interface BrandState {
   brand: Brand;
   evidence: Evidence[];
@@ -137,4 +155,5 @@ export interface BrandState {
   assets: Asset[];
   runs: Run[];
   learnings: Learning[];
+  economics: EconomicsState;
 }

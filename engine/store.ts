@@ -10,6 +10,7 @@ import type {
   Asset,
   Brand,
   BrandState,
+  CampaignTarget,
   Evidence,
   Learning,
   Run,
@@ -98,6 +99,15 @@ export function ensureBrandSeed(slug: string): Brand | undefined {
   return brand;
 }
 
+// Campaign-level target with brand-level fallback (#17): the target on the
+// campaign (brand.meta.campaignTarget) wins; brand.json targetCpa stays the
+// default (metric CPA) for campaigns without an explicit target.
+export function resolveCampaignTarget(brand: Brand): CampaignTarget | null {
+  if (brand.meta.campaignTarget) return brand.meta.campaignTarget;
+  if (brand.targetCpa != null) return { metric: "CPA", value: brand.targetCpa };
+  return null;
+}
+
 export function getBrandState(slug: string): BrandState | undefined {
   const brand = ensureBrandSeed(slug);
   if (!brand) return undefined;
@@ -110,6 +120,7 @@ export function getBrandState(slug: string): BrandState | undefined {
     assets: readCollection("assets").filter((a) => angleIds.has(a.angleId)),
     runs: readCollection("runs").filter((r) => r.brandSlug === slug),
     learnings: readCollection("learnings").filter((l) => l.brandSlug === slug),
+    economics: { target: resolveCampaignTarget(brand) },
   };
 }
 

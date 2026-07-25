@@ -47,7 +47,8 @@
       "dsaPayor": "CREATORS (Demo)",
       "fixedDailyBudgetCents": null,
       "campaignId": "demo-camp-creators-001",
-      "adsetId": "demo-adset-creators-001"
+      "adsetId": "demo-adset-creators-001",
+      "campaignTarget": { "metric": "CPL", "value": 40 }
     }
   }
 ]

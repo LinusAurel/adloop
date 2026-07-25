@@ -17,6 +17,7 @@ import {
   finishRun,
   newId,
   readCollection,
+  resolveCampaignTarget,
   upsert,
 } from "../store.ts";
 import type { Angle, Brand, Evidence, Run } from "../types.ts";
@@ -37,9 +38,11 @@ function buildPrompt(brand: Brand, evidence: Evidence[], existing: Angle[]): str
   const parts: string[] = [];
   parts.push(`# Brand: ${brand.name} (${brand.url})`);
   parts.push(`Produkt: ${brand.product}`);
+  // Campaign-level target first, brand.targetCpa as fallback (#17).
+  const target = resolveCampaignTarget(brand);
   parts.push(
-    brand.targetCpa != null
-      ? `Ziel-CPA: ${brand.targetCpa} € (Conversion-Goal: ${brand.conversionGoal})`
+    target != null
+      ? `Ziel-${target.metric}: ${target.value} € (Conversion-Goal: ${brand.conversionGoal})`
       : `Ziel-CPA: noch nicht gesetzt — schätze expectedCpl marktüblich konservativ (Conversion-Goal: ${brand.conversionGoal})`,
   );
 

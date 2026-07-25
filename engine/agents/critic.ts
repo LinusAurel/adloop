@@ -83,6 +83,9 @@ export async function critiqueVariant(
     `- Schmerz: ${angle.pain}`,
     `- Mechanismus: ${angle.mechanism}`,
     `- Hook-Richtung: ${angle.hookDirection}`,
+    // Message-match criterion needs the falsifiable hypothesis when present.
+    ...(angle.hypothesis ? [`- Hypothese: ${angle.hypothesis}`] : []),
+    ...(angle.awarenessStage ? [`- Awareness-Stufe: ${angle.awarenessStage}`] : []),
     "",
     "## Zu prüfende Copy-Variante",
     JSON.stringify(variant, null, 2),

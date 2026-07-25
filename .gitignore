@@ -12,3 +12,14 @@ _local/
 .cursor/hooks.json
 .github/skills/
 .github/hooks/
+
+# Next.js / Build-Artefakte
+/.next/
+/out/
+*.tsbuildinfo
+
+# Run-Artefakte und JSON-Store (SPEC §0)
+data/
+
+# Worktrees (AGENTS.md Workflow)
+.worktrees/

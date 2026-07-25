@@ -13,7 +13,7 @@ import type {
   Evidence,
   Learning,
   Run,
-} from "./types";
+} from "./types.ts";
 
 export type CollectionName =
   | "brands"
@@ -32,7 +32,7 @@ interface CollectionTypes {
   learnings: Learning;
 }
 
-function dataDir(): string {
+export function dataDir(): string {
   return process.env.ADLOOP_DATA_DIR ?? path.join(process.cwd(), "data");
 }
 
@@ -111,6 +111,27 @@ export function getBrandState(slug: string): BrandState | undefined {
     runs: readCollection("runs").filter((r) => r.brandSlug === slug),
     learnings: readCollection("learnings").filter((l) => l.brandSlug === slug),
   };
+}
+
+export function createRun(brandSlug: string, stage: string): Run {
+  const run: Run = {
+    id: newId("run"),
+    brandSlug,
+    stage,
+    log: [],
+    startedAt: new Date().toISOString(),
+    finishedAt: null,
+  };
+  upsert("runs", run);
+  return run;
+}
+
+export function finishRun(runId: string): void {
+  const runs = readCollection("runs");
+  const run = runs.find((r) => r.id === runId);
+  if (!run) return;
+  run.finishedAt = new Date().toISOString();
+  writeCollection("runs", runs);
 }
 
 export function appendRunLog(

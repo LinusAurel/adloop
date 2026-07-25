@@ -4,6 +4,8 @@
 // the pipeline stays demoable end to end. Mock usage is clearly logged.
 
 import Anthropic from "@anthropic-ai/sdk";
+import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
+import type { z } from "zod";
 
 export type LlmRole = "strategist" | "copy" | "critic" | "analyst";
 
@@ -108,4 +110,40 @@ export async function complete(args: CompleteArgs): Promise<string> {
     .filter((block) => block.type === "text")
     .map((block) => block.text)
     .join("\n");
+}
+
+export interface StructuredArgs<T> extends CompleteArgs {
+  schema: z.ZodType<T>;
+  schemaName: string;
+}
+
+// Structured output via output_config.format (zod-validated by the SDK's
+// parse helper). In mock mode the deterministic example output is returned
+// without schema validation — mocks are approximations, not contract tests.
+export async function completeStructured<T>(args: StructuredArgs<T>): Promise<T> {
+  if (isMockMode()) {
+    console.log(
+      `[MOCK] anthropic: kein ANTHROPIC_API_KEY gesetzt — deterministischer Beispiel-Output für Rolle "${args.role}" (unvalidiert)`,
+    );
+    return JSON.parse(MOCK_OUTPUTS[args.role]) as T;
+  }
+
+  const client = new Anthropic();
+  const response = await client.messages.parse({
+    model: modelFor(args.role),
+    max_tokens: args.maxTokens ?? 8192,
+    system: args.system,
+    messages: [{ role: "user", content: args.prompt }],
+    output_config: { format: zodOutputFormat(args.schema) },
+  });
+
+  if (response.stop_reason === "refusal") {
+    throw new Error(`LLM-Refusal für Rolle "${args.role}" — Prompt prüfen`);
+  }
+  if (response.parsed_output == null) {
+    throw new Error(
+      `Strukturierter Output für "${args.schemaName}" konnte nicht geparst werden (stop_reason: ${response.stop_reason})`,
+    );
+  }
+  return response.parsed_output;
 }

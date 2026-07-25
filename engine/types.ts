@@ -3,6 +3,18 @@
 
 export type ConversionGoal = "website_lead";
 
+// Deterministic copy rules per brand (Critic stage). Patterns are plain
+// RegExp sources so they can live in brand.json (data, not code).
+export interface ForbiddenPattern {
+  pattern: string;
+  flags?: string;
+  reason: string;
+}
+
+export interface CopyRules {
+  forbiddenPatterns: ForbiddenPattern[];
+}
+
 export interface BrandMeta {
   adAccountId: string;
   pageId: string;
@@ -26,6 +38,7 @@ export interface Brand {
   conversionGoal: ConversionGoal;
   targetCpa: number;
   guardrails: string[];
+  copyRules?: CopyRules;
   designTokens: Record<string, string>;
   meta: BrandMeta;
 }

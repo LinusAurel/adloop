@@ -30,11 +30,31 @@
         {
           "pattern": "\\bgarantiert\\w*",
           "flags": "i",
-          "reason": "Keine garantierten Karriere- oder Lern-Ergebnisse versprechen"
+          "reason": "Nie garantierte Ergebnisse versprechen"
+        },
+        {
+          "pattern": "\\bguaranteed?\\b",
+          "flags": "i",
+          "reason": "Nie garantierte Ergebnisse versprechen"
         },
         {
           "pattern": "[—–]",
           "reason": "Keine Gedankenstriche in kundengerichteter Copy (Komma, Doppelpunkt oder neuer Satz)"
+        },
+        {
+          "pattern": "\\b(revolution\\w*|bahnbrechend\\w*|game.?changer)\\b",
+          "flags": "i",
+          "reason": "Kein KI-Hype-Vokabular ohne konkreten Nutzen"
+        },
+        {
+          "pattern": "\\b(hier klicken|click here)\\b",
+          "flags": "i",
+          "reason": "Schwache CTA-Floskeln vermeiden"
+        },
+        {
+          "pattern": "\\b(abzock\\w*|versager|schlechteste)\\b",
+          "flags": "i",
+          "reason": "Kein Wettbewerber-Bashing; sachlicher Vergleich ist ok"
         }
       ]
     },
@@ -50,7 +70,9 @@
       "pageId": "demo-page-creators-000",
       "pixelId": "demo-pixel-creators-000",
       "leadEventName": "Lead",
-      "geoCountries": ["DE"],
+      "geoCountries": [
+        "DE"
+      ],
       "optimizationGoal": "OFFSITE_CONVERSIONS",
       "billingEvent": "IMPRESSIONS",
       "specialAdCategories": [],
@@ -59,7 +81,10 @@
       "fixedDailyBudgetCents": null,
       "campaignId": "demo-camp-creators-001",
       "adsetId": "demo-adset-creators-001",
-      "campaignTarget": { "metric": "CPL", "value": 40 }
+      "campaignTarget": {
+        "metric": "CPL",
+        "value": 40
+      }
     }
   }
 ]

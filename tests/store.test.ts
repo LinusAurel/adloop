@@ -56,21 +56,21 @@ test("write/read roundtrip and upsert by id", () => {
 });
 
 // Runs against the committed example brand — real brand data stays local
-// and untracked (#17), so CI clones only carry brands/_example/.
+// and untracked (#17), so CI clones only carry brands/creators-demo/.
 test("getBrandState seeds a brand from brands/<slug>/brand.json", () => {
-  const state = getBrandState("_example");
-  assert.ok(state, "_example state should exist via seed");
-  assert.equal(state.brand.slug, "_example");
+  const state = getBrandState("creators-demo");
+  assert.ok(state, "creators-demo state should exist via seed");
+  assert.equal(state.brand.slug, "creators-demo");
   assert.equal(state.brand.conversionGoal, "website_lead");
   assert.ok(state.brand.targetCpa != null && state.brand.targetCpa > 0);
   assert.equal(state.angles.length, 0);
 });
 
 test("resolveCampaignTarget: Kampagnen-Ziel schlägt Brand-Fallback (#17)", () => {
-  const state = getBrandState("_example");
+  const state = getBrandState("creators-demo");
   assert.ok(state);
   // The example seed carries a campaign-level target …
-  assert.deepEqual(state.economics.target, { metric: "CPL", value: 25 });
+  assert.deepEqual(state.economics.target, { metric: "CPL", value: 40 });
   // … without one, brand.targetCpa acts as CPA fallback.
   const brand = {
     ...state.brand,

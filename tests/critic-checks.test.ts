@@ -7,11 +7,11 @@ import { deterministicChecks } from "../engine/agents/critic.ts";
 import type { CopyVariant } from "../engine/schemas.ts";
 import type { Brand } from "../engine/types.ts";
 
-// The tests run against the committed example brand (brands/_example) so
+// The tests run against the committed example brand (brands/creators-demo) so
 // brand.json and the checks are verified together — real brand data stays
 // local and untracked (#17), so CI clones cannot depend on it.
 const brand = JSON.parse(
-  readFileSync(path.join(process.cwd(), "brands", "_example", "brand.json"), "utf8"),
+  readFileSync(path.join(process.cwd(), "brands", "creators-demo", "brand.json"), "utf8"),
 ) as Brand;
 const rules = brand.copyRules;
 
@@ -24,7 +24,7 @@ const cleanVariant: CopyVariant = {
 };
 
 test("Beispiel-brand.json enthält copyRules mit Verbots-Mustern", () => {
-  assert.ok(rules, "copyRules fehlen in brands/_example/brand.json");
+  assert.ok(rules, "copyRules fehlen in brands/creators-demo/brand.json");
   assert.ok(rules.forbiddenPatterns.length >= 5);
 });
 
@@ -55,10 +55,10 @@ test("leerer CTA wird erkannt", () => {
 
 test("verbotene Begriffe werden per Regex erkannt", () => {
   const cases: Array<[keyof CopyVariant, string, string]> = [
-    ["primary", "Guaranteed better than supermarket coffee.", "guarantee claim"],
-    ["primary", "Skip the bargain-bin beans.", "competitor bashing"],
-    ["primary", "Our AI picks the beans for you.", "mechanism instead of result"],
-    ["cta", "Click here", "Click here"],
+    ["primary", "Garantiert mehr Leads in 7 Tagen.", "guarantee claim"],
+    ["primary", "Die Abzock-Agenturen von nebenan.", "competitor bashing"],
+    ["primary", "Ein revolutionärer Game-Changer für dein Business.", "hype without proof"],
+    ["cta", "Hier klicken", "weak CTA"],
   ];
   for (const [field, text, label] of cases) {
     const violations = deterministicChecks({ ...cleanVariant, [field]: text }, rules);
@@ -71,7 +71,7 @@ test("Gedankenstrich in kundengerichteter Copy wird erkannt", () => {
     { ...cleanVariant, primary: "No effort — we handle everything for you." },
     rules,
   );
-  assert.ok(violations.some((v) => v.includes("em dashes")));
+  assert.ok(violations.some((v) => v.includes("Gedankenstrich")));
 });
 
 test("ohne Regeln laufen nur die generischen Checks", () => {

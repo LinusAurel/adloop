@@ -40,7 +40,7 @@ export function summarizeAnalysis(analysis: AnalysisResult, learnings: Learning[
     analysis.source === "fixture"
       ? "Datenbasis: Demo-Fixture (klar gelabelt, kein Live-Ergebnis)."
       : "Datenbasis: echte Meta-Insights.",
-    `Gesamt: Spend ${euro(analysis.totals.spend)}, ${analysis.totals.leads} Leads, CPL ${euro(analysis.totals.cpl)} bei Ziel-CPA ≤ ${analysis.targetCpa} €.`,
+    `Gesamt: Spend ${euro(analysis.totals.spend)}, ${analysis.totals.leads} Leads, CPL ${euro(analysis.totals.cpl)} bei Ziel-${analysis.target?.metric ?? "CPA"} ≤ ${analysis.targetCpa} €.`,
     `Klassifikation: ${winners.length} Winner, ${losers.length} Loser, ${rest}× zu wenig Daten.`,
   ];
   for (const w of winners) {

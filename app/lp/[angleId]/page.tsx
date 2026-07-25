@@ -91,17 +91,19 @@ export default async function LandingPage(
           {variant.primary}
         </p>
 
+        {/* CTA-Texte kommen aus den Brand-Daten (brand.cta, #17), Fallback ist
+            der CTA der freigegebenen Ad-Copy — nie hartkodierte Brand-Sprache. */}
         <div className="flex flex-col items-start gap-3">
           <a
             href={ctaHref}
             className="rounded-xl px-6 py-3 text-base font-semibold transition-opacity hover:opacity-90"
             style={{ backgroundColor: mint, color: ink }}
           >
-            Kostenlosen Tarif-Check starten
+            {brand.cta?.label ?? variant.cta ?? "Mehr erfahren"}
           </a>
-          <p className="text-xs text-zinc-500">
-            Unverbindlicher Erst-Check. Kostet nichts, wenn Du nicht sparst.
-          </p>
+          {brand.cta?.subline ? (
+            <p className="text-xs text-zinc-500">{brand.cta.subline}</p>
+          ) : null}
         </div>
 
         <footer className="mt-8 border-t border-white/10 pt-6 text-xs text-zinc-500">

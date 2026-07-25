@@ -15,6 +15,7 @@ const analysis: AnalysisResult = {
   source: "fixture",
   note: "Demo-Daten",
   totals: { spend: 214.5, leads: 11, cpl: 19.5 },
+  target: { metric: "CPA", value: 100 },
   targetCpa: 100,
   rows: [
     {

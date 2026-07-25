@@ -162,3 +162,55 @@ export const scoutResearchSchema = z.object({
   marketContext: z.string().min(10).max(2000).optional(),
 });
 export type ScoutResearch = z.infer<typeof scoutResearchSchema>;
+
+// PATCH /api/brands/:slug (#17) — human-editable brand fields, everything
+// the Brand schema offers as data. Deliberately NOT editable: slug
+// (identity), conversionGoal (fixed today) and the Meta publisher IDs
+// (campaignId/adsetId are publisher-owned, account/page/pixel are set by a
+// human directly in brand.json). Strict: unknown keys are rejected.
+export const campaignTargetSchema = z.object({
+  metric: z.enum(["CPL", "CPA"]),
+  value: z.number().min(1).max(10000),
+});
+
+export const brandPatchSchema = z
+  .strictObject({
+    name: z.string().min(1).max(80),
+    url: z.url().max(300),
+    whatsappUrl: z.url().max(300),
+    product: z.string().min(10).max(2000),
+    // Brand-level default target for new campaigns; null clears it.
+    targetCpa: z.number().min(1).max(10000).nullable(),
+    guardrails: z.array(z.string().min(3).max(300)).max(24),
+    copyRules: z.strictObject({
+      forbiddenPatterns: z
+        .array(
+          z.strictObject({
+            pattern: z.string().min(1).max(300),
+            flags: z.string().max(8).optional(),
+            reason: z.string().min(3).max(300),
+          }),
+        )
+        .max(32),
+    }),
+    cta: z.strictObject({
+      label: z.string().min(3).max(60),
+      subline: z.string().min(3).max(200).optional(),
+    }),
+    fallbackCopy: z.strictObject({
+      message: z.string().min(10).max(1200),
+      headline: z.string().min(3).max(120),
+    }),
+    designTokens: z.record(z.string().min(1).max(60), z.string().max(600)),
+    meta: z
+      .strictObject({
+        // Campaign-level target (#17); null clears back to the brand default.
+        campaignTarget: campaignTargetSchema.nullable(),
+        // Default daily budget — set by a human via this admin-guarded route,
+        // never by an agent (Hard Stop 4).
+        fixedDailyBudgetCents: z.number().int().min(100).max(10000000).nullable(),
+      })
+      .partial(),
+  })
+  .partial();
+export type BrandPatch = z.infer<typeof brandPatchSchema>;

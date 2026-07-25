@@ -38,7 +38,10 @@ import type {
 import type { CopyVariant } from "@/engine/schemas";
 import { EconomicsTab } from "@/components/economics-tab";
 
-const DEFAULT_BRAND_SLUG = "loyft";
+// Default brand is data/config, not code (#17): env override first, sonst die
+// versionierte Demo-Brand (brands/<slug> echter Brands liegt nur lokal).
+const DEFAULT_BRAND_SLUG =
+  process.env.NEXT_PUBLIC_DEFAULT_BRAND ?? "creators-demo";
 const POLL_MS = 5000;
 
 // Mutations answer 202 + runId (#7); progress comes from /state polling.
@@ -378,7 +381,7 @@ function Sidebar({
   query,
   onQuery,
   brandName,
-  targetCpa,
+  target,
   brands,
   brandSlug,
   onBrand,
@@ -391,7 +394,8 @@ function Sidebar({
   query: string;
   onQuery: (q: string) => void;
   brandName?: string;
-  targetCpa?: number | null;
+  // Resolved campaign target (#17): campaign-level first, brand fallback.
+  target?: { metric: string; value: number } | null;
   brands: { slug: string; name: string }[];
   brandSlug: string;
   onBrand: (slug: string) => void;
@@ -521,7 +525,7 @@ function Sidebar({
               {brandName ?? "lädt …"}
             </span>
             <span className="block truncate text-[0.6875rem] tnum text-text-faint">
-              Ziel-CPA ≤ {targetCpa ?? "—"} €
+              Ziel-{target?.metric ?? "CPA"} ≤ {target?.value ?? "—"} €
             </span>
           </span>
           <ChevronsUpDown
@@ -1134,7 +1138,8 @@ function TickerView({
 /* ---------------------------------------------------------------- shell -- */
 
 export function MissionControl() {
-  // Brand switcher: every brand in the store is selectable, loyft is default.
+  // Brand switcher: every brand in the store is selectable; the default
+  // comes from NEXT_PUBLIC_DEFAULT_BRAND (or the versioned demo brand).
   const [brandSlug, setBrandSlug] = useState(DEFAULT_BRAND_SLUG);
   const [brands, setBrands] = useState<{ slug: string; name: string }[]>([]);
   const [state, setState] = useState<BrandState | null>(null);
@@ -1243,7 +1248,7 @@ export function MissionControl() {
         query={query}
         onQuery={setQuery}
         brandName={state?.brand.name}
-        targetCpa={state?.brand.targetCpa}
+        target={state?.economics.target}
         brands={brands}
         brandSlug={brandSlug}
         onBrand={switchBrand}

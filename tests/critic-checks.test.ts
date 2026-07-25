@@ -7,23 +7,24 @@ import { deterministicChecks } from "../engine/agents/critic.ts";
 import type { CopyVariant } from "../engine/schemas.ts";
 import type { Brand } from "../engine/types.ts";
 
-// The tests run against the REAL loyft copy rules so brand.json and the
-// checks are verified together.
+// The tests run against the committed example brand (brands/_example) so
+// brand.json and the checks are verified together — real brand data stays
+// local and untracked (#17), so CI clones cannot depend on it.
 const brand = JSON.parse(
-  readFileSync(path.join(process.cwd(), "brands", "loyft", "brand.json"), "utf8"),
+  readFileSync(path.join(process.cwd(), "brands", "_example", "brand.json"), "utf8"),
 ) as Brand;
 const rules = brand.copyRules;
 
 const cleanVariant: CopyVariant = {
-  hook: "Deine Stromrechnung weiß mehr als Du.",
+  hook: "Your coffee should taste like its roast date, not its shelf life.",
   primary:
-    "Schick uns ein Foto Deiner Abrechnung. Wir rechnen ehrlich nach, ob Du zu viel zahlst. Kostet nichts, wenn Du nicht sparst.",
-  headline: "Sparpotenzial in 2 Minuten prüfen",
-  cta: "Rechnung schicken",
+    "Tell us how you drink your coffee. We build a subscription that fits your taste, and you can pause it anytime.",
+  headline: "Fresh roasts on subscription",
+  cta: "Browse the sampler pack",
 };
 
-test("loyft brand.json enthält copyRules mit Verbots-Mustern", () => {
-  assert.ok(rules, "copyRules fehlen in brands/loyft/brand.json");
+test("Beispiel-brand.json enthält copyRules mit Verbots-Mustern", () => {
+  assert.ok(rules, "copyRules fehlen in brands/_example/brand.json");
   assert.ok(rules.forbiddenPatterns.length >= 5);
 });
 
@@ -54,11 +55,10 @@ test("leerer CTA wird erkannt", () => {
 
 test("verbotene Begriffe werden per Regex erkannt", () => {
   const cases: Array<[keyof CopyVariant, string, string]> = [
-    ["primary", "Unser Wechselservice übernimmt alles.", "Wechselservice"],
-    ["primary", "Garantiert günstiger als Dein alter Tarif.", "Garantie"],
-    ["primary", "Loyft übernimmt den Wechsel für Dich.", "Großschreibung"],
-    ["primary", "Unsere KI vergleicht alle Tarife für Dich.", "KI"],
-    ["cta", "Hier klicken", "Hier klicken"],
+    ["primary", "Guaranteed better than supermarket coffee.", "guarantee claim"],
+    ["primary", "Skip the bargain-bin beans.", "competitor bashing"],
+    ["primary", "Our AI picks the beans for you.", "mechanism instead of result"],
+    ["cta", "Click here", "Click here"],
   ];
   for (const [field, text, label] of cases) {
     const violations = deterministicChecks({ ...cleanVariant, [field]: text }, rules);
@@ -68,23 +68,15 @@ test("verbotene Begriffe werden per Regex erkannt", () => {
 
 test("Gedankenstrich in kundengerichteter Copy wird erkannt", () => {
   const violations = deterministicChecks(
-    { ...cleanVariant, primary: "Kein Aufwand — wir übernehmen alles für Dich." },
+    { ...cleanVariant, primary: "No effort — we handle everything for you." },
     rules,
   );
-  assert.ok(violations.some((v) => v.includes("Gedankenstrich")));
-});
-
-test("kleingeschriebenes Du/Dein wird erkannt", () => {
-  const violations = deterministicChecks(
-    { ...cleanVariant, primary: "Wir rechnen ehrlich nach, ob du zu viel zahlst." },
-    rules,
-  );
-  assert.ok(violations.some((v) => v.includes("großgeschrieben")));
+  assert.ok(violations.some((v) => v.includes("em dashes")));
 });
 
 test("ohne Regeln laufen nur die generischen Checks", () => {
   const violations = deterministicChecks(
-    { ...cleanVariant, primary: "Unsere KI hilft dir — garantiert! ".repeat(3) },
+    { ...cleanVariant, primary: "Our AI helps you — guaranteed! ".repeat(3) },
     undefined,
   );
   // Forbidden patterns require brand rules; the generic limit checks pass here.

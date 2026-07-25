@@ -3,6 +3,19 @@
 
 export type ConversionGoal = "website_lead";
 
+// Performance target on campaign level (#17): CPL or CPA plus a value in EUR.
+// brand.targetCpa stays as the brand-level fallback/default for new campaigns.
+export type TargetMetric = "CPL" | "CPA";
+
+export interface CampaignTarget {
+  metric: TargetMetric;
+  value: number;
+}
+
+// Meta delivery status for campaigns and ads (#17). Objects are always
+// created PAUSED; ACTIVE requires a deliberate human click (status route).
+export type DeliveryStatus = "ACTIVE" | "PAUSED";
+
 // Deterministic copy rules per brand (Critic stage). Patterns are plain
 // RegExp sources so they can live in brand.json (data, not code).
 export interface ForbiddenPattern {
@@ -32,6 +45,12 @@ export interface BrandMeta {
   fixedDailyBudgetCents: number | null;
   campaignId?: string;
   adsetId?: string;
+  // Campaign-level target (#17); resolveCampaignTarget falls back to
+  // brand.targetCpa (metric CPA) when unset.
+  campaignTarget?: CampaignTarget;
+  // Last delivery status set via the status route (#17). Publishes always
+  // create PAUSED; activation is a deliberate human click.
+  campaignStatus?: DeliveryStatus;
 }
 
 export interface Brand {
@@ -46,6 +65,11 @@ export interface Brand {
   targetCpa: number | null;
   guardrails: string[];
   copyRules?: CopyRules;
+  // Landing-page CTA (#17) — brand data, never hard-coded in engine/ or app/.
+  cta?: { label: string; subline?: string };
+  // Publisher fallback when an approved static has no companion ad_copy
+  // asset (#17); without it, neutral product/name texts are used.
+  fallbackCopy?: { message: string; headline: string };
   designTokens: Record<string, string>;
   meta: BrandMeta;
 }
@@ -94,6 +118,8 @@ export interface Asset {
   criticNotes?: string;
   status: AssetStatus;
   metaIds?: { creativeId?: string; adId?: string };
+  // Delivery status of the published ad (#17), set via the status route.
+  deliveryStatus?: DeliveryStatus;
 }
 
 export interface RunLogEntry {
@@ -135,6 +161,12 @@ export interface Learning {
   appliedToSkill?: string;
 }
 
+// Derived economics view (#17): the resolved campaign target the Analyst and
+// the UI work against (campaign target first, brand.targetCpa as fallback).
+export interface EconomicsState {
+  target: CampaignTarget | null;
+}
+
 export interface BrandState {
   brand: Brand;
   evidence: Evidence[];
@@ -142,4 +174,5 @@ export interface BrandState {
   assets: Asset[];
   runs: Run[];
   learnings: Learning[];
+  economics: EconomicsState;
 }

@@ -14,8 +14,9 @@ engine/            # generisch, open source
   skills/          # *.md Prompt-Module (research, angles, copy, critic, creative-brief, mining)
   agents/          # TS-Orchestrierung je Pipeline-Stufe
   connectors/      # firecrawl.ts, fal.ts, meta.ts, elevenlabs.ts
-brands/
-  loyft/           # Daten-Layer (Seed liegt vor), weitere Brands via Onboarding
+brands/            # Daten-Layer — lokal und privat (Repo ist öffentlich, #17):
+  _example/        # einzige versionierte Brand (fiktiv, zeigt die Struktur)
+  <slug>/          # echte Brands (z. B. loyft) bleiben untracked, weitere via Onboarding
 app/               # Next.js UI + API-Routen
 data/              # SQLite / Run-Artefakte (gitignored)
 ```
@@ -29,7 +30,8 @@ Brand      { slug, name, url, product, conversionGoal: 'website_lead',   // heut
                      geoCountries: ['DE'], optimizationGoal: 'OFFSITE_CONVERSIONS',
                      billingEvent: 'IMPRESSIONS', specialAdCategories: [],
                      fixedDailyBudgetCents,                              // von Linus VORAB gesetzt, Code behandelt ihn als unveränderlich (Hard Stop 4)
-                     campaignId?, adsetId? } }                           // nach Erst-Anlage gespeichert -> idempotenter Publish
+                     campaignId?, adsetId?,                              // nach Erst-Anlage gespeichert -> idempotenter Publish
+                     campaignTarget?: { metric: 'CPL'|'CPA', value } } } // Ziel pro Kampagne (#17); brand.targetCpa bleibt Fallback/Default
 Evidence   { id, brandSlug, tag: 'real'|'external'|'hypothesis', source, text, createdBy }
 Angle      { id, brandSlug, name, segment, pain, mechanism, hookDirection,
              status: 'draft'|'approved'|'testing'|'validated'|'killed',
@@ -50,11 +52,13 @@ Angle-Diversität ist Schema-Pflicht: Der Strategist muss `hookDirection`/`segme
 - `POST /api/onboard` `{ url, name?, product? }` → Scout-Run → Brand + Evidence (Unified Research Doc)
 - `POST /api/brands/:slug/angles/generate` → Strategist (n Angles, default 5)
 - `POST /api/angles/:id/approve | kill`
-- `POST /api/angles/:id/assets/generate` → Copywriter→Critic→Designer (AssetPair)
+- `POST /api/angles/:id/assets/generate` `{ model? }` → Copywriter→Critic→Designer (AssetPair); optionales `model` wählt ein kuratiertes Fal-Modell aus `FAL_MODELS` (#17)
 - `POST /api/assets/:id/approve | reject | regenerate`
-- `POST /api/brands/:slug/publish` → Publisher: fehlende Kampagne/AdSet anlegen (einmalig, IDs in Brand speichern), approved Assets als Ads PAUSED. Idempotent: Idempotency-Key pro Asset, `status: PAUSED` wird SERVERSEITIG erzwungen (Request-Werte werden ignoriert), Doppel-Klick/Retry erzeugt keine Duplikate
-- `POST /api/brands/:slug/optimize` → Analyst/Mining (auch Ziel des n8n-Schedulers)
-- `GET  /api/brands/:slug/state` → alles fürs UI (polling reicht; SSE nur wenn trivial)
+- `POST /api/brands/:slug/publish` → Publisher: fehlende Kampagne/AdSet anlegen (einmalig, IDs in Brand speichern), approved Assets als Ads pausiert. Idempotent: Idempotency-Key pro Asset, `status: PAUSED` wird beim Anlegen SERVERSEITIG erzwungen (Request-Werte werden ignoriert), Doppel-Klick/Retry erzeugt keine Duplikate. Aktivierung ist NIE Teil des Publish — sie ist ein bewusster menschlicher Klick auf der Status-Route (oder im Ads Manager)
+- `POST /api/campaigns/:id/status` `{ status: 'ACTIVE'|'PAUSED' }` → Human-Gate (#17): Delivery-Toggle für Kampagne oder Ad, admin-geschützt; akzeptiert nur IDs aus dem eigenen Store. Echte Meta-IDs gehen über die Graph API (`POST /{id}` mit `status`), Demo-IDs (`demo-…`) ändern nur den Store
+- `PATCH /api/brands/:slug` → Brand-Editing (#17), admin-geschützt, zod-validiert (`brandPatchSchema`): Teilmenge aus name, url, whatsappUrl, product, targetCpa, guardrails, copyRules, cta, fallbackCopy, designTokens, meta.campaignTarget, meta.fixedDailyBudgetCents; unbekannte Felder → 400. Schreibt Store und brands/<slug>/brand.json
+- `POST /api/brands/:slug/optimize` → Analyst/Mining (auch Ziel des n8n-Schedulers); misst gegen das aufgelöste Kampagnen-Ziel (campaignTarget, sonst targetCpa)
+- `GET  /api/brands/:slug/state` → alles fürs UI inkl. `economics.target` (polling reicht; SSE nur wenn trivial)
 
 Job-Muster für lange Läufe (#7): `angles/generate`, `assets/generate`, `publish` und `optimize` antworten sofort mit `202 { ok, runId }`; die Arbeit läuft als Fire-and-forget-Promise im Node-Prozess weiter (lokal/Render, kein Serverless). Status (`running`/`finished`/`failed` inkl. `error`) und beim Analyst das Ergebnis (`run.result`) stehen am Run und sind über `GET /state` sichtbar — die UI wartet nie auf die HTTP-Response.
 

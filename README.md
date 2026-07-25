@@ -10,7 +10,7 @@ Built at **Cursor Hackathon Stuttgart 2026** — in one day.
 
 ## How it works
 
-A seven-stage agent pipeline feeds a closed learning loop. Mission Control is the human's cockpit: every angle and every asset passes an explicit approval gate before anything reaches the ad account, and nothing goes live without a human flipping the switch in Ads Manager.
+A seven-stage agent pipeline feeds a closed learning loop. Mission Control is the human's cockpit: every angle and every asset passes an explicit approval gate before anything reaches the ad account. Ads are always created paused — nothing goes live without a human deliberately flipping the switch, in the interface or in Ads Manager.
 
 ```mermaid
 flowchart TB
@@ -63,6 +63,7 @@ git clone https://github.com/LinusAurel/adloop.git
 cd adloop
 pnpm install
 cp .env.example .env   # fill in your API keys (sources are commented inline)
+pnpm demo:load         # load the versioned demo brand into the store
 pnpm dev
 ```
 
@@ -72,8 +73,8 @@ Open [http://localhost:3000](http://localhost:3000) for Mission Control.
 
 adloop touches a real ad account, so the guardrails are structural, not optional:
 
-- **Every publish is PAUSED.** The server enforces `status: PAUSED` on all Meta objects (campaigns, ad sets, ads) and ignores any request value that says otherwise. Activation happens exclusively by a human in Ads Manager.
-- **Human approval gates.** Angles and assets must be explicitly approved in Mission Control before the pipeline continues. No gate can be automated away.
+- **Every publish starts PAUSED.** The server enforces `status: PAUSED` on every Meta object it creates (campaigns, ad sets, ads) and ignores any request value that says otherwise. Going live is a separate, deliberate human click — via the admin-guarded status route in the interface or directly in Ads Manager. No agent ever activates an ad, and no publish ever does.
+- **Human approval gates.** Angles and assets must be explicitly approved in Mission Control before the pipeline continues, and activation itself is the final gate. No gate can be automated away.
 - **No agent spend.** The daily budget is fixed by a human up front; no agent ever creates, changes, or manages budgets.
 - **Admin secret on mutation routes.** In public deployments, publish/optimize/approve routes require an `x-admin-secret` header. Read routes stay open — that is the demo URL.
 
@@ -83,11 +84,13 @@ Freshly published ads are paused, and paused ads produce no performance data —
 
 ## Brands as data
 
-Everything company-specific lives in `brands/<slug>/` as data — never as code in `engine/` or `app/`. A brand is a research doc, a target function, guardrails, design tokens, and a winner library that grows with validated tests. Media-buying style is a configurable **playbook** (`engine/playbooks/`), not hard-coded engine behavior. Onboarding a new brand takes a URL and a product description; the engine researches the rest.
+Everything company-specific lives in `brands/<slug>/` as data — never as code in `engine/` or `app/`. A brand is a research doc, a target function (default target plus a per-campaign `CPL`/`CPA` target), guardrails, CTA texts, design tokens, and a winner library that grows with validated tests. Media-buying style is a configurable **playbook** (`engine/playbooks/`), not hard-coded engine behavior. Onboarding a new brand takes a URL and a product description; the engine researches the rest.
+
+**`brands/` is a local, private directory.** Real brand data is never committed — the repo is public, so `.gitignore` excludes everything under `brands/` except `brands/_example/`, a fictional brand that documents the structure. To add a brand, copy `brands/_example/` to `brands/<slug>/` and fill in real data; it stays untracked automatically.
 
 ```
 engine/     # generic, open source: agents, skills (markdown prompt modules), connectors, playbooks
-brands/     # brand data layer — one folder per brand
+brands/     # brand data layer — local and private; only brands/_example/ is committed
 app/        # Next.js Mission Control UI + API routes
 ```
 

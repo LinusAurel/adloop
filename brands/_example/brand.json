@@ -1,0 +1,72 @@
+{
+  "slug": "_example",
+  "name": "Northwind Coffee",
+  "url": "https://example.com",
+  "whatsappUrl": "https://example.com/contact",
+  "product": "Fictional example brand: freshly roasted beans on a monthly subscription, flexible pauses, personal roast recommendations. Exists purely as a structural template for real brands under brands/<slug>/.",
+  "conversionGoal": "website_lead",
+  "targetCpa": 25,
+  "guardrails": [
+    "Never promise guaranteed results",
+    "No invented social proof, no invented testimonials",
+    "No false urgency or invented scarcity",
+    "No competitor bashing; factual comparison is fine",
+    "Real em-dash-free customer copy; sell the result, not the mechanism"
+  ],
+  "copyRules": {
+    "forbiddenPatterns": [
+      {
+        "pattern": "\\bguaranteed?\\b",
+        "flags": "i",
+        "reason": "Never promise guaranteed results"
+      },
+      {
+        "pattern": "[—–]",
+        "reason": "No em dashes in customer-facing copy (use a comma, colon, or new sentence)"
+      },
+      {
+        "pattern": "\\b(AI|artificial intelligence)\\b",
+        "reason": "Sell the result and the relief, not the mechanism"
+      },
+      {
+        "pattern": "Click here",
+        "flags": "i",
+        "reason": "CTAs are outcome-oriented with an object (e.g. Browse the sampler pack)"
+      },
+      {
+        "pattern": "bargain-bin|knockoff",
+        "flags": "i",
+        "reason": "No competitor bashing via fighting words"
+      }
+    ]
+  },
+  "cta": {
+    "label": "Get your sampler pack",
+    "subline": "Try it without commitment. Pause or end the subscription anytime."
+  },
+  "fallbackCopy": {
+    "message": "Freshly roasted coffee, delivered monthly: Northwind Coffee matches beans to your taste. Pause or cancel anytime.",
+    "headline": "A coffee subscription that fits your taste"
+  },
+  "designTokens": {
+    "primary": "#3E2C1C",
+    "accent": "#E8A13C",
+    "background": "#FAF6F0",
+    "font": "Inter, sans-serif",
+    "imagery": "Warm daylight, real kitchen and café scenes, no stock poses"
+  },
+  "meta": {
+    "adAccountId": "",
+    "pageId": "",
+    "pixelId": "",
+    "leadEventName": "Lead",
+    "geoCountries": ["DE"],
+    "optimizationGoal": "OFFSITE_CONVERSIONS",
+    "billingEvent": "IMPRESSIONS",
+    "specialAdCategories": [],
+    "dsaBeneficiary": "Northwind Coffee (example)",
+    "dsaPayor": "Northwind Coffee (example)",
+    "fixedDailyBudgetCents": null,
+    "campaignTarget": { "metric": "CPL", "value": 25 }
+  }
+}

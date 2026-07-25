@@ -77,17 +77,28 @@ async function downloadImage(url: string, assetId: string): Promise<string> {
   return localPath;
 }
 
+// model: optional curated Fal model id (#17); validated at the route, the
+// connector falls back to env/default when unset.
 export async function runDesigner(
   brand: Brand,
   angle: Angle,
   variant: CopyVariant,
   runId: string,
+  model?: string,
 ): Promise<Asset> {
   appendRunLog(runId, AGENT, `erstellt Creative-Brief für Angle „${angle.name}“ …`);
   const brief = await createBrief(brand, angle, variant);
 
-  appendRunLog(runId, AGENT, "generiert Static (4:5) via Fal …");
-  const imageUrl = await generateStatic({ prompt: brief.prompt, aspectRatio: "4:5" });
+  appendRunLog(
+    runId,
+    AGENT,
+    `generiert Static (4:5) via Fal${model ? ` (Modell ${model})` : ""} …`,
+  );
+  const imageUrl = await generateStatic({
+    prompt: brief.prompt,
+    aspectRatio: "4:5",
+    modelId: model,
+  });
 
   const assetId = newId("ast");
   const localPath = await downloadImage(imageUrl, assetId);

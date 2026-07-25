@@ -11,8 +11,15 @@ import fs from "node:fs";
 import path from "node:path";
 import { getInsights, type MetaInsightRow } from "../connectors/meta.ts";
 import { parseAdName } from "../naming.ts";
-import { ensureBrandSeed, newId, readCollection, setRunResult, upsert } from "../store.ts";
-import type { Brand, Learning, Run } from "../types.ts";
+import {
+  ensureBrandSeed,
+  newId,
+  readCollection,
+  resolveCampaignTarget,
+  setRunResult,
+  upsert,
+} from "../store.ts";
+import type { Brand, CampaignTarget, Learning, Run } from "../types.ts";
 import { endRun, logLine, startRun } from "./run.ts";
 
 const AGENT = "Analyst";
@@ -49,6 +56,10 @@ export interface AnalysisResult {
   source: "live" | "fixture";
   note: string;
   totals: { spend: number; leads: number; cpl: number | null };
+  // Resolved campaign target (#17): campaign-level target first,
+  // brand.targetCpa as fallback. targetCpa mirrors target.value for
+  // consumers that predate the campaign target.
+  target: CampaignTarget;
   targetCpa: number;
   rows: ClassifiedAdRow[];
   learnings: Learning[];
@@ -188,7 +199,7 @@ function buildRecommendation(rows: ClassifiedAdRow[], targetCpa: number): string
   const winners = rows.filter((r) => r.classification === "winner");
   const losers = rows.filter((r) => r.classification === "loser");
   if (rows.length === 0) {
-    return "Noch keine Daten — pausierte frische Ads liefern physikalisch keine Insights. Nächster Schritt: Aktivierung durch einen Menschen im Ads Manager.";
+    return "Noch keine Daten — pausierte frische Ads liefern physikalisch keine Insights. Nächster Schritt: bewusste Aktivierung durch einen Menschen (Status-Toggle oder Ads Manager).";
   }
   const parts: string[] = [];
   if (winners.length > 0) {
@@ -279,10 +290,11 @@ export async function analyzeBrand(
       logLine(run.id, AGENT, `mined Fixture-Insights (${raw.length} Ads, klar als Demo gelabelt) …`);
     }
 
-    // Onboarded brands without a human-set goal cannot be classified yet.
-    const targetCpa = brand.targetCpa;
-    if (targetCpa == null) throw new Error("target_cpa_missing");
-    const rows = classifyRows(raw, targetCpa);
+    // Campaign target first, brand.targetCpa as fallback (#17). Onboarded
+    // brands without a human-set goal cannot be classified yet.
+    const target = resolveCampaignTarget(brand);
+    if (target == null) throw new Error("target_missing");
+    const rows = classifyRows(raw, target.value);
     const spend = rows.reduce((s, r) => s + r.spend, 0);
     const leads = rows.reduce((s, r) => s + r.leads, 0);
     const winners = rows.filter((r) => r.classification === "winner").length;
@@ -291,7 +303,7 @@ export async function analyzeBrand(
     // Fixture learnings go to the store too (that IS the mining demo), but
     // clearly prefixed so they are never mistaken for live findings.
     const learnings = persistLearnings(slug, rows, source === "fixture");
-    const recommendation = buildRecommendation(rows, targetCpa);
+    const recommendation = buildRecommendation(rows, target.value);
 
     if (rows.length > 0) {
       logLine(
@@ -306,7 +318,8 @@ export async function analyzeBrand(
       source,
       note,
       totals: { spend, leads, cpl: leads > 0 ? spend / leads : null },
-      targetCpa,
+      target,
+      targetCpa: target.value,
       rows,
       learnings,
       recommendation,

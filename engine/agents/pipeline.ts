@@ -52,9 +52,10 @@ function bestIndex(results: CriticResult[]): number {
 
 // opts.run: pre-created by the route so it can answer 202 + runId before
 // the pipeline work happens (#7); without it the agent creates its own run.
+// opts.model: optional curated Fal model id for the Designer (#17).
 export async function generateAssetPair(
   angleId: string,
-  opts: { run?: Run } = {},
+  opts: { run?: Run; model?: string } = {},
 ): Promise<{ runId: string; copyAsset: Asset; staticAsset: Asset }> {
   const angle = readCollection("angles").find((a) => a.id === angleId);
   if (!angle) throw new Error("angle_not_found");
@@ -117,7 +118,13 @@ export async function generateAssetPair(
       `Variante ${chosen + 1} gewählt (Score ${best.score}/10) — Copy-Asset gespeichert`,
     );
 
-    const staticAsset = await runDesigner(brand, angle, draft.variants[chosen], run.id);
+    const staticAsset = await runDesigner(
+      brand,
+      angle,
+      draft.variants[chosen],
+      run.id,
+      opts.model,
+    );
     appendRunLog(run.id, "Designer", "AssetPair vollständig — bereit fürs Studio");
     finishRun(run.id);
     return { runId: run.id, copyAsset, staticAsset };

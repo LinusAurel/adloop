@@ -69,13 +69,15 @@ function persistBrand(brand: Brand, raw: Record<string, unknown>): void {
 }
 
 // Fallback copy if an approved static has no companion ad_copy asset.
-// Written to the loyft guardrails (loyft lowercase, Du capitalized, no
-// dashes, allowed claim wording) but brand-neutral enough for any seed.
+// Brand-specific texts live in brand.json (fallbackCopy, #17) — the engine
+// itself only falls back to neutral fields the brand already carries.
 function fallbackCopy(brand: Brand): { message: string; headline: string } {
-  return {
-    message: `Strom und Gas zu teuer? ${brand.name} prüft Deine Verträge und übernimmt den Wechsel für Dich. Kostet nichts, wenn Du nicht sparst.`,
-    headline: "Dein Sparservice für Strom und Gas",
-  };
+  return (
+    brand.fallbackCopy ?? {
+      message: brand.product,
+      headline: brand.name,
+    }
+  );
 }
 
 function copyForAngle(angleId: string, brand: Brand): { message: string; headline: string } {
@@ -184,7 +186,7 @@ export async function publishBrand(
     logLine(
       run.id,
       AGENT,
-      `fertig: ${published.length} Ad(s) publisht, ${skipped.length} übersprungen — Aktivierung nur durch Menschen im Ads Manager`,
+      `fertig: ${published.length} Ad(s) publisht (PAUSED), ${skipped.length} übersprungen — Aktivierung nur per bewusstem Klick durch einen Menschen`,
     );
     endRun(run.id);
     return {

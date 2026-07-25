@@ -106,16 +106,18 @@ const MOCK_OUTPUTS: Record<LlmRole, string> = {
     null,
     2,
   ),
+  // Brand-neutral on purpose (see strategist mock note): mock copy must never
+  // carry the vocabulary of a real brand.
   copy: JSON.stringify(
     {
       mock: true,
       variants: [
         {
-          hook: "Deine Stromrechnung weiß mehr als Du.",
+          hook: "MOCK: Hook, der den Kern-Schmerz des Segments direkt anspricht.",
           primary:
-            "Schick uns ein Foto Deiner Abrechnung. Wir rechnen ehrlich nach, ob Du zu viel zahlst. Kostet nichts, wenn Du nicht sparst.",
-          headline: "Sparpotenzial in 2 Minuten prüfen",
-          cta: "Rechnung schicken",
+            "MOCK: Primary-Text ohne Brand-Bezug. Beispieldaten für Demos ohne API-Key: Problem benennen, Mechanismus erklären, konkreten nächsten Schritt anbieten.",
+          headline: "MOCK: Nutzen in einer Zeile",
+          cta: "MOCK: Mehr erfahren",
         },
       ],
     },

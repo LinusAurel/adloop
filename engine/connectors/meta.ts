@@ -52,31 +52,53 @@ export async function createCampaign(args: {
     status: "PAUSED",
     special_ad_categories: JSON.stringify(args.specialAdCategories ?? []),
     daily_budget: String(args.dailyBudgetCents),
+    // v25 requires an explicit bid strategy on CBO create
+    // (pre-flight-verified 2026-07-25, SPEC §5).
+    bid_strategy: "LOWEST_COST_WITHOUT_CAP",
   });
 }
+
+// Standard conversion events Meta accepts directly as custom_event_type;
+// anything else goes through OTHER + custom_event_str.
+const STANDARD_EVENTS = new Set([
+  "LEAD",
+  "PURCHASE",
+  "COMPLETE_REGISTRATION",
+  "CONTACT",
+  "SUBSCRIBE",
+  "SUBMIT_APPLICATION",
+]);
 
 export async function createAdSet(args: {
   name: string;
   campaignId: string;
-  pixelId: string;
-  leadEventName: string;
   geoCountries: string[];
   optimizationGoal: string;
   billingEvent: string;
+  // Without a pixel the caller falls back to LINK_CLICKS and omits this.
+  promotedObject?: { pixelId: string; leadEventName: string };
 }): Promise<{ id: string }> {
-  return graphRequest("POST", `${actId()}/adsets`, {
+  const params: Record<string, string> = {
     name: args.name,
     campaign_id: args.campaignId,
     status: "PAUSED",
     optimization_goal: args.optimizationGoal,
     billing_event: args.billingEvent,
     targeting: JSON.stringify({ geo_locations: { countries: args.geoCountries } }),
-    promoted_object: JSON.stringify({
-      pixel_id: args.pixelId,
-      custom_event_type: "OTHER",
-      custom_event_str: args.leadEventName,
-    }),
-  });
+  };
+  if (args.promotedObject) {
+    const event = args.promotedObject.leadEventName.toUpperCase();
+    params.promoted_object = JSON.stringify(
+      STANDARD_EVENTS.has(event)
+        ? { pixel_id: args.promotedObject.pixelId, custom_event_type: event }
+        : {
+            pixel_id: args.promotedObject.pixelId,
+            custom_event_type: "OTHER",
+            custom_event_str: args.promotedObject.leadEventName,
+          },
+    );
+  }
+  return graphRequest("POST", `${actId()}/adsets`, params);
 }
 
 // Upload image bytes -> image_hash for creatives.
@@ -91,6 +113,11 @@ export async function uploadImage(imageBytes: Buffer, name: string): Promise<str
   return first.hash;
 }
 
+// Dynamic URL tags for attribution ({{campaign.id}} etc. are Meta macros,
+// resolved by Meta at delivery time — sent literally as one string).
+export const DEFAULT_URL_TAGS =
+  "utm_source=adloop&utm_medium=paid_social&utm_campaign={{campaign.id}}&utm_content={{ad.id}}";
+
 export async function createCreative(args: {
   name: string;
   pageId: string;
@@ -99,9 +126,11 @@ export async function createCreative(args: {
   headline: string;
   link: string;
   callToActionType?: string;
+  urlTags?: string;
 }): Promise<{ id: string }> {
   return graphRequest("POST", `${actId()}/adcreatives`, {
     name: args.name,
+    url_tags: args.urlTags ?? DEFAULT_URL_TAGS,
     object_story_spec: JSON.stringify({
       page_id: args.pageId,
       link_data: {
@@ -128,9 +157,22 @@ export async function createAd(args: {
   });
 }
 
+// Raw Graph insights row: numbers arrive as strings, actions as a list of
+// { action_type, value } pairs. Normalization happens in the Analyst.
+export interface MetaInsightRow {
+  ad_id?: string;
+  ad_name?: string;
+  campaign_id?: string;
+  spend?: string;
+  impressions?: string;
+  clicks?: string;
+  actions?: { action_type?: string; value?: string }[];
+  cost_per_action_type?: { action_type?: string; value?: string }[];
+}
+
 // Insights read, always filtered to OUR campaign_id (SPEC §5).
-export async function getInsights(campaignId: string): Promise<unknown[]> {
-  const result = await graphRequest<{ data: unknown[] }>("GET", `${actId()}/insights`, {
+export async function getInsights(campaignId: string): Promise<MetaInsightRow[]> {
+  const result = await graphRequest<{ data: MetaInsightRow[] }>("GET", `${actId()}/insights`, {
     level: "ad",
     fields: "ad_id,ad_name,campaign_id,spend,impressions,clicks,actions,cost_per_action_type",
     filtering: JSON.stringify([

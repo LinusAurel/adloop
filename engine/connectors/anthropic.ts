@@ -27,6 +27,15 @@ export function isMockMode(): boolean {
   return !process.env.ANTHROPIC_API_KEY;
 }
 
+// One log line per process is not enough context when a dev server runs from
+// a worktree without .env — the cwd pinpoints which checkout misses the key.
+export function mockModeHint(): string {
+  return (
+    "MOCK-Modus aktiv: ANTHROPIC_API_KEY fehlt im Server-Prozess " +
+    `(cwd: ${process.cwd()}) — Outputs sind Beispieldaten, keine echten Ergebnisse`
+  );
+}
+
 // Deterministic example outputs per role — clearly labelled as mock data.
 const MOCK_OUTPUTS: Record<LlmRole, string> = {
   scout: JSON.stringify(
@@ -59,27 +68,29 @@ const MOCK_OUTPUTS: Record<LlmRole, string> = {
     null,
     2,
   ),
+  // Brand-neutral on purpose: mock angles must never look like real data of a
+  // specific brand (see #12 — loyft-flavoured mocks landed under another slug).
   strategist: JSON.stringify(
     {
       mock: true,
       angles: [
         {
-          name: "Grundversorgungs-Falle",
-          segment: "Nicht-Wechsler in der Grundversorgung",
-          pain: "Zahlt seit Jahren still zu viel, ohne es zu merken",
-          mechanism: "Erst-Check per Rechnung deckt das Delta konkret auf",
-          hookDirection: "Zahlen-Schock mit sofortiger Auflösung",
+          name: "MOCK-Angle Preis-Frust",
+          segment: "MOCK: preissensible Bestandskunden der Kategorie",
+          pain: "MOCK: zahlt spürbar mehr als nötig und merkt es erst spät",
+          mechanism: "MOCK: konkreter Vorher-nachher-Vergleich macht das Delta sichtbar",
+          hookDirection: "MOCK: Zahlen-Kontrast mit sofortiger Auflösung",
           expectedCpl: 14,
-          rationale: "MOCK: ~23 % der Haushalte stecken in der Grundversorgung",
+          rationale: "MOCK: Beispiel-Angle ohne Brand-Bezug — nur für Demos ohne API-Key",
         },
         {
-          name: "Nie-wieder-kümmern",
-          segment: "Bequeme Ex-Wechsler",
-          pain: "Hat einmal gewechselt und will das nie wieder selbst machen",
-          mechanism: "Laufendes Vertragsmanagement übernimmt Folgewechsel",
-          hookDirection: "Entlastungs-Versprechen statt Spar-Claim",
+          name: "MOCK-Angle Bequemlichkeit",
+          segment: "MOCK: bequeme Wiederkäufer ohne Wechselmotivation",
+          pain: "MOCK: will sich um das Thema nie wieder selbst kümmern müssen",
+          mechanism: "MOCK: Service übernimmt die wiederkehrende Arbeit dauerhaft",
+          hookDirection: "MOCK: Entlastungs-Versprechen statt Spar-Claim",
           expectedCpl: 16,
-          rationale: "MOCK: Trägheit als Retention-Moat, Positionierung Premium-Entlastung",
+          rationale: "MOCK: Beispiel-Angle ohne Brand-Bezug — nur für Demos ohne API-Key",
         },
       ],
     },
@@ -123,9 +134,7 @@ export interface CompleteArgs {
 
 export async function complete(args: CompleteArgs): Promise<string> {
   if (isMockMode()) {
-    console.log(
-      `[MOCK] anthropic: kein ANTHROPIC_API_KEY gesetzt — deterministischer Beispiel-Output für Rolle "${args.role}"`,
-    );
+    console.log(`[MOCK] anthropic (Rolle "${args.role}"): ${mockModeHint()}`);
     return MOCK_OUTPUTS[args.role];
   }
 
@@ -153,9 +162,7 @@ export interface StructuredArgs<T> extends CompleteArgs {
 // without schema validation — mocks are approximations, not contract tests.
 export async function completeStructured<T>(args: StructuredArgs<T>): Promise<T> {
   if (isMockMode()) {
-    console.log(
-      `[MOCK] anthropic: kein ANTHROPIC_API_KEY gesetzt — deterministischer Beispiel-Output für Rolle "${args.role}" (unvalidiert)`,
-    );
+    console.log(`[MOCK] anthropic (Rolle "${args.role}", unvalidiert): ${mockModeHint()}`);
     return JSON.parse(MOCK_OUTPUTS[args.role]) as T;
   }
 

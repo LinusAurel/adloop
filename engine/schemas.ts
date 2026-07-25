@@ -71,3 +71,36 @@ export const creativeBriefSchema = z.object({
   prompt: z.string().min(40).max(3000),
 });
 export type CreativeBrief = z.infer<typeof creativeBriefSchema>;
+
+// Stage 1 — Scout (SPEC §3): Unified Research Document. The awareness
+// distribution is ALWAYS a hypothesis (no first-party data at onboarding);
+// evidence rows created from it carry the tag "hypothesis".
+export const scoutSegmentSchema = z.object({
+  name: z.string().min(3).max(120),
+  psychographics: z.string().min(20).max(600),
+  pains: z.array(z.string().min(5).max(300)).min(1).max(6),
+});
+export type ScoutSegment = z.infer<typeof scoutSegmentSchema>;
+
+export const awarenessDistributionSchema = z.object({
+  unaware: z.number().min(0).max(100),
+  problemAware: z.number().min(0).max(100),
+  solutionAware: z.number().min(0).max(100),
+  productAware: z.number().min(0).max(100),
+  mostAware: z.number().min(0).max(100),
+});
+export type AwarenessDistribution = z.infer<typeof awarenessDistributionSchema>;
+
+export const scoutResearchSchema = z.object({
+  productSummary: z.string().min(20).max(800),
+  valueProposition: z.string().min(10).max(600),
+  pricingModel: z.string().min(3).max(400),
+  tonality: z.string().min(3).max(400),
+  segments: z.array(scoutSegmentSchema).min(2).max(6),
+  awarenessDistribution: awarenessDistributionSchema,
+  awarenessRationale: z.string().min(20).max(800),
+  competitorNotes: z.array(z.string().min(10).max(400)).max(8),
+  vocPhrases: z.array(z.string().min(3).max(300)).max(12),
+  objections: z.array(z.string().min(5).max(300)).max(8),
+});
+export type ScoutResearch = z.infer<typeof scoutResearchSchema>;

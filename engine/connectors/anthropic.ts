@@ -7,12 +7,13 @@ import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import type { z } from "zod";
 
-export type LlmRole = "strategist" | "copy" | "critic" | "analyst";
+export type LlmRole = "scout" | "strategist" | "copy" | "critic" | "analyst";
 
 const DEFAULT_MODEL = "claude-sonnet-5"; // SPEC §0 default
 
 function modelFor(role: LlmRole): string {
   switch (role) {
+    case "scout":
     case "strategist":
     case "critic":
       return process.env.MODEL_STRATEGIST || DEFAULT_MODEL;
@@ -28,6 +29,36 @@ export function isMockMode(): boolean {
 
 // Deterministic example outputs per role — clearly labelled as mock data.
 const MOCK_OUTPUTS: Record<LlmRole, string> = {
+  scout: JSON.stringify(
+    {
+      mock: true,
+      productSummary: "MOCK: D2C-Produkt, aus der Website extrahiert",
+      valueProposition: "MOCK: zentrales Nutzenversprechen der Marke",
+      pricingModel: "MOCK: Einmalkauf, mittleres Preissegment",
+      tonality: "MOCK: nahbar, direkt, leicht premium",
+      segments: [
+        {
+          name: "MOCK-Segment Selbstoptimierer",
+          psychographics:
+            "MOCK: will Kontrolle über den Alltag, misstraut leeren Marketing-Versprechen",
+          pains: ["MOCK: hat schon Alternativen probiert und wurde enttäuscht"],
+        },
+      ],
+      awarenessDistribution: {
+        unaware: 40,
+        problemAware: 30,
+        solutionAware: 15,
+        productAware: 10,
+        mostAware: 5,
+      },
+      awarenessRationale: "MOCK: Hypothese ohne Datenbasis, am Tag 1 zu validieren",
+      competitorNotes: ["MOCK: Wettbewerber werben primär über Rabatt-Claims"],
+      vocPhrases: ["MOCK: „endlich etwas, das wirklich hält, was es verspricht“"],
+      objections: ["MOCK: „zu schön, um wahr zu sein“-Skepsis"],
+    },
+    null,
+    2,
+  ),
   strategist: JSON.stringify(
     {
       mock: true,

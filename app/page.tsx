@@ -1,5 +1,5 @@
-import { MissionControl } from "@/components/mission-control";
+import { AppShell } from "@/components/app-shell";
 
 export default function Home() {
-  return <MissionControl />;
+  return <AppShell />;
 }

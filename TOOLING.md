@@ -42,4 +42,4 @@
 - `.mcp.json` — Firecrawl-MCP (Remote, Standard-Projektformat für weitere Coding-Agents).
 - `.gitignore` — um `!.env.example` ergänzt (sonst hätte `.env.*` das Example mitignoriert).
 - Nichts committed.
-npx impeccable install  # nach dem Clonen einmal ausfuehren (Design-Skill, lokal)
+npx impeccable install  # nach dem Clonen einmal ausführen (Design-Skill, lokal)

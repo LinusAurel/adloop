@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Einziges Qualitaets-Gate des Repos. Lokal, lefthook und GitHub CI rufen
+# Einziges Qualitäts-Gate des Repos. Lokal, lefthook und GitHub CI rufen
 # alle DIESES Skript — neue Checks kommen nur hier dazu.
 #
 #   scripts/verify.sh quick     lint + typecheck            (pre-commit)
@@ -18,7 +18,7 @@ if [ "$MODE" = "secrets" ]; then
   staged="$(git diff --cached --name-only --diff-filter=ACM)"
   envs="$(printf '%s\n' "$staged" | grep -E '(^|/)\.env(\.[^/]*)?$' | grep -vE '\.env\.example$' || true)"
   if [ -n "$envs" ]; then
-    fail ".env-Datei gestaged (gehoert in .gitignore): $envs"
+    fail ".env-Datei gestaged (gehört in .gitignore): $envs"
   fi
   # Key-Muster: Anthropic (sk-ant-), Meta (EAA...), Firecrawl (fc-), private Keys.
   # Lockfiles ausgenommen — base64-Hashes triggern sonst False-Positives.
@@ -29,7 +29,7 @@ if [ "$MODE" = "secrets" ]; then
   exit 0
 fi
 
-# Anfuehrungszeichen-Check laeuft schon vor dem package.json-Guard —
+# Anführungszeichen-Check läuft schon vor dem package.json-Guard —
 # er braucht nur Node, keine Dependencies.
 if command -v node >/dev/null 2>&1; then
   echo "== german-quotes"
@@ -37,7 +37,7 @@ if command -v node >/dev/null 2>&1; then
 fi
 
 if [ ! -f package.json ]; then
-  echo "verify: kein package.json — noch nichts zu pruefen, Gate ok."
+  echo "verify: kein package.json — noch nichts zu prüfen, Gate ok."
   exit 0
 fi
 

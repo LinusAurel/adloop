@@ -56,7 +56,7 @@ Vier Ansichten: **Hypothesen-Board** (Angle-Kanban mit erwartetem vs. gemessenem
 
 - **Must (bis 13:00):** Onboarding (loyft-Seed + beliebige URL) → Angles → Copy+Critic → 1 Static/Angle → Publish PAUSED ins echte Konto → Mission Control (Board, Ticker, Asset-Ansicht).
 - **Should (bis 15:00):** Analyst mit echtem Insights-Read (Demo mit frisch angelegten Test-Ads), Economics-Screen, n8n-Loop, ElevenLabs-Briefing, LP-Routen.
-- **Could:** Live-Onboarding einer fremden Brand im Pitch, Cursor-CLI-Live-Beleg, **Voice-Mode** („Talk to your media buyer": ElevenLabs-Agent als Sprach-Interface — briefen, Angles anstoßen, Briefing anhören; Demo-Stunt mit Skript-Fallback, erst NACH stabilem Must-Slice).
+- **Could:** Live-Onboarding einer fremden Brand im Pitch, Cursor-CLI-Live-Beleg, **Voice-Mode** („Talk to your media buyer“: ElevenLabs-Agent als Sprach-Interface — briefen, Angles anstoßen, Briefing anhören; Demo-Stunt mit Skript-Fallback, erst NACH stabilem Must-Slice).
 - **Won't:** Video-Ads, Budget-Automation, Multi-Channel, B2B, CRO-Modul, eigene Developer-API.
 
 ## 8. Bewertungs-Fit

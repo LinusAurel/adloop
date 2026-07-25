@@ -21,7 +21,8 @@ import { accentForBrand } from "@/lib/brand-accent";
 // import to "@/components/chat-panel" once the file exists.
 import { ChatPanel } from "@/components/chat-panel";
 
-const DEFAULT_BRAND_SLUG = "loyft";
+const DEFAULT_BRAND_SLUG =
+  process.env.NEXT_PUBLIC_DEFAULT_BRAND ?? "creators-demo";
 const POLL_MS = 5000;
 
 // The age cap keeps buttons usable if a server crash orphans a running run.
@@ -66,13 +67,25 @@ export function AppShell() {
         fetch(`/api/brands/${brandSlug}/state`, { cache: "no-store" }),
         fetch(`/api/brands`, { cache: "no-store" }),
       ]);
+      let available: { slug: string; name: string }[] = [];
       if (brandsRes.ok) {
         const data = (await brandsRes.json()) as {
           brands?: { slug: string; name: string }[];
         };
-        setBrands(data.brands ?? []);
+        available = data.brands ?? [];
+        setBrands(available);
       }
-      if (!stateRes.ok) throw new Error(`state ${stateRes.status}`);
+      if (!stateRes.ok) {
+        // A brand that does not exist on this instance (e.g. a deployment
+        // without local brand data) must never surface as an error — fall
+        // back to the first available brand instead.
+        const fallback = available.find((b) => b.slug !== brandSlug);
+        if (stateRes.status === 404 && fallback) {
+          setBrandSlug(fallback.slug);
+          return;
+        }
+        throw new Error(`state ${stateRes.status}`);
+      }
       setState((await stateRes.json()) as BrandState);
       setError(null);
     } catch (e) {

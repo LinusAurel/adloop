@@ -63,7 +63,8 @@ export function useSettle(status: string): boolean {
 
 /* -------------------------------------------------------------- buttons -- */
 
-// The one strong element per view: the mint action.
+// The one strong element per view: the primary action (muted emerald — mint
+// is reserved for brand accents).
 export function PillButton({
   label,
   busyLabel,
@@ -82,7 +83,7 @@ export function PillButton({
       type="button"
       onClick={onClick}
       disabled={busy || disabled}
-      className="inline-flex h-11 shrink-0 items-center rounded-2xl bg-mint px-6 text-[0.9375rem] font-semibold text-[#04120a] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-45"
+      className="inline-flex h-11 shrink-0 items-center rounded-2xl bg-emerald-600 px-6 text-[0.9375rem] font-semibold text-white transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-45"
     >
       {busy ? (
         <span className="animate-pulse">{busyLabel ?? label}</span>
@@ -93,8 +94,8 @@ export function PillButton({
   );
 }
 
-// Coloured decision buttons: approve is green (mint) and filled, reject red
-// outline. Quiet is the neutral secondary action.
+// Coloured decision buttons: approve is filled emerald, reject red outline.
+// Quiet is the neutral secondary action.
 export function ActionButton({
   label,
   tone,
@@ -110,7 +111,7 @@ export function ActionButton({
 }) {
   const skin =
     tone === "approve"
-      ? "bg-mint font-semibold text-[#04120a] hover:opacity-90"
+      ? "bg-emerald-600 font-semibold text-white hover:bg-emerald-500"
       : tone === "reject"
         ? "border border-signal-red/50 font-medium text-signal-red hover:bg-signal-red/10"
         : "bg-ink-750 font-medium text-foreground hover:bg-rule";

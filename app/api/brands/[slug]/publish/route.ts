@@ -19,10 +19,27 @@ export async function POST(
   const denied = requireAdmin(req);
   if (denied) return denied;
   const { slug } = await ctx.params;
-  if (!ensureBrandSeed(slug)) {
+  const brand = ensureBrandSeed(slug);
+  if (!brand) {
     return NextResponse.json(
       { ok: false, error: "brand_not_found" },
       { status: 404 },
+    );
+  }
+  // Onboarded brands have no Meta publisher fields yet — publish stays
+  // disabled until a human configures account, page and budget (Hard Stop 4).
+  if (
+    !brand.meta.adAccountId ||
+    !brand.meta.pageId ||
+    !brand.meta.fixedDailyBudgetCents
+  ) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "publish_not_configured",
+        hint: "Meta-Konfiguration (adAccountId, pageId, fixedDailyBudgetCents) fehlt — für neue Brands setzt die ein Mensch, kein Agent",
+      },
+      { status: 409 },
     );
   }
   const run = createRun(slug, "publish");

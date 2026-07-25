@@ -1,6 +1,6 @@
 "use client";
 
-// Verbindungen (Personalisieren): the ONLY place in the UI that talks about
+// Connections (Personalize): the ONLY place in the UI that talks about
 // connection status. Reads GET /api/connections if the engine stream shipped
 // it; otherwise the cards state the static truth: configured via env vars.
 
@@ -14,10 +14,10 @@ interface ConnectionCard {
 }
 
 const SERVICES: ConnectionCard[] = [
-  { key: "meta", name: "Meta", role: "Kampagnen, Ads und Insights" },
-  { key: "fal", name: "Fal", role: "Bildgenerierung für Motive" },
-  { key: "firecrawl", name: "Firecrawl", role: "Website-Research des Scouts" },
-  { key: "elevenlabs", name: "ElevenLabs", role: "Sprachausgabe" },
+  { key: "meta", name: "Meta", role: "Campaigns, ads and insights" },
+  { key: "fal", name: "Fal", role: "Image generation for ad visuals" },
+  { key: "firecrawl", name: "Firecrawl", role: "Website research for the Scout" },
+  { key: "elevenlabs", name: "ElevenLabs", role: "Voice output" },
 ];
 
 type StatusMap = Record<string, { connected?: boolean; detail?: string }>;
@@ -48,42 +48,42 @@ export function ConnectionsView() {
   return (
     <>
       <ViewHeader
-        title="Verbindungen"
-        lead="Die Dienste, mit denen die Agenten arbeiten."
+        title="Connections"
+        lead="The services the agents work with."
       />
       <div className="grid gap-4 sm:grid-cols-2">
         {SERVICES.map((service) => {
           const live = statuses?.[service.key];
           return (
-            <div key={service.key} className="surface p-6">
+            <div key={service.key} className="rounded-2xl bg-ink-800 p-6">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-[1.0625rem] font-semibold tracking-[-0.015em]">
                     {service.name}
                   </p>
-                  <p className="mt-1 text-[0.875rem] leading-relaxed text-ink-soft">
+                  <p className="mt-1 text-[0.875rem] leading-relaxed text-text-soft">
                     {service.role}
                   </p>
                 </div>
                 {live?.connected !== undefined ? (
                   <span
-                    className={`mt-1 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[0.75rem] font-medium ${
+                    className={`mt-1 inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[0.75rem] font-medium ${
                       live.connected
-                        ? "bg-positive/10 text-positive"
-                        : "bg-negative/10 text-negative"
+                        ? "bg-mint/10 text-mint"
+                        : "bg-signal-red/10 text-signal-red"
                     }`}
                   >
                     <span
                       className={`size-1.5 rounded-full ${
-                        live.connected ? "bg-positive" : "bg-negative"
+                        live.connected ? "bg-mint" : "bg-signal-red"
                       }`}
                     />
-                    {live.connected ? "verbunden" : "getrennt"}
+                    {live.connected ? "connected" : "disconnected"}
                   </span>
                 ) : null}
               </div>
-              <p className="mt-4 text-[0.8125rem] text-ink-faint">
-                {live?.detail ?? "konfiguriert über Umgebungsvariablen"}
+              <p className="mt-4 text-[0.8125rem] text-text-faint">
+                {live?.detail ?? "configured via environment variables"}
               </p>
             </div>
           );

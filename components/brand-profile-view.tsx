@@ -1,9 +1,10 @@
 "use client";
 
-// Brand-Profil (Personalisieren): all brand data, editable. Saving goes to
+// Brand Profile (Personalize): all brand data, editable. Saving goes to
 // PATCH /api/brands/[slug] — the route lands with the engine stream, so it
 // is bound defensively: a 404/405/501 switches the form to read-only with a
 // note. A mount-time probe (empty PATCH) detects that without a user click.
+// Field values (product, guardrails, …) render verbatim from the brand data.
 
 import { useEffect, useMemo, useState } from "react";
 import type { Brand, BrandState } from "@/engine/types";
@@ -35,12 +36,12 @@ const FIELDS: {
 }[] = [
   { key: "name", label: "Name" },
   { key: "url", label: "URL" },
-  { key: "audience", label: "Zielgruppe", multiline: true },
-  { key: "product", label: "Nutzenversprechen", multiline: true },
-  { key: "tone", label: "Tonalität", multiline: true },
+  { key: "audience", label: "Audience", multiline: true },
+  { key: "product", label: "Value proposition", multiline: true },
+  { key: "tone", label: "Tone of voice", multiline: true },
   { key: "cta", label: "CTA" },
-  { key: "budgetDailyEuro", label: "Budget-Default (€ pro Tag)", numeric: true },
-  { key: "targetCpa", label: "Ziel-Default (Ziel-CPA in €)", numeric: true },
+  { key: "budgetDailyEuro", label: "Default budget (€ per day)", numeric: true },
+  { key: "targetCpa", label: "Default goal (target CPA, €)", numeric: true },
 ];
 
 function valuesFromBrand(brand: Brand): FormValues {
@@ -109,7 +110,7 @@ export function BrandProfileView({
   }, [brandSlug]);
 
   if (!brand || !values) {
-    return <ViewHeader title="Brand-Profil" lead="lädt …" />;
+    return <ViewHeader title="Brand Profile" lead="loading…" />;
   }
 
   const save = async () => {
@@ -144,13 +145,13 @@ export function BrandProfileView({
         const body = (await res.json().catch(() => ({}))) as {
           error?: string;
         };
-        throw new Error(body.error ?? `Status ${res.status}`);
+        throw new Error(body.error ?? `status ${res.status}`);
       }
       setDirty(false);
       setSaved(true);
       onSaved();
     } catch (e) {
-      setFailed(e instanceof Error ? e.message : "unbekannter Fehler");
+      setFailed(e instanceof Error ? e.message : "unknown error");
     } finally {
       setBusy(false);
     }
@@ -159,13 +160,13 @@ export function BrandProfileView({
   return (
     <>
       <ViewHeader
-        title="Brand-Profil"
-        lead="Die Daten, aus denen jeder Agent seinen Kontext zieht."
+        title="Brand Profile"
+        lead="The data every agent draws its context from."
         action={
           readOnly === false ? (
             <PillButton
-              label={saved && !dirty ? "Gespeichert" : "Speichern"}
-              busyLabel="speichert …"
+              label={saved && !dirty ? "Saved" : "Save"}
+              busyLabel="saving…"
               busy={busy}
               disabled={!dirty}
               onClick={save}
@@ -175,23 +176,23 @@ export function BrandProfileView({
       />
 
       {readOnly ? (
-        <p className="mb-6 rounded-xl bg-sink px-4 py-3 text-[0.8125rem] leading-relaxed text-ink-soft">
-          Bearbeiten ist noch nicht angeschlossen (PATCH-Route folgt). Die
-          Felder sind bis dahin schreibgeschützt.
+        <p className="mb-6 rounded-xl bg-ink-750 px-4 py-3 text-[0.8125rem] leading-relaxed text-text-soft">
+          Editing is not wired up yet (PATCH route pending). Fields are
+          read-only for now.
         </p>
       ) : null}
 
-      <div className="surface divide-y divide-rule">
+      <div className="divide-y divide-rule rounded-2xl bg-ink-800">
         {FIELDS.map((field) => {
           const value = values[field.key];
           const common =
-            "w-full bg-transparent text-[0.9375rem] text-ink placeholder:text-ink-faint focus:outline-none disabled:text-ink-soft";
+            "w-full bg-transparent text-[0.9375rem] text-foreground placeholder:text-text-faint focus:outline-none disabled:text-text-soft";
           return (
             <label
               key={field.key}
-              className="flex flex-col gap-1.5 px-6 py-4 sm:flex-row sm:items-baseline sm:gap-6"
+              className="flex flex-col gap-1.5 px-6 py-4 sm:flex-row sm:items-start sm:gap-6"
             >
-              <span className="w-[220px] shrink-0 text-[0.8125rem] font-medium text-ink-soft">
+              <span className="w-[220px] shrink-0 pt-0.5 text-[0.8125rem] font-medium text-text-soft">
                 {field.label}
               </span>
               {field.multiline ? (
@@ -229,12 +230,12 @@ export function BrandProfileView({
         <section className="mt-10">
           <p className="group-heading mb-3 px-1">
             Guardrails
-            <span className="ml-1.5 tnum text-ink-faint/70">
+            <span className="ml-1.5 tnum text-text-faint/70">
               {brand.guardrails.length}
             </span>
           </p>
-          <div className="surface px-6 py-4">
-            <ul className="list-disc space-y-1.5 pl-4 text-[0.875rem] leading-relaxed text-ink-soft">
+          <div className="rounded-2xl bg-ink-800 px-6 py-4">
+            <ul className="list-disc space-y-1.5 pl-4 text-[0.875rem] leading-relaxed text-text-soft">
               {brand.guardrails.map((g) => (
                 <li key={g}>{g}</li>
               ))}
@@ -243,7 +244,7 @@ export function BrandProfileView({
         </section>
       ) : null}
 
-      {failed ? <ErrorNote text={`Konnte nicht speichern: ${failed}`} /> : null}
+      {failed ? <ErrorNote text={`Could not save: ${failed}`} /> : null}
     </>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
-// Ticker: the last hundred log lines from all runs, newest first.
+// Ticker: the last hundred log lines from all runs, newest first. Log
+// content renders verbatim from the run data.
 
 import type { RunLogEntry } from "@/engine/types";
 import { Hero, ViewHeader } from "@/components/bits";
@@ -14,8 +15,8 @@ export function TickerView({
   if (lines.length === 0) {
     return (
       <Hero
-        title="Noch keine Läufe"
-        lead="Hier schreiben die Agenten mit, sobald die erste Pipeline startet: wer gerade was tut, in der Reihenfolge, in der es passiert."
+        title="No runs yet"
+        lead="The agents write here as soon as the first pipeline starts: who is doing what, in the order it happens."
       />
     );
   }
@@ -24,27 +25,27 @@ export function TickerView({
     <>
       <ViewHeader
         title="Ticker"
-        lead="Die letzten hundert Zeilen aus allen Läufen, neueste zuerst."
+        lead="The last hundred lines from all runs, newest first."
       />
       <div className="space-y-1">
         {lines.map((line, i) => (
           <div
             key={`${line.runId}-${i}`}
-            className="flex items-baseline gap-4 rounded-xl px-4 py-2.5 transition-colors hover:bg-sink/50"
+            className="flex items-baseline gap-4 rounded-xl px-4 py-2.5 transition-colors hover:bg-ink-800"
           >
-            <span className="shrink-0 font-mono text-[0.75rem] tnum text-ink-faint">
+            <span className="shrink-0 font-mono text-[0.75rem] tnum text-text-faint">
               {clock(line.ts)}
             </span>
-            <span className="w-[92px] shrink-0 truncate text-[0.8125rem] font-medium text-ink">
+            <span className="w-[92px] shrink-0 truncate text-[0.8125rem] font-medium text-foreground">
               {line.agent}
             </span>
             <span
               className={`min-w-0 flex-1 text-[0.875rem] leading-relaxed ${
                 line.level === "error"
-                  ? "text-negative"
+                  ? "text-signal-red"
                   : line.level === "warn"
-                    ? "text-warn"
-                    : "text-ink-soft"
+                    ? "text-signal-amber"
+                    : "text-text-soft"
               }`}
             >
               {line.message}

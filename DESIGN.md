@@ -1,63 +1,70 @@
 # Design
 
-Verbindliches Designsystem für die adloop-Oberfläche. Produktwahrheit steht in
+Verbindliches Designsystem für adloop Mission Control. Produktwahrheit steht in
 `PRODUCT.md`. Diese Datei hält die dauerhaften visuellen Regeln.
 
-## Die Welt: die ruhige Plattform
+## Die Welt: der leise Leitstand
 
-adloop ist eine ruhige, agentische Marketing-Plattform, kein Cockpit und kein
-Dashboard: Chat als Start, wenige klare Bereiche, die Brand als Kontext. Eine
-leise Seitenleiste links, ein zentrierter Inhaltsbereich mit viel leerem Raum,
-weiche stark gerundete Flächen, wenig Text und dieser groß gesetzt. Pro
-Ansicht gibt es genau ein starkes Element, alles andere ist zurückgenommen.
+Mission Control ist ein ruhiger Arbeitsraum, kein Cockpit und kein Dashboard.
+Die Haltung kommt aus dem von Lenn gesetzten Vorbild: eine sehr leise
+Seitenleiste links, ein zentrierter Inhaltsbereich mit viel leerem Raum, weiche
+stark gerundete Flächen, fast keine sichtbaren Rahmen, wenig Text und dieser
+groß gesetzt. Pro Ansicht gibt es genau ein starkes Element, alles andere ist
+zurückgenommen.
+
+Das Vorbild ist hell. Übernommen wird nicht seine Helligkeit, sondern seine
+Ruhe, übersetzt in unsere dunkle Palette.
 
 **Was diese Welt ausdrücklich ablehnt:** das Kachel-Dashboard mit gleichgroßen
 Karten, Karten in Karten, Haarlinien-Register mit gedrängten Spalten, Stempel in
-Versalien, viele kleine Beschriftungen, Fortschrittsringe als Inhaltsersatz.
-Wenn eine Ansicht dicht wirkt, ist zu viel drin, nicht zu wenig Platz.
+Versalien, viele kleine Beschriftungen, Sparklines und Fortschrittsringe als
+Inhaltsersatz. Wenn eine Ansicht dicht wirkt, ist zu viel drin, nicht zu wenig
+Platz.
 
 ## Grund und Licht
 
-Hell und warm: ein Off-White-Papier als Grund, Tinte-Schwarz als Text, weiße
-Karten mit sehr weicher Rundung und haarfeiner Kante als Fläche. Struktur
-entsteht durch Flächenwechsel und Abstand, nicht durch harte Rahmen und nicht
-durch Schatten.
+Dunkel, weil die Oberfläche im abgedunkelten Pitch-Raum auf einen Beamer
+projiziert und daneben live bedient wird. Der Grund ist kein Schwarz und kein
+Neutralgrau, sondern ein sehr tiefes, kühles Tintenblau-Grün. Diese Werte sind
+gesetzt und ändern sich nicht.
 
 ```
---paper    #F4F2EC   Grund, Seitenleiste und Hauptbereich
---card     #FDFCF9   ruhende Karte, Popover, Dialog
---sink     #ECE9E0   Eingaben, leise Knöpfe, aktive Navigation
---sink-2   #E4E1D5   gedrückter Zustand, kbd
---rule     #E3E0D4   haarfeine Kante, nur wo nötig
---ink      #1C1B17   Haupttext, der schwarze Pill-Button
---ink-soft #6D6A5E   Fortsetzung im Satz, Sekundärtext
---ink-faint #999687  Zeitangaben, Gruppenüberschriften
+--ink-900  #070B0D   Seitenleiste, tiefster Grund
+--ink-850  #0A1013   Hauptbereich
+--ink-800  #0D1418   Eintragsfläche, ruhende Karte
+--ink-750  #111A1E   Eingaben, leise Knöpfe
+--rule     #1B272C   Trennlinie, nur im Ausnahmefall
+--rule-2   #29383E   betonte Linie
+--text     #E9EFF1   Haupttext
+--text-soft #9AAAB0  Fortsetzung im Satz, Sekundärtext
+--text-faint #82949B Zeitangaben, Gruppenüberschriften
 ```
+
+Die drei Grundtöne bilden die Tiefe: Seitenleiste dunkler als der
+Hauptbereich, Einträge heller als der Hauptbereich. Struktur entsteht durch
+diesen Flächenwechsel und durch Abstand, nicht durch Rahmen und nicht durch
+Schatten.
 
 ## Farbstrategie: zurückhaltend
 
-Tinte auf Papier plus Farbe nur als Bedeutung. Die Hauptaktion ist ein
-schwarzer Pill-Button; Entscheidungen sind farbig; die Brand färbt einen
-dezenten Akzent.
+Neutrale Tinte plus **ein** Signal. Mint ist Handlung und Bestätigung, nie
+Dekoration.
 
 ```
---green        #1E7A49   Freigeben (gefüllt), Gewinner, unter Ziel
---red          #C2402E   Verwerfen/Ablehnen (Outline), Verlierer, Fehler
---amber        #A3791F   im Test, Demo-Daten, über Ziel
---accent-brand pro Brand Kontextfarbe: Avatar, Wortmarke, aktive Navigation
+--mint   #00FF7F   Hauptaktion, validiert, Messwert schlägt Erwartung
+--red    #FF5C4D   abgebrochen, fehlgeschlagen, Limit überschritten
+--amber  #E8A93B   im Test, offene Auflage, Demo-Daten
 ```
 
 Regeln, die nicht verhandelbar sind:
 
-- Der schwarze Pill ist die eine starke Aktion pro Ansicht — nie zwei.
-- Grün gefüllt heißt Freigeben, Rot als Outline heißt Verwerfen/Ablehnen.
-  Farbe erscheint nur an Entscheidungen und Bewertungen, nie als Dekoration.
-- Der Brand-Akzent kommt aus den Brand-Daten (Fallback-Palette pro Slug) und
-  bleibt klein: Avatar, Wortmarke, aktives Icon, Punkte. Nie als Fläche hinter
-  Fließtext, nie als Verlauf.
+- Mint erscheint pro Ansicht an höchstens drei Stellen. Ist Mint überall, ist es
+  nirgends. Freigegeben trägt deshalb kein Mint, validiert schon.
+- Mint nie als Fläche hinter Fließtext, nie als Verlauf, nie als Textfarbe für
+  ganze Überschriften.
 - Rot ausschließlich negativ. PAUSED ist kein Fehler, sondern der korrekte
   Ruhezustand, und bleibt neutral.
-- Keine Farbverläufe, kein Glas, keine schweren Schatten.
+- Keine Farbverläufe, kein Glas, keine Schatten als Tiefenersatz.
 
 ## Typografie
 
@@ -67,43 +74,38 @@ echten Tabellenziffern: sie tritt bei kleinen Graden zurück und trägt bei
 großen.
 
 - Alle Zahlen laufen mit `font-variant-numeric: tabular-nums` (`.tnum`).
-- Ansichtstitel: 1,875 rem, Gewicht 600, Letterspacing −0,025 em.
-- Die eine große Zahl einer Ansicht: bis 3,25 rem, Gewicht 600,
+- Ansichtstitel: 1,75 rem, Gewicht 600, Letterspacing −0,025 em.
+- Die eine große Zahl einer Ansicht: bis 3,5 rem, Gewicht 600,
   Letterspacing −0,04 em.
 - Listenzeile: 0,9375 rem mit entspannter Zeilenhöhe.
-- Führungstext unter dem Titel: 0,9375 rem, `--ink-soft`, maximal 56 Zeichen
+- Führungstext unter dem Titel: 0,9375 rem, `--text-soft`, maximal 52 Zeichen
   pro Zeile.
 - Zeitangaben und Gruppenüberschriften: 0,6875 bis 0,8125 rem.
 
 Versalien gibt es an genau einer Stelle: der Gruppenüberschrift (`.group-heading`),
-die Abschnitte in Seitenleiste, Listen und Board-Spalten voneinander trennt.
-Sonst nirgends.
+die Abschnitte in Seitenleiste und Liste voneinander trennt. Sonst nirgends.
 
 ## Form und Rhythmus
 
-- **Flächen statt Linien.** Einträge sind weiche, stark gerundete Karten
-  (`.surface`) mit Abstand dazwischen. Trennlinien sind die Ausnahme.
-- Radius ist großzügig und gestuft: Pill (voll rund) für Knöpfe, 16–20 px für
-  Karten, 24 px für die eine große Fläche einer Ansicht.
-- Die Inhaltsspalte ist auf 860 px begrenzt und zentriert; nur das Board darf
-  auf 1280 px wachsen, weil ein Kanban Spalten braucht. Der leere Raum ist
-  Absicht und wird nicht gefüllt.
-- Die Seitenleiste ist 248 px breit (einklappbar auf 64 px), trägt oben
-  „+ Neu“ und Suche (⌘K), dann die Bereiche, unten die Brand als Wortmarke mit
-  Akzent-Avatar. Sie ist leise: haarfeine Kante, keine Versalien in der
-  Navigation.
+- **Flächen statt Linien.** Einträge sind weiche, stark gerundete Flächen mit
+  Abstand dazwischen. Trennlinien sind die Ausnahme, nicht die Regel.
+- Radius ist großzügig und gestuft: 12 px für Knöpfe und Eingaben, 16 px für
+  Einträge, 22 px für die eine große Fläche einer Ansicht.
+- Die Inhaltsspalte ist auf 840 px begrenzt und zentriert. Der leere Raum
+  rechts und links ist Absicht und wird nicht gefüllt.
+- Die Seitenleiste ist 240 px breit, trägt Suche oben, Navigation als Icon plus
+  Label in normaler Textgröße und die Marke unten. Sie ist leise: kein Rahmen,
+  keine Versalien in der Navigation.
 - Eine Listenzeile liest sich als ein Satz: fetter Anfang, graue Fortsetzung in
   derselben Zeile, Zahlen und Statuspunkt rechts.
 - Der Statuspunkt ist 7 px groß und rund. Er ersetzt den Stempel vollständig.
-- Verbindungsstatus erscheint ausschließlich im Bereich „Verbindungen“ —
-  nirgendwo sonst eine „Verbunden“-Pille.
 
 ## Ehrlichkeit als Designregel
 
 Es wird nichts gezeigt, was keine Route dahinter hat. Keine Platzhalter-Funktion,
-kein Knopf ohne Wirkung, kein erfundener Startbildschirm. Noch nicht gelandete
-Routen werden defensiv angebunden: antwortet die Route 404/405/501, verschwindet
-das Bedienelement oder wird als schreibgeschützt benannt.
+kein Knopf ohne Wirkung, kein erfundener Startbildschirm. Die Ablauf-Ansicht wird
+ausschließlich aus echten Läufen gebaut; eine Stufe ohne Lauf sagt „nie
+gelaufen“, statt einen Zustand zu erfinden.
 
 Zahlen aus einer Fixture tragen an ihrer eigenen Stelle die Kennzeichnung
 „Demo-Daten“. Das ist eine Produktregel aus `PRODUCT.md`, keine optionale

@@ -1,9 +1,9 @@
 "use client";
 
 // App shell: a quiet, agentic marketing platform. Chat first, few clear
-// areas, brand as context (accent colour shifts with the brand). State comes
-// from GET /state polled every 5s; long mutations answer 202 + runId (#7)
-// and progress is read from the polled runs.
+// areas, brand as context (a subtle accent shifts with the brand). State
+// comes from GET /state polled every 5s; long mutations answer 202 + runId
+// (#7) and progress is read from the polled runs.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { BrandState, Run } from "@/engine/types";
@@ -49,7 +49,7 @@ export function AppShell() {
   const [view, setView] = useState<ViewKey>("chat");
   const [collapsed, setCollapsed] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
-  // Remount key for the chat panel: „+ Neu“ starts a fresh conversation.
+  // Remount key for the chat panel: "New" starts a fresh conversation.
   const [chatKey, setChatKey] = useState(0);
   const [onboarding, setOnboarding] = useState(false);
   const [onboardError, setOnboardError] = useState<string | null>(null);
@@ -70,7 +70,7 @@ export function AppShell() {
       setState((await stateRes.json()) as BrandState);
       setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "unbekannter Fehler");
+      setError(e instanceof Error ? e.message : "unknown error");
     }
   }, [brandSlug]);
 
@@ -113,14 +113,14 @@ export function AppShell() {
           body: JSON.stringify({ url }),
         });
         const data = (await res.json()) as { slug?: string; error?: string };
-        // 202 (neu) und 409 brand_exists liefern beide den Slug — hinschalten.
+        // 202 (new) and 409 brand_exists both deliver the slug — switch over.
         if (data.slug) {
           switchBrand(data.slug);
         } else {
           setOnboardError(data.error ?? `onboard ${res.status}`);
         }
       } catch (e) {
-        setOnboardError(e instanceof Error ? e.message : "unbekannter Fehler");
+        setOnboardError(e instanceof Error ? e.message : "unknown error");
       } finally {
         setOnboarding(false);
       }
@@ -165,13 +165,10 @@ export function AppShell() {
     [brandSlug, state],
   );
 
-  const wide = view === "board";
+  const wide = view === "board" || view === "studio";
 
   return (
-    <div
-      className="flex min-h-screen bg-paper text-ink"
-      style={{ "--accent-brand": accent } as React.CSSProperties}
-    >
+    <div className="flex min-h-screen bg-background text-foreground">
       <Sidebar
         view={view}
         onView={setView}
@@ -194,27 +191,27 @@ export function AppShell() {
 
       <main className="flex min-h-screen min-w-0 flex-1 flex-col">
         {scoutRunning ? (
-          <p className="animate-pulse px-10 pt-4 text-[0.8125rem] text-ink-soft">
-            Scout liest die Marke …
+          <p className="animate-pulse px-8 pt-4 text-[0.8125rem] text-text-soft">
+            Scout is reading the brand…
           </p>
         ) : null}
 
         <div
-          className={`mx-auto flex w-full min-h-0 flex-1 flex-col px-10 pb-16 pt-10 ${
-            wide ? "max-w-[1280px]" : "max-w-[860px]"
+          className={`mx-auto flex min-h-0 w-full flex-1 flex-col px-8 pb-16 pt-10 ${
+            wide ? "max-w-[1280px]" : "max-w-[840px]"
           }`}
         >
           {error ? (
             <div className="mb-4">
-              <ErrorNote text={`Zustand nicht erreichbar: ${error}`} />
+              <ErrorNote text={`State unreachable: ${error}`} />
             </div>
           ) : null}
           {failedRun ? (
             <div className="mb-4">
               <ErrorNote
-                text={`Letzter Lauf (${failedRun.stage}) fehlgeschlagen: ${
-                  failedRun.error ?? "unbekannter Fehler"
-                } — Details im Ticker.`}
+                text={`Last run (${failedRun.stage}) failed: ${
+                  failedRun.error ?? "unknown error"
+                } — details in the ticker.`}
               />
             </div>
           ) : null}
@@ -246,11 +243,7 @@ export function AppShell() {
           ) : null}
           {view === "economics" ? (
             // Key remounts the view on brand switch so analysis state resets.
-            <EconomicsView
-              key={brandSlug}
-              state={state}
-              brandSlug={brandSlug}
-            />
+            <EconomicsView key={brandSlug} state={state} brandSlug={brandSlug} />
           ) : null}
           {view === "ticker" ? <TickerView lines={tickerLines} /> : null}
           {view === "brand" ? (

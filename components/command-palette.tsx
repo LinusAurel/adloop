@@ -42,15 +42,15 @@ export function CommandPalette({
       { key: "chat", label: "Chat" },
       { key: "board", label: "Board" },
       { key: "studio", label: "Studio" },
-      { key: "economics", label: "Wirtschaftlichkeit" },
+      { key: "economics", label: "Economics" },
       { key: "ticker", label: "Ticker" },
-      { key: "brand", label: "Brand-Profil" },
-      { key: "connections", label: "Verbindungen" },
+      { key: "brand", label: "Brand Profile" },
+      { key: "connections", label: "Connections" },
     ];
     const all: PaletteItem[] = [
       ...nav.map((n) => ({
         id: `nav-${n.key}`,
-        group: "Bereiche",
+        group: "Areas",
         label: n.label,
         run: () => onView(n.key),
       })),
@@ -58,7 +58,7 @@ export function CommandPalette({
         id: `brand-${b.slug}`,
         group: "Brands",
         label: b.name,
-        detail: "Brand wechseln",
+        detail: "Switch brand",
         run: () => onBrand(b.slug),
       })),
       ...(state?.angles ?? []).map((a) => ({
@@ -83,6 +83,33 @@ export function CommandPalette({
 
   useEffect(() => setIndex(0), [query]);
 
+  // Keyboard control sits on the window while the palette is open, so
+  // arrows and Enter work regardless of where the focus currently is.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onClose();
+      } else if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setIndex((i) => Math.min(i + 1, items.length - 1));
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setIndex((i) => Math.max(i - 1, 0));
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        const item = items[index];
+        if (item) {
+          item.run();
+          onClose();
+        }
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, items, index, onClose]);
+
   if (!open) return null;
 
   const pick = (item?: PaletteItem) => {
@@ -93,39 +120,31 @@ export function CommandPalette({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-ink/20 px-6 pt-[16vh]"
+      className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 px-6 pt-[16vh]"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="surface w-full max-w-[560px] overflow-hidden p-0">
+      <div className="w-full max-w-[560px] overflow-hidden rounded-2xl bg-ink-800">
         <div className="flex items-center gap-3 border-b border-rule px-5">
-          <Search className="size-4 shrink-0 text-ink-faint" strokeWidth={1.75} />
+          <Search
+            className="size-4 shrink-0 text-text-faint"
+            strokeWidth={1.75}
+          />
           <input
             ref={inputRef}
+            autoFocus
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Escape") onClose();
-              if (e.key === "ArrowDown") {
-                e.preventDefault();
-                setIndex((i) => Math.min(i + 1, items.length - 1));
-              }
-              if (e.key === "ArrowUp") {
-                e.preventDefault();
-                setIndex((i) => Math.max(i - 1, 0));
-              }
-              if (e.key === "Enter") pick(items[index]);
-            }}
-            placeholder="Bereich, Brand oder Angle suchen …"
-            aria-label="Suchen"
-            className="h-13 w-full bg-transparent py-4 text-[0.9375rem] text-ink placeholder:text-ink-faint focus:outline-none"
+            placeholder="Search areas, brands or angles…"
+            aria-label="Search"
+            className="h-13 w-full bg-transparent py-4 text-[0.9375rem] text-foreground placeholder:text-text-faint focus:outline-none"
           />
         </div>
         <div className="max-h-[320px] overflow-y-auto p-2">
           {items.length === 0 ? (
-            <p className="px-3 py-6 text-center text-[0.875rem] text-ink-faint">
-              Nichts gefunden zu „{query}“.
+            <p className="px-3 py-6 text-center text-[0.875rem] text-text-faint">
+              Nothing matches your search.
             </p>
           ) : (
             items.slice(0, 30).map((item, i) => (
@@ -135,18 +154,18 @@ export function CommandPalette({
                 onMouseEnter={() => setIndex(i)}
                 onClick={() => pick(item)}
                 className={`flex w-full items-baseline gap-3 rounded-xl px-3 py-2.5 text-left text-[0.875rem] transition-colors ${
-                  i === index ? "bg-sink text-ink" : "text-ink-soft"
+                  i === index ? "bg-ink-750" : ""
                 }`}
               >
-                <span className="min-w-0 flex-1 truncate font-medium text-ink">
+                <span className="min-w-0 flex-1 truncate font-medium text-foreground">
                   {item.label}
                 </span>
                 {item.detail ? (
-                  <span className="truncate text-[0.75rem] text-ink-faint">
+                  <span className="truncate text-[0.75rem] text-text-faint">
                     {item.detail}
                   </span>
                 ) : null}
-                <span className="shrink-0 text-[0.6875rem] uppercase tracking-wide text-ink-faint/70">
+                <span className="shrink-0 text-[0.6875rem] uppercase tracking-wide text-text-faint/70">
                   {item.group}
                 </span>
               </button>

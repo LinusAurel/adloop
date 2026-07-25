@@ -3,7 +3,7 @@
 // Quiet sidebar: new chat + search on top, few clear areas, brand as context
 // at the bottom. The brand switcher is a branded popover (wordmark + accent
 // avatar), never a bare select; onboarding lives in a dialog behind
-// „Neue Brand anlegen …“ — no permanent URL field.
+// "New brand…" — no permanent URL field.
 
 import { useEffect, useRef, useState } from "react";
 import {
@@ -19,18 +19,19 @@ import {
   User,
 } from "lucide-react";
 import type { ViewKey } from "@/components/app-shell";
+import { onAccent } from "@/lib/brand-accent";
 
 const NAV_MAIN: { key: ViewKey; label: string; Icon: typeof Activity }[] = [
   { key: "chat", label: "Chat", Icon: MessageSquare },
   { key: "board", label: "Board", Icon: SquareKanban },
   { key: "studio", label: "Studio", Icon: ImageIcon },
-  { key: "economics", label: "Wirtschaftlichkeit", Icon: TrendingUp },
+  { key: "economics", label: "Economics", Icon: TrendingUp },
   { key: "ticker", label: "Ticker", Icon: Activity },
 ];
 
 const NAV_PERSONAL: { key: ViewKey; label: string; Icon: typeof Activity }[] = [
-  { key: "brand", label: "Brand-Profil", Icon: User },
-  { key: "connections", label: "Verbindungen", Icon: Plug },
+  { key: "brand", label: "Brand Profile", Icon: User },
+  { key: "connections", label: "Connections", Icon: Plug },
 ];
 
 export interface BrandListEntry {
@@ -110,14 +111,14 @@ export function Sidebar({
         type="button"
         onClick={() => onView(entry.key)}
         title={collapsed ? entry.label : undefined}
-        className={`flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-[0.875rem] transition-colors ${
+        className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-[0.875rem] transition-colors ${
           active
-            ? "bg-sink font-medium text-ink"
-            : "text-ink-soft hover:bg-sink/60 hover:text-ink"
+            ? "bg-ink-800 font-medium text-foreground"
+            : "text-text-soft hover:bg-ink-850 hover:text-foreground"
         } ${collapsed ? "justify-center px-0" : ""}`}
       >
         <entry.Icon
-          className="size-[16px] shrink-0"
+          className="size-[15px] shrink-0"
           strokeWidth={1.75}
           style={active ? { color: accent } : undefined}
         />
@@ -128,12 +129,12 @@ export function Sidebar({
 
   return (
     <aside
-      className={`sticky top-0 flex h-screen shrink-0 flex-col border-r border-rule px-3 py-4 transition-[width] duration-200 ${
-        collapsed ? "w-[64px]" : "w-[248px]"
+      className={`sticky top-0 flex h-screen shrink-0 flex-col bg-ink-900 px-3 py-4 transition-[width] duration-200 ${
+        collapsed ? "w-[64px]" : "w-[240px]"
       }`}
     >
       <div
-        className={`mb-6 flex items-center px-1.5 pt-1 ${collapsed ? "justify-center" : "justify-between"}`}
+        className={`mb-5 flex items-center px-3 pt-1 ${collapsed ? "justify-center px-0" : "justify-between"}`}
       >
         {collapsed ? null : (
           <p className="text-[0.9375rem] font-semibold tracking-[-0.02em]">
@@ -143,40 +144,38 @@ export function Sidebar({
         <button
           type="button"
           onClick={onToggleCollapsed}
-          aria-label={
-            collapsed ? "Seitenleiste ausklappen" : "Seitenleiste einklappen"
-          }
-          className="rounded-lg p-1.5 text-ink-faint transition-colors hover:bg-sink hover:text-ink"
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          className="rounded-lg p-1.5 text-text-faint transition-colors hover:bg-ink-850 hover:text-foreground"
         >
           <PanelLeft className="size-4" strokeWidth={1.75} />
         </button>
       </div>
 
-      <div className="mb-6 space-y-1">
+      <div className="mb-6 space-y-0.5">
         <button
           type="button"
           onClick={onNewChat}
-          title={collapsed ? "Neu" : undefined}
-          className={`flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-[0.875rem] font-medium text-ink transition-colors hover:bg-sink/60 ${
+          title={collapsed ? "New" : undefined}
+          className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-[0.875rem] font-medium text-foreground transition-colors hover:bg-ink-850 ${
             collapsed ? "justify-center px-0" : ""
           }`}
         >
-          <Plus className="size-[16px] shrink-0" strokeWidth={2} />
-          {collapsed ? null : "Neu"}
+          <Plus className="size-[15px] shrink-0" strokeWidth={2} />
+          {collapsed ? null : "New"}
         </button>
         <button
           type="button"
           onClick={onOpenPalette}
-          title={collapsed ? "Suchen" : undefined}
-          className={`flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-[0.875rem] text-ink-soft transition-colors hover:bg-sink/60 hover:text-ink ${
+          title={collapsed ? "Search" : undefined}
+          className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-[0.875rem] text-text-soft transition-colors hover:bg-ink-850 hover:text-foreground ${
             collapsed ? "justify-center px-0" : ""
           }`}
         >
-          <Search className="size-[16px] shrink-0" strokeWidth={1.75} />
+          <Search className="size-[15px] shrink-0" strokeWidth={1.75} />
           {collapsed ? null : (
             <>
-              <span className="flex-1">Suchen</span>
-              <kbd className="rounded-md bg-sink px-1.5 py-0.5 text-[0.625rem] font-medium text-ink-faint">
+              <span className="flex-1">Search</span>
+              <kbd className="rounded-md bg-ink-800 px-1.5 py-0.5 text-[0.625rem] font-medium text-text-faint">
                 ⌘K
               </kbd>
             </>
@@ -189,14 +188,14 @@ export function Sidebar({
       {collapsed ? (
         <div className="my-4 border-t border-rule" />
       ) : (
-        <p className="group-heading mb-1.5 mt-7 px-2.5">Personalisieren</p>
+        <p className="group-heading mb-1.5 mt-7 px-3">Personalize</p>
       )}
       <nav className="space-y-0.5">{NAV_PERSONAL.map(navItem)}</nav>
 
       {/* Brand foot: wordmark + accent avatar opens the switcher popover. */}
       <div ref={footRef} className="relative mt-auto">
         {switcherOpen ? (
-          <div className="surface absolute bottom-full left-0 z-30 mb-2 w-[224px] p-1.5">
+          <div className="absolute bottom-full left-0 z-30 mb-2 w-[216px] rounded-2xl bg-ink-750 p-1.5">
             <p className="group-heading px-2.5 pb-1 pt-1.5">Brands</p>
             {options.map((b) => (
               <button
@@ -206,8 +205,10 @@ export function Sidebar({
                   setSwitcherOpen(false);
                   onBrand(b.slug);
                 }}
-                className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[0.875rem] transition-colors hover:bg-sink ${
-                  b.slug === brandSlug ? "font-medium text-ink" : "text-ink-soft"
+                className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[0.875rem] transition-colors hover:bg-ink-800 ${
+                  b.slug === brandSlug
+                    ? "font-medium text-foreground"
+                    : "text-text-soft"
                 }`}
               >
                 <span className="min-w-0 flex-1 truncate">{b.name}</span>
@@ -226,10 +227,10 @@ export function Sidebar({
                 setSwitcherOpen(false);
                 setDialogOpen(true);
               }}
-              className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[0.875rem] text-ink-soft transition-colors hover:bg-sink hover:text-ink"
+              className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[0.875rem] text-text-soft transition-colors hover:bg-ink-800 hover:text-foreground"
             >
               <Plus className="size-3.5" strokeWidth={2} />
-              Neue Brand anlegen …
+              New brand…
             </button>
           </div>
         ) : null}
@@ -240,13 +241,13 @@ export function Sidebar({
           aria-haspopup="menu"
           aria-expanded={switcherOpen}
           title={collapsed ? display : undefined}
-          className={`flex w-full items-center gap-2.5 rounded-xl px-2 py-2 transition-colors hover:bg-sink/60 ${
+          className={`flex w-full items-center gap-2.5 rounded-xl px-2 py-2 transition-colors hover:bg-ink-850 ${
             collapsed ? "justify-center px-0" : ""
           }`}
         >
           <span
-            className="grid size-7 shrink-0 place-items-center rounded-full text-[0.6875rem] font-semibold text-white"
-            style={{ background: accent }}
+            className="grid size-7 shrink-0 place-items-center rounded-full text-[0.6875rem] font-semibold"
+            style={{ background: accent, color: onAccent(accent) }}
           >
             {display.slice(0, 1).toUpperCase()}
           </span>
@@ -264,17 +265,17 @@ export function Sidebar({
       {/* Onboarding dialog: URL in, Scout runs async (202 + runId). */}
       {dialogOpen ? (
         <div
-          className="fixed inset-0 z-40 grid place-items-center bg-ink/20 p-6"
+          className="fixed inset-0 z-40 grid place-items-center bg-black/60 p-6"
           onMouseDown={(e) => {
             if (e.target === e.currentTarget) setDialogOpen(false);
           }}
         >
-          <div className="surface w-full max-w-[420px] p-6">
+          <div className="w-full max-w-[420px] rounded-3xl bg-ink-800 p-6">
             <h2 className="text-[1.125rem] font-semibold tracking-[-0.02em]">
-              Neue Brand anlegen
+              Add a new brand
             </h2>
-            <p className="mt-1.5 text-[0.875rem] leading-relaxed text-ink-soft">
-              Der Scout liest die Website und legt das Brand-Profil an.
+            <p className="mt-1.5 text-[0.875rem] leading-relaxed text-text-soft">
+              The Scout reads the website and builds the brand profile.
             </p>
             <form
               className="mt-5 space-y-3"
@@ -291,29 +292,29 @@ export function Sidebar({
                 type="text"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
-                placeholder="https://neue-brand.de"
-                aria-label="Website der neuen Brand"
+                placeholder="https://new-brand.com"
+                aria-label="Website of the new brand"
                 autoFocus
                 disabled={onboarding}
-                className="h-11 w-full rounded-xl border border-rule bg-card px-4 text-[0.9375rem] text-ink placeholder:text-ink-faint focus:outline-none focus:ring-1 focus:ring-ink/30 disabled:opacity-40"
+                className="h-11 w-full rounded-xl bg-ink-750 px-4 text-[0.9375rem] text-foreground placeholder:text-text-faint focus:outline-none focus:ring-1 focus:ring-rule-2 disabled:opacity-40"
               />
               <div className="flex items-center justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setDialogOpen(false)}
-                  className="inline-flex h-10 items-center rounded-full px-4 text-[0.875rem] text-ink-soft transition-colors hover:bg-sink"
+                  className="inline-flex h-10 items-center rounded-xl px-4 text-[0.875rem] text-text-soft transition-colors hover:bg-ink-750 hover:text-foreground"
                 >
-                  Abbrechen
+                  Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={onboarding || url.trim() === ""}
-                  className="inline-flex h-10 items-center rounded-full bg-ink px-5 text-[0.875rem] font-medium text-paper transition-opacity hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="inline-flex h-10 items-center rounded-xl bg-mint px-5 text-[0.875rem] font-semibold text-[#04120a] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-45"
                 >
                   {onboarding ? (
-                    <span className="animate-pulse">Scout startet …</span>
+                    <span className="animate-pulse">Scout starting…</span>
                   ) : (
-                    "Anlegen"
+                    "Add brand"
                   )}
                 </button>
               </div>
@@ -323,7 +324,7 @@ export function Sidebar({
       ) : null}
 
       {onboardError && !collapsed ? (
-        <p className="mt-2 px-2 text-[0.75rem] leading-snug text-negative">
+        <p className="mt-2 px-2 text-[0.75rem] leading-snug text-signal-red">
           {onboardError}
         </p>
       ) : null}

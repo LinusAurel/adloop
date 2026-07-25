@@ -13,11 +13,11 @@ export const FAL_MODELS: FalModelOption[] = [
   {
     id: "fal-ai/nano-banana-pro",
     label: "Nano Banana Pro",
-    hint: "Standard, fotorealistische Motive",
+    hint: "default, photorealistic visuals",
   },
   {
     id: "fal-ai/gpt-image-2",
     label: "GPT Image 2",
-    hint: "Stärker bei Text im Bild",
+    hint: "stronger text-in-image",
   },
 ];

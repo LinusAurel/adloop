@@ -1,9 +1,8 @@
 "use client";
 
-// Shared atoms of the app shell. Direction contract (DESIGN.md): warm paper
-// ground, ink black type, black pill as the one strong action per view, soft
-// rounded cards, colour only as meaning (green = freigeben, red = verwerfen,
-// brand accent = context).
+// Shared atoms of the app shell. Direction contract (DESIGN.md): dark ink
+// ground, soft strongly rounded surfaces, mint as the one strong action,
+// decisions carry colour (approve mint filled, reject red outline).
 
 import { useEffect, useRef, useState } from "react";
 
@@ -42,7 +41,7 @@ export async function postAction(
 
 export function actionError(result: ActionResult): string {
   const err = result.body.error;
-  return typeof err === "string" ? err : `Status ${result.status}`;
+  return typeof err === "string" ? err : `status ${result.status}`;
 }
 
 /* ---------------------------------------------------------------- hooks -- */
@@ -64,7 +63,7 @@ export function useSettle(status: string): boolean {
 
 /* -------------------------------------------------------------- buttons -- */
 
-// The one strong element per view: a black pill.
+// The one strong element per view: the mint action.
 export function PillButton({
   label,
   busyLabel,
@@ -83,7 +82,7 @@ export function PillButton({
       type="button"
       onClick={onClick}
       disabled={busy || disabled}
-      className="inline-flex h-11 shrink-0 items-center rounded-full bg-ink px-6 text-[0.9375rem] font-medium text-paper transition-opacity hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-40"
+      className="inline-flex h-11 shrink-0 items-center rounded-2xl bg-mint px-6 text-[0.9375rem] font-semibold text-[#04120a] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-45"
     >
       {busy ? (
         <span className="animate-pulse">{busyLabel ?? label}</span>
@@ -94,7 +93,8 @@ export function PillButton({
   );
 }
 
-// Coloured decision buttons: approve is green and filled, reject red outline.
+// Coloured decision buttons: approve is green (mint) and filled, reject red
+// outline. Quiet is the neutral secondary action.
 export function ActionButton({
   label,
   tone,
@@ -110,10 +110,10 @@ export function ActionButton({
 }) {
   const skin =
     tone === "approve"
-      ? "bg-positive text-white hover:opacity-90"
+      ? "bg-mint font-semibold text-[#04120a] hover:opacity-90"
       : tone === "reject"
-        ? "border border-negative/45 text-negative hover:bg-negative/8"
-        : "bg-sink text-ink hover:bg-sink-2";
+        ? "border border-signal-red/50 font-medium text-signal-red hover:bg-signal-red/10"
+        : "bg-ink-750 font-medium text-foreground hover:bg-rule";
   const size = small
     ? "h-8 px-3.5 text-[0.8125rem]"
     : "h-9 px-4 text-[0.875rem]";
@@ -122,7 +122,7 @@ export function ActionButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`inline-flex items-center rounded-full font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${size} ${skin}`}
+      className={`inline-flex items-center rounded-xl transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${size} ${skin}`}
     >
       {label}
     </button>
@@ -138,7 +138,7 @@ export function Card({
   children: React.ReactNode;
   className?: string;
 }) {
-  return <div className={`surface ${className}`}>{children}</div>;
+  return <div className={`rounded-2xl bg-ink-800 ${className}`}>{children}</div>;
 }
 
 export function GroupHeading({
@@ -152,7 +152,7 @@ export function GroupHeading({
     <p className="group-heading mb-3 px-1">
       {label}
       {count === undefined ? null : (
-        <span className="ml-1.5 tnum text-ink-faint/70">{count}</span>
+        <span className="ml-1.5 tnum text-text-faint/70">{count}</span>
       )}
     </p>
   );
@@ -170,11 +170,11 @@ export function ViewHeader({
   return (
     <header className="mb-10 flex items-start justify-between gap-8">
       <div className="min-w-0">
-        <h1 className="text-[1.875rem] font-semibold tracking-[-0.025em]">
+        <h1 className="text-[1.75rem] font-semibold tracking-[-0.025em]">
           {title}
         </h1>
         {lead ? (
-          <p className="mt-2 max-w-[56ch] text-[0.9375rem] leading-relaxed text-ink-soft">
+          <p className="mt-2 max-w-[52ch] text-[0.9375rem] leading-relaxed text-text-soft">
             {lead}
           </p>
         ) : null}
@@ -197,10 +197,10 @@ export function Hero({
 }) {
   return (
     <div className="flex flex-col items-center px-6 py-24 text-center">
-      <h1 className="text-[1.875rem] font-semibold tracking-[-0.025em]">
+      <h1 className="text-[1.75rem] font-semibold tracking-[-0.025em]">
         {title}
       </h1>
-      <p className="mt-3 max-w-[48ch] text-[0.9375rem] leading-relaxed text-ink-soft">
+      <p className="mt-3 max-w-[46ch] text-[0.9375rem] leading-relaxed text-text-soft">
         {lead}
       </p>
       {action ? <div className="mt-8">{action}</div> : null}
@@ -210,7 +210,7 @@ export function Hero({
 
 export function ErrorNote({ text }: { text: string }) {
   return (
-    <p className="mt-3 rounded-xl bg-negative/8 px-4 py-2.5 text-[0.8125rem] text-negative">
+    <p className="mt-3 rounded-xl bg-signal-red/10 px-4 py-2.5 text-[0.8125rem] text-signal-red">
       {text}
     </p>
   );

@@ -1,8 +1,9 @@
-// Shared display formatting for the app shell views.
+// Shared display formatting for the app shell views. UI language is English;
+// brand content (angles, copy, learnings) renders verbatim from the data.
 
 export function euro(value?: number | null): string {
   if (value === undefined || value === null) return "—";
-  return `${value.toFixed(2).replace(".", ",")} €`;
+  return `€${value.toFixed(2)}`;
 }
 
 export function ago(iso?: string | null): string {
@@ -10,18 +11,18 @@ export function ago(iso?: string | null): string {
   const ms = Date.now() - new Date(iso).getTime();
   if (!Number.isFinite(ms)) return "—";
   const min = Math.round(ms / 60000);
-  if (min < 1) return "gerade eben";
-  if (min < 60) return `vor ${min} Min.`;
+  if (min < 1) return "just now";
+  if (min < 60) return `${min} min ago`;
   const hours = Math.round(min / 60);
-  if (hours < 24) return `vor ${hours} Std.`;
-  return `vor ${Math.round(hours / 24)} Tg.`;
+  if (hours < 24) return `${hours} h ago`;
+  return `${Math.round(hours / 24)} d ago`;
 }
 
 export function clock(iso: string): string {
   const d = new Date(iso);
   return Number.isNaN(d.getTime())
     ? "--:--:--"
-    : d.toLocaleTimeString("de-DE", { hour12: false });
+    : d.toLocaleTimeString("en-GB", { hour12: false });
 }
 
 export function matches(

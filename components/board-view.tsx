@@ -2,7 +2,7 @@
 
 // Board: a real kanban over the five angle statuses from the data model.
 // Cards carry name, one-line hypothesis and the expected/measured figures;
-// decisions are coloured (approve green filled, kill red outline).
+// decisions are coloured (approve mint filled, discard red outline).
 
 import { useState } from "react";
 import type { Angle, AngleStatus, BrandState } from "@/engine/types";
@@ -19,11 +19,11 @@ import { euro } from "@/lib/format";
 
 // The five real statuses (engine/types.ts), in pipeline order.
 const COLUMNS: { status: AngleStatus; label: string }[] = [
-  { status: "draft", label: "Vorschlag" },
-  { status: "approved", label: "Freigegeben" },
-  { status: "testing", label: "Im Test" },
-  { status: "validated", label: "Validiert" },
-  { status: "killed", label: "Verworfen" },
+  { status: "draft", label: "Proposed" },
+  { status: "approved", label: "Approved" },
+  { status: "testing", label: "Testing" },
+  { status: "validated", label: "Validated" },
+  { status: "killed", label: "Discarded" },
 ];
 
 function AngleCard({
@@ -45,7 +45,7 @@ function AngleCard({
     const result = await postAction(url).catch((e: unknown) => ({
       ok: false,
       status: 0,
-      body: { error: e instanceof Error ? e.message : "Netzwerkfehler" },
+      body: { error: e instanceof Error ? e.message : "network error" },
     }));
     setBusy(false);
     if (!result.ok) {
@@ -56,25 +56,27 @@ function AngleCard({
   };
 
   return (
-    <article className={`surface p-4 ${settling ? "settle" : ""}`}>
+    <article
+      className={`rounded-2xl bg-ink-800 p-4 ${settling ? "settle" : ""}`}
+    >
       <p className="text-[0.9375rem] font-semibold leading-snug tracking-[-0.01em]">
         {angle.name}
       </p>
-      <p className="mt-1.5 line-clamp-2 text-[0.8125rem] leading-relaxed text-ink-soft">
+      <p className="mt-1.5 line-clamp-2 text-[0.8125rem] leading-relaxed text-text-soft">
         {angle.pain || angle.hookDirection}
       </p>
 
       {angle.expectedCpl !== undefined || angle.measuredCpl !== undefined ? (
-        <p className="mt-3 text-[0.75rem] text-ink-faint">
-          erwartet{" "}
-          <span className="tnum font-medium text-ink">
+        <p className="mt-3 text-[0.75rem] text-text-faint">
+          expected{" "}
+          <span className="tnum font-medium text-foreground">
             {euro(angle.expectedCpl)}
           </span>
           {angle.measuredCpl !== undefined ? (
             <>
               {" "}
-              · gemessen{" "}
-              <span className="tnum font-medium text-ink">
+              · measured{" "}
+              <span className="tnum font-medium text-foreground">
                 {euro(angle.measuredCpl)}
               </span>
             </>
@@ -87,14 +89,14 @@ function AngleCard({
           <ActionButton
             small
             tone="approve"
-            label="Freigeben"
+            label="Approve"
             disabled={busy}
             onClick={() => fire(`/api/angles/${angle.id}/approve`)}
           />
           <ActionButton
             small
             tone="reject"
-            label="Verwerfen"
+            label="Discard"
             disabled={busy}
             onClick={() => fire(`/api/angles/${angle.id}/kill`)}
           />
@@ -107,9 +109,7 @@ function AngleCard({
             small
             tone="quiet"
             label={
-              busy || pipelineRunning
-                ? "Material entsteht …"
-                : "Material erzeugen"
+              busy || pipelineRunning ? "Generating assets…" : "Generate assets"
             }
             disabled={busy || pipelineRunning}
             onClick={() => fire(`/api/angles/${angle.id}/assets/generate`)}
@@ -147,7 +147,7 @@ export function BoardView({
     ).catch((e: unknown) => ({
       ok: false,
       status: 0,
-      body: { error: e instanceof Error ? e.message : "Netzwerkfehler" },
+      body: { error: e instanceof Error ? e.message : "network error" },
     }));
     setBusy(false);
     if (!result.ok) {
@@ -160,8 +160,8 @@ export function BoardView({
   const angles = state?.angles ?? [];
   const action = (
     <PillButton
-      label="Neue Angles generieren"
-      busyLabel="Strategist arbeitet …"
+      label="Generate new angles"
+      busyLabel="Strategist working…"
       busy={busy || strategistRunning}
       onClick={generate}
     />
@@ -171,11 +171,11 @@ export function BoardView({
     return (
       <>
         <Hero
-          title="Noch keine Angles"
-          lead="Der Strategist liest den Markenkontext und schlägt testbare Angles vor, jeder mit seinem erwarteten Preis pro Lead. Freigeben oder verwerfen entscheidest Du."
+          title="No angles yet"
+          lead="The strategist reads the brand context and proposes testable angles, each with its expected cost per lead. Approving or discarding stays your call."
           action={action}
         />
-        {failed ? <ErrorNote text={`Start fehlgeschlagen: ${failed}`} /> : null}
+        {failed ? <ErrorNote text={`Could not start: ${failed}`} /> : null}
       </>
     );
   }
@@ -184,19 +184,18 @@ export function BoardView({
     <div className="flex h-full min-h-0 flex-col">
       <header className="mb-8 flex items-start justify-between gap-8">
         <div>
-          <h1 className="text-[1.875rem] font-semibold tracking-[-0.025em]">
+          <h1 className="text-[1.75rem] font-semibold tracking-[-0.025em]">
             Board
           </h1>
-          <p className="mt-2 text-[0.9375rem] text-ink-soft">
-            Jeder Angle wandert von Vorschlag bis Validiert — oder wird
-            verworfen.
+          <p className="mt-2 text-[0.9375rem] text-text-soft">
+            Every angle moves from proposed to validated, or gets discarded.
           </p>
         </div>
         <div className="shrink-0 pt-1">{action}</div>
       </header>
       {failed ? (
         <div className="mb-4">
-          <ErrorNote text={`Start fehlgeschlagen: ${failed}`} />
+          <ErrorNote text={`Could not start: ${failed}`} />
         </div>
       ) : null}
 
@@ -210,14 +209,14 @@ export function BoardView({
             >
               <p className="group-heading mb-3 px-1">
                 {col.label}
-                <span className="ml-1.5 tnum text-ink-faint/70">
+                <span className="ml-1.5 tnum text-text-faint/70">
                   {cards.length}
                 </span>
               </p>
               <div className="space-y-2.5">
                 {cards.length === 0 ? (
-                  <p className="rounded-2xl border border-dashed border-rule px-4 py-6 text-center text-[0.8125rem] text-ink-faint">
-                    leer
+                  <p className="rounded-2xl border border-dashed border-rule px-4 py-6 text-center text-[0.8125rem] text-text-faint">
+                    empty
                   </p>
                 ) : (
                   cards.map((a) => (

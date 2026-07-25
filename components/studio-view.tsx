@@ -1,9 +1,10 @@
 "use client";
 
-// Studio: the campaign from A to Z. Master list of angles with material on
-// the left, on the right the feed-style ad preview, the critic verdict and
-// the human decisions (approve green, reject red, regenerate with a curated
-// image-model picker). Publishing creates PAUSED ads only (Hard Stop 2).
+// Studio: the campaign from A to Z. Master list of angles with assets on the
+// left, on the right the feed-style ad preview, the critic verdict and the
+// human decisions (approve mint filled, reject red outline, regenerate with
+// a curated image-model picker). Publishing creates PAUSED ads only (Hard
+// Stop 2).
 
 import { useMemo, useState } from "react";
 import { ChevronDown } from "lucide-react";
@@ -37,10 +38,10 @@ interface Entry {
 }
 
 const ASSET_STATUS_LABEL: Record<string, string> = {
-  draft: "wartet auf Freigabe",
-  approved: "freigegeben",
-  rejected: "abgelehnt",
-  published: "veröffentlicht",
+  draft: "awaiting approval",
+  approved: "approved",
+  rejected: "rejected",
+  published: "published",
 };
 
 function FeedPreview({
@@ -56,17 +57,17 @@ function FeedPreview({
     .imageUrl;
 
   return (
-    <div className="w-[300px] shrink-0 overflow-hidden rounded-2xl border border-rule bg-card">
+    <div className="w-[300px] shrink-0 overflow-hidden rounded-2xl bg-ink-750">
       <div className="flex items-center gap-2.5 px-4 py-3">
-        <span className="grid size-8 shrink-0 place-items-center rounded-full bg-sink text-[0.6875rem] font-semibold text-ink">
+        <span className="grid size-8 shrink-0 place-items-center rounded-full bg-ink-800 text-[0.6875rem] font-semibold text-text-soft">
           {brandName.slice(0, 1).toUpperCase()}
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[0.8125rem] font-semibold">
             {brandName}
           </span>
-          <span className="block text-[0.6875rem] text-ink-faint">
-            Gesponsert
+          <span className="block text-[0.6875rem] text-text-faint">
+            Sponsored
           </span>
         </span>
       </div>
@@ -74,23 +75,23 @@ function FeedPreview({
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={imageUrl}
-          alt={`Motiv für ${entry.angle.name}`}
+          alt={`Visual for ${entry.angle.name}`}
           className="aspect-[4/5] w-full object-cover"
         />
       ) : (
-        <div className="grid aspect-[4/5] place-items-center bg-sink text-[0.8125rem] text-ink-faint">
-          noch kein Motiv
+        <div className="grid aspect-[4/5] place-items-center bg-ink-800 text-[0.8125rem] text-text-faint">
+          no visual yet
         </div>
       )}
       <div className="space-y-1.5 px-4 py-3.5">
         <p className="text-[0.9375rem] font-semibold leading-snug">
           {variant?.headline ?? "—"}
         </p>
-        <p className="line-clamp-4 whitespace-pre-line text-[0.8125rem] leading-relaxed text-ink-soft">
+        <p className="line-clamp-4 whitespace-pre-line text-[0.8125rem] leading-relaxed text-text-soft">
           {variant?.primary ?? ""}
         </p>
         {variant?.cta ? (
-          <span className="mt-1 block truncate rounded-lg bg-sink px-3 py-2 text-center text-[0.75rem] font-medium">
+          <span className="mt-1 block truncate rounded-lg bg-ink-800 px-3 py-2 text-center text-[0.75rem] font-medium">
             {variant.cta}
           </span>
         ) : null}
@@ -130,7 +131,7 @@ function Detail({
       await fn();
       onChanged();
     } catch (e) {
-      setFailed(e instanceof Error ? e.message : "unbekannter Fehler");
+      setFailed(e instanceof Error ? e.message : "unknown error");
     } finally {
       setBusy(null);
     }
@@ -162,9 +163,7 @@ function Detail({
       const result = await postAction(`/api/brands/${brandSlug}/publish`);
       if (!result.ok) {
         const hint = result.body.hint;
-        throw new Error(
-          typeof hint === "string" ? hint : actionError(result),
-        );
+        throw new Error(typeof hint === "string" ? hint : actionError(result));
       }
     });
 
@@ -181,30 +180,26 @@ function Detail({
           <h2 className="text-[1.25rem] font-semibold tracking-[-0.02em]">
             {entry.angle.name}
           </h2>
-          <p className="mt-1.5 text-[0.875rem] leading-relaxed text-ink-soft">
+          <p className="mt-1.5 text-[0.875rem] leading-relaxed text-text-soft">
             {entry.angle.hookDirection}
           </p>
 
-          <p className="mt-4 text-[0.8125rem] text-ink-faint">
+          <p className="mt-4 text-[0.8125rem] text-text-faint">
             Status: {ASSET_STATUS_LABEL[status] ?? status}
           </p>
 
           {/* Critic verdict with reasoning. */}
-          <div className="surface mt-5 p-5">
+          <div className="mt-5 rounded-2xl bg-ink-800 p-5">
             <div className="flex items-baseline justify-between gap-4">
-              <p className="text-[0.8125rem] font-medium text-ink-soft">
-                Critic-Bewertung
+              <p className="text-[0.8125rem] font-medium text-text-soft">
+                Critic score
               </p>
               <p className="tnum text-[1.5rem] font-semibold tracking-[-0.02em]">
                 {critic?.criticScore ?? "—"}
-                <span className="text-[0.875rem] font-normal text-ink-faint">
-                  {" "}
-                  / 100
-                </span>
               </p>
             </div>
-            <p className="mt-2 text-[0.875rem] leading-relaxed text-ink-soft">
-              {critic?.criticNotes ?? "Noch keine Begründung vorhanden."}
+            <p className="mt-2 text-[0.875rem] leading-relaxed text-text-soft">
+              {critic?.criticNotes ?? "No reasoning yet."}
             </p>
           </div>
 
@@ -212,13 +207,13 @@ function Detail({
             <div className="mt-5 flex flex-wrap items-center gap-2">
               <ActionButton
                 tone="approve"
-                label="Freigeben"
+                label="Approve"
                 disabled={busy !== null}
                 onClick={() => decide("approve")}
               />
               <ActionButton
                 tone="reject"
-                label="Ablehnen"
+                label="Reject"
                 disabled={busy !== null}
                 onClick={() => decide("reject")}
               />
@@ -231,14 +226,14 @@ function Detail({
                 tone="quiet"
                 label={
                   busy === "publish" || publishRunning
-                    ? "Publisher arbeitet …"
-                    : "Als pausierte Ad anlegen"
+                    ? "Publisher working…"
+                    : "Create as paused ad"
                 }
                 disabled={busy !== null || publishRunning}
                 onClick={publish}
               />
-              <p className="mt-2 text-[0.75rem] leading-relaxed text-ink-faint">
-                Ads entstehen immer pausiert; aktiviert wird von Hand im Ads
+              <p className="mt-2 text-[0.75rem] leading-relaxed text-text-faint">
+                Ads are always created paused; a human activates them in Ads
                 Manager.
               </p>
             </div>
@@ -246,14 +241,14 @@ function Detail({
 
           {/* Regenerate with curated image models. */}
           <div className="mt-6 border-t border-rule pt-5">
-            <p className="group-heading mb-2.5">Bild-Modell</p>
+            <p className="group-heading mb-2.5">Image model</p>
             <div className="flex flex-wrap items-center gap-2">
               <span className="relative inline-flex">
                 <select
                   value={model}
                   onChange={(e) => setModel(e.target.value)}
-                  aria-label="Bild-Modell wählen"
-                  className="h-9 appearance-none rounded-full border border-rule bg-card pl-4 pr-9 text-[0.8125rem] font-medium text-ink focus:outline-none focus:ring-1 focus:ring-ink/30"
+                  aria-label="Choose image model"
+                  className="h-9 appearance-none rounded-xl bg-ink-750 pl-4 pr-9 text-[0.8125rem] font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-rule-2"
                 >
                   {FAL_MODELS.map((m) => (
                     <option key={m.id} value={m.id}>
@@ -262,7 +257,7 @@ function Detail({
                   ))}
                 </select>
                 <ChevronDown
-                  className="pointer-events-none absolute right-3 top-1/2 size-3.5 -translate-y-1/2 text-ink-faint"
+                  className="pointer-events-none absolute right-3 top-1/2 size-3.5 -translate-y-1/2 text-text-faint"
                   strokeWidth={1.75}
                 />
               </span>
@@ -270,8 +265,8 @@ function Detail({
                 tone="quiet"
                 label={
                   busy === "regenerate" || pipelineRunning
-                    ? "Material entsteht …"
-                    : "Neu generieren"
+                    ? "Generating assets…"
+                    : "Regenerate"
                 }
                 disabled={busy !== null || pipelineRunning}
                 onClick={regenerate}
@@ -302,7 +297,7 @@ export function StudioView({
   const brandName = state?.brand.name ?? brandSlug;
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  // One entry per angle that has material.
+  // One entry per angle that has assets.
   const entries = useMemo<Entry[]>(
     () =>
       (state?.angles ?? [])
@@ -320,14 +315,13 @@ export function StudioView({
     [state],
   );
 
-  const selected =
-    entries.find((e) => e.angle.id === selectedId) ?? entries[0];
+  const selected = entries.find((e) => e.angle.id === selectedId) ?? entries[0];
 
   if (entries.length === 0) {
     return (
       <Hero
-        title="Noch kein Material"
-        lead="Sobald Du im Board einen Angle freigibst und Material erzeugen lässt, stehen Motiv und Copy hier als Ad-Vorschau — so, wie sie im Feed erscheinen."
+        title="No assets yet"
+        lead="Approve an angle on the board and generate assets — visual and copy appear here as a feed preview, the way they would run."
       />
     );
   }
@@ -335,11 +329,11 @@ export function StudioView({
   return (
     <>
       <header className="mb-8">
-        <h1 className="text-[1.875rem] font-semibold tracking-[-0.025em]">
+        <h1 className="text-[1.75rem] font-semibold tracking-[-0.025em]">
           Studio
         </h1>
-        <p className="mt-2 text-[0.9375rem] text-ink-soft">
-          Motiv und Copy als Paar, vom Critic bewertet, von Dir freigegeben.
+        <p className="mt-2 text-[0.9375rem] text-text-soft">
+          Visual and copy as a pair, scored by the critic, approved by you.
         </p>
       </header>
 
@@ -356,16 +350,16 @@ export function StudioView({
                 type="button"
                 onClick={() => setSelectedId(entry.angle.id)}
                 className={`w-full rounded-xl px-3.5 py-3 text-left transition-colors ${
-                  active ? "bg-sink" : "hover:bg-sink/50"
+                  active ? "bg-ink-800" : "hover:bg-ink-850"
                 }`}
               >
-                <span className="block truncate text-[0.875rem] font-medium text-ink">
+                <span className="block truncate text-[0.875rem] font-medium text-foreground">
                   {entry.angle.name}
                 </span>
-                <span className="mt-0.5 block text-[0.75rem] text-ink-faint">
+                <span className="mt-0.5 block text-[0.75rem] text-text-faint">
                   {ASSET_STATUS_LABEL[status] ?? status}
                   {entry.copyAsset?.criticScore !== undefined
-                    ? ` · Critic ${entry.copyAsset.criticScore}`
+                    ? ` · critic ${entry.copyAsset.criticScore}`
                     : ""}
                 </span>
               </button>

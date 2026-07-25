@@ -1,4 +1,4 @@
-# TOOLING — Setup-Status (Stand: 25.07.2026, ~08:30 Uhr)
+# TOOLING — Setup-Status (Stand: 25.07.2026, aktualisiert mittags)
 
 ## Status-Tabelle
 
@@ -10,14 +10,14 @@
 | bun | ja | 1.3.11 | nichts |
 | gh | ja | 2.86.0 | Auth-Check lief in Keyring-Timeout (nicht-interaktive Session). Account `LinusAurel` ist konfiguriert — **Linus: einmal `gh auth status` im Terminal bestätigen** |
 | cursor-agent (Cursor CLI) | ja, **verifiziert** | 2026.07.23-e383d2b (Homebrew-Cask `cursor-cli`, Binary von downloads.cursor.com) | **Linus: `cursor-agent login`** (interaktiv). `cursor-agent --version` läuft sauber durch (s. Vorfälle Nr. 1 zum Gatekeeper-Fix) |
-| n8n | **nein** | — | Global-Install fehlgeschlagen (s. Vorfälle). Morgen: `npx n8n` versuchen; wenn derselbe Build-Fehler kommt → Node 22 LTS (`brew install node@22`) oder Docker (`docker run -p 5678:5678 n8nio/n8n`) |
+| n8n | ja (Cloud-Instanz) | — | Läuft auf n8n Cloud statt lokal (lokaler Install gescheitert, s. Vorfälle). Workflow-Export liegt unter `integrations/n8n/`, API-Key via `N8N_API_KEY` in `.env` |
 | yt-dlp | **nein** | — | Bei Bedarf: `brew install yt-dlp` (war nicht Teil des Setup-Auftrags) |
 | ffmpeg | ja | 8.1.2 | nichts |
 
 ## Vorfälle beim Setup
 
 1. **Cursor CLI:** cursor.com war nicht erreichbar (SSL-Timeout, auch über externen Proxy — Ausfall auf Cursor-/Vercel-Seite), der offizielle Installer `curl https://cursor.com/install | bash` schlug deshalb fehl. Ausweich: Homebrew-Cask `cursor-cli` (offizielles Binary vom CDN `downloads.cursor.com`, SHA256-verifiziert durch Homebrew). Danach blockierte macOS-Gatekeeper das native Modul `merkle-tree-napi.darwin-arm64.node` (Quarantäne, „Apple could not verify…“) und verschob es beim Dialog in den Papierkorb. **Fix, der funktioniert hat:** `brew reinstall --cask cursor-cli` und direkt danach — vor dem ersten Start — `xattr -dr com.apple.quarantine /opt/homebrew/Caskroom/cursor-cli/`. Danach läuft `cursor-agent --version` sauber durch. Falls das CLI je neu installiert wird, solange cursor.com down ist: denselben xattr-Schritt wiederholen. Sobald cursor.com wieder erreichbar ist, ist der offizielle Installer der sauberere Weg (notarisiert, kein xattr nötig).
-2. **n8n-Global-Install scheiterte** am nativen Build von `isolated-vm` (node-gyp) unter Node v26. `npx n8n` kann denselben Fehler treffen — Fallbacks siehe Tabelle. Für den 3-Node-Workflow (Schedule → HTTP POST `/api/brands/loyft/optimize` → Notification) reicht zur Not auch ein Cron/`launchd`-Job mit `curl`.
+2. **n8n-Global-Install scheiterte** am nativen Build von `isolated-vm` (node-gyp) unter Node v26. **Gelöst:** Statt lokalem Install läuft n8n auf einer Cloud-Instanz; der Optimize-Workflow (Schedule → HTTP POST `/api/brands/loyft/optimize`) ist dort eingerichtet, Export liegt unter `integrations/n8n/`.
 
 ## MCP / Konnektoren
 

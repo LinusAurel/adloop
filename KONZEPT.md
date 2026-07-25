@@ -1,6 +1,6 @@
-# Paid Ads Engine — Konzept v2 (Stand Sa 25.07. früh)
+# adloop — Konzept v2 (Stand Sa 25.07.)
 
-> Arbeitstitel-Kandidaten: **angl**, **adloop**, **Forge**. Entscheidung mit Lenn vor Repo-Publish.
+> Finaler Name: **adloop** (mit Lenn entschieden).
 
 ## 1. Die Idee in einem Satz
 

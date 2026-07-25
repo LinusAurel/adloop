@@ -1,8 +1,8 @@
 # Skill: Research (Scout)
 
-Rolle: Research-Analyst für Direct-Response-Werbung. Aus Rohmaterial (Website,
-Bewertungen, Foren, Wettbewerber-Ads) entsteht ein Research-Doc, das Strategist
-und Copywriter direkt verwenden können.
+Rolle: Senior-Research-Analyst für Direct-Response-Werbung. Aus Rohmaterial
+(Website, Bewertungen, Foren, Wettbewerber-Ads) entsteht ein Research-Doc,
+das Strategist und Copywriter direkt verwenden können.
 
 ## Die 7 Research-Fragen (immer alle beantworten)
 
@@ -21,6 +21,26 @@ und Copywriter direkt verwenden können.
    (Ruhe, Kontrolle, nie wieder kümmern müssen).
 7. **Einwände und Risiken:** Was hält vom Klick oder Lead ab (Skepsis,
    Datenschutz, „zu schön, um wahr zu sein“)?
+
+## Extraktions-Checkliste (Pflicht pro Output-Feld)
+
+- **Segmente mit Job-to-be-done:** pro Segment in `psychographics` den JTBD
+  benennen: „Wenn [Situation], will ich [Fortschritt], damit [Ergebnis]“ —
+  der Job erklärt den Kauf, nicht das Produktinteresse.
+- **Einwände + Gegenbeweise:** jeden Einwand als Paar festhalten:
+  „Einwand — Gegenbeweis laut Website: [wörtlich, z. B. Garantie, Zertifikat,
+  Zahl]“. Fehlt der Gegenbeweis auf der Website, explizit „kein Gegenbeweis
+  auf der Website“ notieren — die Lücke ist selbst ein Befund.
+- **Tonalität mit Wortlaut:** nicht nur Adjektive — 2–3 kurze Beispielsätze
+  der Website wörtlich in `tonality` zitieren, damit der Copywriter den Ton
+  imitieren kann.
+- **Wettbewerbs-Positionierung:** pro Competitor in `competitorNotes`: Angle,
+  Promise, Mechanismus — und wodurch sich die Brand konkret unterscheidet
+  (oder „kein erkennbarer Unterschied“, wenn ehrlich).
+- **Konkrete Zahlen / Proof-Points:** alle belastbaren Zahlen der Website
+  (Preise, Kundenzahl, Dauer, Ersparnis, Garantien) wörtlich mit Fundort in
+  `productSummary`/`valueProposition` aufnehmen — Rohstoff für spezifische
+  Hooks. Keine Zahl ohne Fundort.
 
 ## Voice of Customer (VoC)
 

@@ -130,7 +130,9 @@ function FeedPreview({
 
 // Performance rows from the latest analysis that belong to this entry's
 // assets (any version). The ad name carries the asset id, the Analyst
-// resolves it into row.assetId.
+// resolves it into row.assetId; rows whose asset id is not in the local
+// store (e.g. seeded insight rows) still match via row.angleId, so the
+// winner section never goes missing just because an id drifted.
 function performanceRows(
   entry: Entry,
   analysis: AnalysisResult | null,
@@ -141,7 +143,11 @@ function performanceRows(
       .filter((a): a is Asset => Boolean(a))
       .map((a) => a.id),
   );
-  return analysis.rows.filter((r) => r.assetId && ids.has(r.assetId));
+  return analysis.rows.filter(
+    (r) =>
+      (r.assetId && ids.has(r.assetId)) ||
+      (r.angleId && r.angleId === entry.angle.id),
+  );
 }
 
 function PerformanceSection({

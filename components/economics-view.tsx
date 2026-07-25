@@ -70,13 +70,38 @@ function Sparkline({ points }: { points: number[] }) {
   );
 }
 
-function RowLine({ row }: { row: ClassifiedAdRow }) {
+// Human-readable row title: angle name + variant ("Community statt
+// Alleingang · Static V1") resolved via row.angleId/row.assetId against the
+// brand state. Falls back to the raw ad name when nothing matches.
+function rowDisplay(
+  row: ClassifiedAdRow,
+  state: BrandState | null,
+): { title: string; raw?: string } {
+  const raw = row.adName || row.adId;
+  const angle = state?.angles.find((a) => a.id === row.angleId);
+  if (!angle) return { title: raw };
+  const asset = state?.assets.find((a) => a.id === row.assetId);
+  // Version from the asset record, else from the ad name suffix (…_V2).
+  const version =
+    asset?.version ?? Number(/_V(\d+)$/i.exec(row.adName ?? "")?.[1] ?? 1);
+  const kind = asset?.kind === "ad_copy" ? "Copy" : "Static";
+  return { title: `${angle.name} · ${kind} V${version}`, raw };
+}
+
+function RowLine({
+  row,
+  state,
+}: {
+  row: ClassifiedAdRow;
+  state: BrandState | null;
+}) {
   const dot =
     row.classification === "winner"
       ? "bg-emerald-500"
       : row.classification === "loser"
         ? "bg-signal-red"
         : "bg-text-faint";
+  const { title, raw } = rowDisplay(row, state);
   // The Analyst resolves the asset id from the ad name
   // ({BRAND}_{ANGLEID}_{ASSETID}_{FORMAT}_{VERSION}) into row.assetId; a row
   // with one links straight into the Studio (app-shell listens for the event).
@@ -93,12 +118,17 @@ function RowLine({ row }: { row: ClassifiedAdRow }) {
       <span className="pt-[0.45rem]">
         <span className={`block size-[7px] shrink-0 rounded-full ${dot}`} />
       </span>
-      <p className="min-w-0 flex-1 text-[0.9375rem] leading-relaxed">
-        <span className="font-semibold text-foreground">
-          {row.adName || row.adId}
-        </span>
-        <span className="text-text-soft"> {row.reason}</span>
-      </p>
+      <div className="min-w-0 flex-1">
+        <p className="text-[0.9375rem] leading-relaxed">
+          <span className="font-semibold text-foreground">{title}</span>
+          <span className="text-text-soft"> {row.reason}</span>
+        </p>
+        {raw ? (
+          <p className="mt-0.5 truncate font-mono text-[0.6875rem] text-text-faint">
+            {raw}
+          </p>
+        ) : null}
+      </div>
       <span className="shrink-0 pt-1 tnum text-[0.8125rem] text-text-soft">
         {row.leads} leads · {euro(row.cpl)}
       </span>
@@ -376,7 +406,7 @@ export function EconomicsView({
         ) : (
           <div className="space-y-2">
             {[...winners, ...losers, ...rest].map((row) => (
-              <RowLine key={row.adId} row={row} />
+              <RowLine key={row.adId} row={row} state={state} />
             ))}
           </div>
         )}

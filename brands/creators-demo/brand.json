@@ -1,0 +1,68 @@
+{
+  "slug": "creators-demo",
+  "name": "CREATORS",
+  "url": "https://creators-ecosystem.de",
+  "product": "AI-Ökosystem und Creator-Netzwerk aus Stuttgart: Community, Events und Enablement in einem. Membership mit wöchentlichen Builder-Sessions, Hands-on-Workshops und Abendformaten, die Corporates, Startups und KI-Interessierte in Baden-Württemberg an konkreten Projekten zusammenbringen.",
+  "audience": "Corporates, Startups und KI-Interessierte in Baden-Württemberg: Innovation-Teams etablierter Unternehmen, Gründer und Produktleute junger Firmen sowie Professionals, die KI im Alltag konkret einsetzen wollen statt nur darüber zu lesen.",
+  "tone": "Hands-on statt Hype: konkret, kollegial, auf Augenhöhe. Wir zeigen, was gebaut wurde und was es bringt, nicht was theoretisch möglich wäre. Kurze Sätze, klare Aussagen, kein Buzzword-Bingo.",
+  "conversionGoal": "website_lead",
+  "targetCpa": 40,
+  "cta": {
+    "label": "Jetzt Teil des Netzwerks werden",
+    "subline": "Unverbindliche Anfrage. Wir melden uns persönlich bei Dir."
+  },
+  "fallbackCopy": {
+    "message": "KI baut man nicht allein: CREATORS bringt Builder, Gründer und Innovation-Teams in Stuttgart an einen Tisch. Wöchentliche Sessions, echte Projekte, ehrliches Feedback.",
+    "headline": "Das KI-Ökosystem in Stuttgart"
+  },
+  "guardrails": [
+    "Kein KI-Hype-Vokabular ohne konkreten Nutzen (kein revolutionär, disruptiv, Game-Changer)",
+    "Kein erfundener Social Proof, keine erfundenen Mitglieder-Testimonials",
+    "Keine Heilsversprechen zu Karriere oder Umsatz; erlaubt: konkrete Programm-Inhalte",
+    "Keine falsche Dringlichkeit oder erfundene Knappheit bei Memberships und Events",
+    "Kein Wettbewerber-Bashing gegenüber anderen Communities oder Hubs",
+    "Du/Dir/Dich/Dein groß in kundengerichteter Copy; echte Umlaute; keine Gedankenstriche",
+    "Stuttgart-Bezug konkret halten (Orte, Formate), nicht als leere Standort-Floskel"
+  ],
+  "copyRules": {
+    "forbiddenPatterns": [
+      {
+        "pattern": "\\bgarantiert\\w*",
+        "flags": "i",
+        "reason": "Keine garantierten Karriere- oder Lern-Ergebnisse versprechen"
+      },
+      {
+        "pattern": "[—–]",
+        "reason": "Keine Gedankenstriche in kundengerichteter Copy (Komma, Doppelpunkt oder neuer Satz)"
+      }
+    ]
+  },
+  "designTokens": {
+    "primary": "#0F766E",
+    "accent": "#2DD4BF",
+    "background": "#0B1220",
+    "font": "Inter, sans-serif",
+    "imagery": "Dokumentarisch, echte Arbeitssituationen, warmes Licht, keine Stock-Posen"
+  },
+  "meta": {
+    "adAccountId": "demo-act-creators-000",
+    "pageId": "demo-page-creators-000",
+    "pixelId": "demo-pixel-creators-000",
+    "leadEventName": "Lead",
+    "geoCountries": [
+      "DE"
+    ],
+    "optimizationGoal": "OFFSITE_CONVERSIONS",
+    "billingEvent": "IMPRESSIONS",
+    "specialAdCategories": [],
+    "dsaBeneficiary": "CREATORS (Demo)",
+    "dsaPayor": "CREATORS (Demo)",
+    "fixedDailyBudgetCents": null,
+    "campaignId": "demo-camp-creators-001",
+    "adsetId": "demo-adset-creators-001",
+    "campaignTarget": {
+      "metric": "CPL",
+      "value": 40
+    }
+  }
+}

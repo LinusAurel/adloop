@@ -25,7 +25,7 @@ data/*
 # Brand-Daten bleiben lokal und privat (Repo ist öffentlich) — nur die
 # fiktive Beispiel-Brand ist versioniert
 brands/*
-!brands/_example/
+!brands/creators-demo/
 
 # Worktrees (AGENTS.md Workflow)
 .worktrees/

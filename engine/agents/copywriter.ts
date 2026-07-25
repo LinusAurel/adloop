@@ -31,6 +31,9 @@ function buildPrompt(brand: Brand, angle: Angle, rewrite?: RewriteContext): stri
   parts.push(
     "## Freigegebener Angle\n" +
       `- Name: ${angle.name}\n` +
+      (angle.category ? `- Kategorie: ${angle.category}\n` : "") +
+      (angle.awarenessStage ? `- Awareness-Stufe: ${angle.awarenessStage}\n` : "") +
+      (angle.hypothesis ? `- Hypothese: ${angle.hypothesis}\n` : "") +
       `- Segment: ${angle.segment}\n` +
       `- Schmerz: ${angle.pain}\n` +
       `- Mechanismus: ${angle.mechanism}\n` +

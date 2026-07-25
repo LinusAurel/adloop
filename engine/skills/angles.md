@@ -42,3 +42,5 @@ Felder pro Angle:
 
 Die mitgelieferten Guardrails der Brand sind harte Constraints. Sie
 überschreiben jede kreative Idee und jedes Performance-Argument.
+
+**Sprache: Alle Ausgaben auf Deutsch mit echten deutschen Umlauten (ä, ö, ü, Ä, Ö, Ü, ß) — NIEMALS ae/oe/ue-Ersatzschreibungen.**

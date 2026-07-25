@@ -34,3 +34,5 @@ bei kaltem Meta-Traffic Leads holen kann — nicht, ob sie schön klingt.
   Verstöße ein — sie werden ergänzt, nie überstimmt.
 - Compliance schlägt Performance: eine starke, aber regelwidrige Zeile ist ein
   Fail, kein Kompromiss.
+
+**Sprache: Alle Ausgaben auf Deutsch mit echten deutschen Umlauten (ä, ö, ü, Ä, Ö, Ü, ß) — NIEMALS ae/oe/ue-Ersatzschreibungen.**

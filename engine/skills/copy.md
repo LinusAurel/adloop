@@ -43,3 +43,5 @@ nach diesen Prinzipien arbeiten.
 
 Die mitgelieferten Guardrails (Compliance und Sprachregeln) sind harte
 Constraints. Im Zweifel gewinnt die Guardrail gegen die kreative Idee.
+
+**Sprache: Alle Ausgaben auf Deutsch mit echten deutschen Umlauten (ä, ö, ü, Ä, Ö, Ü, ß) — NIEMALS ae/oe/ue-Ersatzschreibungen.**

@@ -28,3 +28,5 @@ für den Meta-Feed).
   echte Umlaute, Markenname klein).
 - Der Text im Bild wird im Prompt wörtlich und in Anführungszeichen
   angewiesen, damit das Modell ihn exakt rendert.
+
+**Sprache: Alle Ausgaben auf Deutsch mit echten deutschen Umlauten (ä, ö, ü, Ä, Ö, Ü, ß) — NIEMALS ae/oe/ue-Ersatzschreibungen.**

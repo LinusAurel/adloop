@@ -43,3 +43,5 @@ und Copywriter direkt verwenden können.
 
 Strukturiertes JSON gemäß vorgegebenem Schema: Segmente, Awareness-Verteilung,
 Competitor-Big-Ideas, VoC-Zitate, Einwände — jeweils mit Evidence-Tag.
+
+**Sprache: Alle Ausgaben auf Deutsch mit echten deutschen Umlauten (ä, ö, ü, Ä, Ö, Ü, ß) — NIEMALS ae/oe/ue-Ersatzschreibungen.**

@@ -1,41 +1,48 @@
 "use client";
 
-// Economics tab (SPEC §6, view 4): tiles from the Analyst result, winner/
-// loser list, learnings feed. Fixture results are ALWAYS labeled with the
-// „Demo-Daten“ badge — never sold as live optimization (SPEC §3, Stufe 7).
+// Economics (SPEC §6, view 4): the Analyst result, winner/loser list and the
+// learnings feed. Fixture results are ALWAYS labelled „Demo-Daten“ — never
+// sold as live optimisation (SPEC §3, Stufe 7). Form follows DESIGN.md.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AnalysisResult, ClassifiedAdRow } from "@/engine/agents/analyst";
 import type { BrandState } from "@/engine/types";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-
-const MINT = "#00FF7F";
 
 function euro(value: number | null | undefined): string {
   if (value === null || value === undefined) return "—";
   return `${value.toFixed(2).replace(".", ",")} €`;
 }
 
-function Tile({ label, value, sub }: { label: string; value: string; sub?: string }) {
+function QuietAction({
+  label,
+  onClick,
+  disabled,
+  tone = "solid",
+}: {
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  tone?: "solid" | "ghost";
+}) {
+  const skin =
+    tone === "solid"
+      ? "bg-ink-750 text-foreground hover:bg-rule"
+      : "text-text-soft hover:bg-ink-750 hover:text-foreground";
   return (
-    <Card className="bg-zinc-900 border-zinc-800">
-      <CardContent className="pt-6">
-        <p className="text-xs uppercase tracking-widest text-zinc-500">{label}</p>
-        <p className="mt-2 text-3xl font-bold tabular-nums" style={{ color: MINT }}>
-          {value}
-        </p>
-        {sub ? <p className="mt-1 text-xs text-zinc-500">{sub}</p> : null}
-      </CardContent>
-    </Card>
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={`inline-flex h-9 items-center rounded-xl px-4 text-[0.8125rem] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${skin}`}
+    >
+      {label}
+    </button>
   );
 }
 
 // Audio briefing (Should scope): one button, fires POST /briefing and plays
-// the returned mp3 via a hidden HTML5 audio element. Kept minimal on purpose —
-// visual polish happens in the design stream.
-function BriefingButton() {
+// the returned mp3 via a hidden HTML5 audio element.
+function BriefingButton({ brandSlug }: { brandSlug: string }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -44,7 +51,9 @@ function BriefingButton() {
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch(`/api/brands/loyft/briefing`, { method: "POST" });
+      const res = await fetch(`/api/brands/${brandSlug}/briefing`, {
+        method: "POST",
+      });
       const json = (await res.json()) as
         | { ok: true; url: string }
         | { ok: false; error: string };
@@ -61,51 +70,57 @@ function BriefingButton() {
   };
 
   return (
-    <span className="inline-flex items-center gap-2">
-      <Button
-        size="sm"
+    <>
+      <QuietAction
+        tone="ghost"
+        label={busy ? "Briefing entsteht …" : "Audio-Briefing"}
         disabled={busy}
-        style={{ backgroundColor: MINT, color: "#002429" }}
         onClick={play}
-      >
-        {busy ? "Briefing wird erstellt …" : "Audio-Briefing abspielen"}
-      </Button>
+      />
       <audio ref={audioRef} className="hidden" />
-      {error ? <span className="text-xs text-red-400">Briefing-Fehler: {error}</span> : null}
-    </span>
+      {error ? (
+        <span className="text-[0.8125rem] text-signal-red">
+          Briefing-Fehler: {error}
+        </span>
+      ) : null}
+    </>
   );
 }
 
 function RowLine({ row }: { row: ClassifiedAdRow }) {
-  const tone =
+  const dot =
     row.classification === "winner"
-      ? "text-emerald-400"
+      ? "bg-mint"
       : row.classification === "loser"
-        ? "text-red-400"
-        : "text-zinc-500";
-  const label =
-    row.classification === "winner"
-      ? "Winner"
-      : row.classification === "loser"
-        ? "Loser"
-        : "zu wenig Daten";
+        ? "bg-signal-red"
+        : "bg-text-faint";
   return (
-    <li className="flex items-baseline justify-between gap-4 border-b border-zinc-800 py-2 text-xs">
-      <div className="min-w-0">
-        <p className="truncate font-mono text-zinc-300">{row.adName || row.adId}</p>
-        <p className="text-zinc-500">{row.reason}</p>
-      </div>
-      <div className="shrink-0 text-right">
-        <p className={`font-semibold ${tone}`}>{label}</p>
-        <p className="text-zinc-500">
-          {euro(row.spend)} · {row.leads} Leads · CPL {euro(row.cpl)}
+    <div className="rounded-2xl bg-ink-800 px-5 py-4">
+      <div className="flex items-start gap-3">
+        <span className="pt-[0.45rem]">
+          <span className={`block size-[7px] shrink-0 rounded-full ${dot}`} />
+        </span>
+        <p className="min-w-0 flex-1 text-[0.9375rem] leading-relaxed">
+          <span className="font-semibold text-foreground">
+            {row.adName || row.adId}
+          </span>
+          <span className="text-text-soft"> {row.reason}</span>
         </p>
+        <span className="shrink-0 pt-1 tnum text-[0.8125rem] text-text-soft">
+          {row.leads} Leads · {euro(row.cpl)}
+        </span>
       </div>
-    </li>
+    </div>
   );
 }
 
-export function EconomicsTab({ state }: { state: BrandState | null }) {
+export function EconomicsTab({
+  state,
+  brandSlug,
+}: {
+  state: BrandState | null;
+  brandSlug: string;
+}) {
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [pendingRunId, setPendingRunId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -116,7 +131,7 @@ export function EconomicsTab({ state }: { state: BrandState | null }) {
   const run = useCallback(async (mode: "auto" | "live" | "fixture") => {
     setError(null);
     try {
-      const res = await fetch(`/api/brands/loyft/optimize`, {
+      const res = await fetch(`/api/brands/${brandSlug}/optimize`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ mode }),
@@ -129,7 +144,7 @@ export function EconomicsTab({ state }: { state: BrandState | null }) {
     } catch (e) {
       setError(e instanceof Error ? e.message : "unbekannter Fehler");
     }
-  }, []);
+  }, [brandSlug]);
 
   useEffect(() => {
     if (ranOnce.current) return;
@@ -159,100 +174,146 @@ export function EconomicsTab({ state }: { state: BrandState | null }) {
   const rest = rows.filter((r) => r.classification === "insufficient_data");
   const learnings = state?.learnings ?? [];
 
+  const cpl = analysis?.totals.cpl ?? null;
+  // Onboarded brands may carry targetCpa: null — treat like "no limit set".
+  const target = state?.brand.targetCpa ?? undefined;
+  const underTarget = cpl !== null && target !== undefined && cpl <= target;
+
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center gap-3">
-        {analysis?.source === "fixture" ? (
-          <Badge className="bg-amber-500/15 text-amber-400 border border-amber-500/40">
-            Demo-Daten
-          </Badge>
+    <>
+      <header className="mb-12 flex items-start justify-between gap-8">
+        <div className="min-w-0">
+          <h1 className="text-[1.75rem] font-semibold tracking-[-0.025em]">
+            Wirtschaftlichkeit
+          </h1>
+          <p className="mt-2 max-w-[52ch] text-[0.9375rem] leading-relaxed text-text-soft">
+            Was ein Lead gerade kostet, gemessen an der Grenze, die sich{" "}
+            {state?.brand.name ?? "die Marke"} leisten kann.
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2 pt-1">
+          <BriefingButton brandSlug={brandSlug} />
+          <QuietAction
+            label={loading ? "analysiert …" : "Neu analysieren"}
+            disabled={loading}
+            onClick={() => run("auto")}
+          />
+        </div>
+      </header>
+
+      {error ? (
+        <p className="mb-6 rounded-xl bg-signal-red/10 px-4 py-2.5 text-[0.8125rem] text-signal-red">
+          Analyse-Fehler: {error}
+        </p>
+      ) : null}
+
+      {/* The one strong element of this view: the measured price per lead. */}
+      <section className="mb-12 rounded-3xl bg-ink-800 px-8 py-9">
+        <p className="text-[0.8125rem] text-text-soft">Preis pro Lead</p>
+        {cpl === null ? (
+          <p className="mt-2 text-[1.5rem] font-semibold tracking-[-0.03em] text-text-soft">
+            noch nicht gemessen
+          </p>
+        ) : (
+          <p
+            className={`mt-1 text-[3.5rem] font-semibold leading-none tracking-[-0.04em] tnum ${
+              underTarget ? "text-mint" : "text-foreground"
+            }`}
+          >
+            {euro(cpl)}
+          </p>
+        )}
+        <div className="mt-6 flex flex-wrap items-baseline gap-x-8 gap-y-2 text-[0.875rem]">
+          <span className="text-text-soft">
+            Ausgegeben{" "}
+            <span className="tnum text-foreground">
+              {euro(analysis?.totals.spend ?? null)}
+            </span>
+          </span>
+          <span className="text-text-soft">
+            Leads{" "}
+            <span className="tnum text-foreground">
+              {analysis ? analysis.totals.leads : "—"}
+            </span>
+          </span>
+          <span className="text-text-soft">
+            Grenze{" "}
+            <span className="tnum text-foreground">
+              {target === undefined ? "—" : `${target} €`}
+            </span>
+          </span>
+          {analysis?.source === "fixture" ? (
+            <span className="rounded-lg bg-signal-amber/12 px-2.5 py-1 text-[0.75rem] font-medium text-signal-amber">
+              Demo-Daten
+            </span>
+          ) : null}
+          {analysis?.source === "live" && rows.length === 0 ? (
+            <span className="text-[0.8125rem] text-text-faint">
+              Live · Konnektivität in Ordnung, noch keine Daten
+            </span>
+          ) : null}
+        </div>
+        {analysis?.note ? (
+          <p className="mt-4 text-[0.8125rem] text-text-faint">{analysis.note}</p>
         ) : null}
-        {analysis?.source === "live" && rows.length === 0 ? (
-          <Badge variant="outline" className="border-zinc-700 text-zinc-400">
-            Live · Konnektivität OK, noch keine Daten
-          </Badge>
+      </section>
+
+      <section className="mb-12">
+        <p className="group-heading mb-3 px-1">
+          Gewinner und Verlierer
+          <span className="ml-1.5 tnum text-text-faint/70">
+            {winners.length} / {losers.length}
+          </span>
+        </p>
+        {rows.length === 0 ? (
+          <p className="rounded-2xl bg-ink-800 px-5 py-4 text-[0.875rem] leading-relaxed text-text-soft">
+            Keine Ad-Daten. Frisch angelegte pausierte Ads liefern physikalisch
+            keine Insights.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {[...winners, ...losers, ...rest].map((row) => (
+              <RowLine key={row.adId} row={row} />
+            ))}
+          </div>
+        )}
+        {analysis?.recommendation ? (
+          <p className="mt-4 px-1 text-[0.9375rem] leading-relaxed text-foreground">
+            {analysis.recommendation}
+          </p>
         ) : null}
-        {analysis?.note ? <span className="text-xs text-zinc-500">{analysis.note}</span> : null}
-        <span className="ml-auto" />
-        <BriefingButton />
-        <Button
-          size="sm"
-          variant="outline"
-          className="border-zinc-700 text-zinc-300"
-          disabled={loading}
-          onClick={() => run("auto")}
-        >
-          {loading ? "analysiert …" : "Neu analysieren"}
-        </Button>
-      </div>
+      </section>
 
-      {error ? <p className="text-sm text-red-400">Analyse-Fehler: {error}</p> : null}
-
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        <Tile label="Spend" value={euro(analysis?.totals.spend ?? null)} />
-        <Tile label="Leads" value={analysis ? String(analysis.totals.leads) : "—"} />
-        <Tile label="CPL" value={euro(analysis?.totals.cpl ?? null)} />
-        <Tile
-          label="Zielfunktion"
-          value={state?.brand.targetCpa != null ? `≤ ${state.brand.targetCpa} €` : "—"}
-          sub="CPA-Grenze aus Brand-Config"
-        />
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <Card className="bg-zinc-900 border-zinc-800">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">
-              Winner / Loser{" "}
-              <span className="text-zinc-500">
-                ({winners.length} / {losers.length}, {rest.length}× zu wenig Daten)
-              </span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {rows.length === 0 ? (
-              <p className="text-xs text-zinc-500">
-                Keine Ad-Daten. Pausierte frische Ads liefern physikalisch keine Insights.
-              </p>
-            ) : (
-              <ul>
-                {[...winners, ...losers, ...rest].map((row) => (
-                  <RowLine key={row.adId} row={row} />
-                ))}
-              </ul>
-            )}
-            {analysis?.recommendation ? (
-              <p className="mt-3 text-xs" style={{ color: MINT }}>
-                {analysis.recommendation}
-              </p>
-            ) : null}
-          </CardContent>
-        </Card>
-
-        <Card className="bg-zinc-900 border-zinc-800">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">
-              Learnings-Feed <span className="text-zinc-500">({learnings.length})</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {learnings.length === 0 ? (
-              <p className="text-xs text-zinc-500">
-                Noch keine Learnings. Der Analyst schreibt sie nach jedem Mining-Lauf.
-              </p>
-            ) : (
-              <ul className="space-y-2 text-xs text-zinc-400">
-                {learnings.map((l) => (
-                  <li key={l.id} className="border-b border-zinc-800 pb-2">
-                    {l.pattern}
-                    <span className="ml-2 text-zinc-600">({l.source})</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-    </div>
+      <section>
+        <p className="group-heading mb-3 px-1">
+          Gelernt
+          <span className="ml-1.5 tnum text-text-faint/70">
+            {learnings.length}
+          </span>
+        </p>
+        {learnings.length === 0 ? (
+          <p className="rounded-2xl bg-ink-800 px-5 py-4 text-[0.875rem] leading-relaxed text-text-soft">
+            Noch keine Learnings. Der Analyst schreibt sie nach jedem
+            Mining-Lauf.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {learnings.map((l) => (
+              <div key={l.id} className="rounded-2xl bg-ink-800 px-5 py-4">
+                <p className="text-[0.9375rem] leading-relaxed text-text-soft">
+                  {l.pattern}
+                </p>
+                <p className="mt-2 text-[0.75rem] text-text-faint">
+                  {l.source === "meta_insights"
+                    ? "aus Meta-Insights"
+                    : "aus menschlicher Prüfung"}
+                  {l.appliedToSkill ? ` · wirkt auf ${l.appliedToSkill}` : ""}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+    </>
   );
 }

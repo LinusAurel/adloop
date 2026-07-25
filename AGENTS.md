@@ -1,84 +1,81 @@
-# AGENTS.md — Prozess-Vertrag (Hackathon-Edition)
+# AGENTS.md — Process contract
 
-Verbindlicher Root-Vertrag für alle Coding-Agents in diesem Repo. Kompakt,
-weil Hackathon: Der Prozess soll Fehler verhindern, nicht Tempo kosten.
-Was hier nicht steht, ist bewusst weggelassen.
+Binding root contract for all coding agents (and a useful guide for human
+contributors) in this repo. Kept short on purpose: the process should prevent
+mistakes, not cost speed. Anything not listed here is deliberately omitted.
 
-## Wahrheitsquellen
+## Sources of truth
 
-- `KONZEPT.md` — WAS gebaut wird und WARUM (fachliche Wahrheit).
-- `SPEC.md` — Bauplan: Stack, Datenmodell, Pipeline-Verträge, Reihenfolge.
-- `brands/<slug>/` — Brand-Daten. Firmen-Spezifisches ist immer Daten,
-  nie Code in `engine/` oder `app/`.
-- Bei Widerspruch zwischen Dokumenten oder zwischen Dokument und Auftrag:
-  stoppen, Widerspruch benennen, Linus fragen. Nicht still eine Variante wählen.
+- `README.md` — what adloop is and why (product truth).
+- `SPEC.md` — blueprint: stack, data model, pipeline contracts.
+- `brands/<slug>/` — brand data. Anything company-specific is always data,
+  never code in `engine/` or `app/`.
+- On contradiction between documents, or between a document and a task:
+  stop, name the contradiction, and ask the maintainer. Never silently pick
+  one interpretation.
 
-## Workflow: Issue → Worktree → Branch → Merge
+## Workflow: issue → worktree → branch → merge
 
-1. **Issue-first.** Jedes nennenswerte Arbeitspaket beginnt mit einem
-   GitHub-Issue: `gh issue create --title "Kurzer deutscher Titel" --body "…"`.
-   Mini-Fixes (offensichtlich, wenige Minuten) dürfen ohne Issue laufen.
-2. **Worktree-Pflicht.** Branch-Arbeit passiert IMMER in einem Worktree,
-   nie im Haupt-Checkout — der bleibt dauerhaft auf `main`. Anlegen mit
-   `scripts/worktree.sh new <type> <short-desc> [issue-nr]`; das Skript
-   erstellt Branch + Worktree unter `.worktrees/`, installiert Dependencies
-   und aktiviert die Hooks. So kollidieren parallele Agent-Streams
-   (SPEC §7) nie miteinander oder mit dem Haupt-Checkout.
-3. **Branch-Konvention.** `<type>/<issue-nr>-<short-desc>`, lowercase, ASCII,
-   kebab-case; Typen: `feat fix chore docs refactor test spike`.
-   Beispiel: `feat/12-board-ui`.
-4. **Kleine Commits mit Issue-Referenz.** Eine logische Einheit pro Commit;
-   bei Issue-Bezug endet das Subject mit `(#N)`, der abschließende Commit
-   oder PR enthält `Closes #N`.
-5. **Rebase statt Merge-Sammeln.** Vor dem Einbringen den Branch auf den
-   aktuellen `main` rebasen, dann fast-forward mergen oder pushen —
-   keine Merge-Commits aus Worktrees heraus.
-6. **Aufräumen.** Nach dem Merge `scripts/worktree.sh done <branch>`:
-   Worktree weg, Branch weg. Überblick: `scripts/worktree.sh list`.
+1. **Issue-first.** Every substantial work package starts with a GitHub issue.
+   Obvious mini-fixes (a few minutes) may skip this.
+2. **Worktrees are mandatory.** Branch work ALWAYS happens in a worktree,
+   never in the main checkout — that one stays on `main` permanently. Create
+   one with `scripts/worktree.sh new <type> <short-desc> [issue-nr]`; the
+   script creates branch + worktree under `.worktrees/`, installs
+   dependencies, and activates the hooks. Parallel work streams never collide.
+3. **Branch convention.** `<type>/<issue-nr>-<short-desc>`, lowercase, ASCII,
+   kebab-case; types: `feat fix chore docs refactor test spike`.
+   Example: `feat/12-board-ui`.
+4. **Small commits with issue references.** One logical unit per commit; when
+   an issue applies, the subject ends with `(#N)` and the closing commit or PR
+   contains `Closes #N`.
+5. **Rebase, don't accumulate merges.** Rebase onto current `main` before
+   integrating, then fast-forward merge or push — no merge commits out of
+   worktrees.
+6. **Clean up.** After merging: `scripts/worktree.sh done <branch>` removes
+   worktree and branch. Overview: `scripts/worktree.sh list`.
 
-## Sprache und Konventionen
+## Language and conventions
 
-- Fachliche Prosa, Docs, Issues und UI-Texte: Deutsch mit korrekten Umlauten,
-  `ß` und deutschen Anführungszeichen („…“); ein pre-commit-Hook korrigiert
-  falsche Closer automatisch (`node scripts/check-quotes.mjs --fix`).
-- Commit-Subjects: Englisch im Conventional-Commit-Stil
-  `<type>(<scope>): <summary>`; Commit-Body darf Deutsch sein.
-- Erlaubte Commit-Typen: `feat fix docs refactor test chore ci build perf revert`.
-- Identifier, Dateinamen, Branches, Env-Vars: Englisch, ASCII-only.
-- Code-Kommentare: Englisch, sparsam, nur für nicht offensichtliche Logik.
+- Commit subjects: English, Conventional-Commit style
+  `<type>(<scope>): <summary>`. Allowed types:
+  `feat fix docs refactor test chore ci build perf revert`.
+- Identifiers, file names, branches, env vars: English, ASCII-only.
+- Code comments: English, sparse, only for non-obvious logic.
+- UI copy targets the German market and uses proper German typography
+  (umlauts, `ß`, „…“ quotes); a pre-commit hook auto-fixes wrong quote
+  closers (`node scripts/check-quotes.mjs --fix`).
 
-## Arbeitsdisziplin
+## Working discipline
 
-- Nur den vereinbarten Scope ändern. Keine Nebenbei-Aufräumarbeiten, keine
-  Stil-Änderungen in fachfremden Dateien.
-- „Funktioniert“ wird nur behauptet, wenn es in derselben Session belegt wurde
-  (Route aufgerufen, Response gelesen, UI gesehen). Ungeprüftes als ungeprüft
-  markieren.
-- Vor Abschluss eines Arbeitspakets: alles committen und `verify` grün —
-  der geprüfte Stand muss dem gepushten Stand entsprechen.
+- Change only the agreed scope. No drive-by cleanups, no style changes in
+  unrelated files.
+- "It works" may only be claimed when it was proven in the same session
+  (route called, response read, UI seen). Mark unverified things as
+  unverified.
+- Before finishing a work package: everything committed and `verify` green —
+  the verified state must equal the pushed state.
 
-## Verify vor Commit und Push (Pflicht)
+## Verify before commit and push (mandatory)
 
-- Ein einziges Gate: `bash scripts/verify.sh` — lefthook führt es automatisch
-  aus (pre-commit: Secrets-Scan + Quote-Autofix + `quick`, pre-push: `full`),
-  CI ruft dasselbe Skript. Neue Checks kommen NUR in `scripts/verify.sh` dazu.
-- Sobald `package.json` existiert: `lefthook` als devDependency plus
-  `"prepare": "lefthook install"` eintragen, damit die Hooks greifen.
-- Rot heißt fixen, nicht umgehen: keine Assertions abschwächen, keine Tests
-  skippen, kein flächiges `eslint-disable`, kein `--no-verify`. Einzige
-  Ausnahme: belegter False-Positive des Secrets-Scans — dann im selben Zug
-  das Muster in `scripts/verify.sh` korrigieren.
+- One single gate: `bash scripts/verify.sh` — lefthook runs it automatically
+  (pre-commit: secrets scan + quote autofix + `quick`, pre-push: `full`),
+  CI calls the same script. New checks go ONLY into `scripts/verify.sh`.
+- Red means fix, not bypass: no weakening assertions, no skipping tests, no
+  blanket `eslint-disable`, no `--no-verify`. Sole exception: a proven false
+  positive of the secrets scan — then fix the pattern in `scripts/verify.sh`
+  in the same change.
 
-## Harte Regeln (Hard Stops)
+## Hard rules (hard stops)
 
-1. **Nie Secrets committen**: keine `.env`-Dateien, API-Keys oder Tokens in
-   Code, Fixtures, Logs oder Docs. `.env.example` bleibt wertlos (leere Werte).
-2. **Meta-Publishes immer `status: PAUSED`** — Kampagnen, AdSets, Ads.
-   Aktivierung macht ausschließlich ein Mensch: per bewusstem Klick über die
-   Status-Route/UI oder direkt im Ads Manager. Kein Agent aktiviert selbst.
-3. **Human-Gates nie automatisieren oder überspringen**: Angle-Approve,
-   Asset-Approve und Ad-Aktivierung sind Menschen-Entscheidungen.
-4. **Kein Budget-/Spend-Management durch Agenten** — auch nicht „nur testweise“.
-5. **Wächter-Selbstschutz**: `AGENTS.md`, `scripts/`, `lefthook.yml` und
-   `.github/workflows/ci.yml` werden nur mit ausdrücklicher Freigabe von
-   Linus geändert — ein Agent schaltet seine eigenen Gates nicht ab.
+1. **Never commit secrets**: no `.env` files, API keys, or tokens in code,
+   fixtures, logs, or docs. `.env.example` stays worthless (empty values).
+2. **Meta publishes are always `status: PAUSED`** — campaigns, ad sets, ads.
+   Activation is done exclusively by a human: a deliberate click via the
+   status route/UI or directly in Ads Manager. No agent ever activates.
+3. **Human gates are never automated or skipped**: angle approval, asset
+   approval, and ad activation are human decisions.
+4. **No budget/spend management by agents** — not even "just for testing".
+5. **Guardian self-protection**: `AGENTS.md`, `scripts/`, `lefthook.yml`, and
+   `.github/workflows/ci.yml` are only changed with explicit maintainer
+   approval — an agent does not disable its own gates.

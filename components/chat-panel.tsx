@@ -38,6 +38,59 @@ interface Suggestion {
   prompt: string;
 }
 
+// Per-brand persistence (#16): the conversation survives view switches and
+// reloads. Key mirrors app-shell's "+ New" handler, which clears it.
+const MAX_PERSISTED_MESSAGES = 50;
+
+function chatStorageKey(brandSlug: string): string {
+  return `adloop_chat_${brandSlug}`;
+}
+
+// Defensive restore: broken JSON or unexpected shapes yield an empty history.
+function restoreMessages(brandSlug: string): PanelMessage[] {
+  try {
+    const raw = window.localStorage.getItem(chatStorageKey(brandSlug));
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter(
+        (m): m is PanelMessage =>
+          typeof m === "object" &&
+          m !== null &&
+          ((m as PanelMessage).role === "user" ||
+            (m as PanelMessage).role === "assistant") &&
+          typeof (m as PanelMessage).content === "string",
+      )
+      .map((m) => ({
+        role: m.role,
+        content: m.content,
+        // Keep refs/actions so chips stay clickable after a restore.
+        actions: Array.isArray(m.actions) ? m.actions : undefined,
+        refs: Array.isArray(m.refs) ? m.refs : undefined,
+      }))
+      .slice(-MAX_PERSISTED_MESSAGES);
+  } catch {
+    return [];
+  }
+}
+
+function persistMessages(brandSlug: string, messages: PanelMessage[]) {
+  try {
+    const key = chatStorageKey(brandSlug);
+    if (messages.length === 0) {
+      window.localStorage.removeItem(key);
+    } else {
+      window.localStorage.setItem(
+        key,
+        JSON.stringify(messages.slice(-MAX_PERSISTED_MESSAGES)),
+      );
+    }
+  } catch {
+    /* quota/private mode — persistence is best effort */
+  }
+}
+
 // Contextual chips: derived from the state, never more than four.
 function buildSuggestions(state: BrandState | null): Suggestion[] {
   const suggestions: Suggestion[] = [];
@@ -180,6 +233,10 @@ export function ChatPanel({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [state, setState] = useState<BrandState | null>(null);
+  // True once the persisted history was restored — gates rendering (no hero
+  // flash when a history exists) and gates writing (never clobber storage
+  // with the initial empty array before the restore ran).
+  const [hydrated, setHydrated] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
 
   // Chips come from the live state; refreshed after every state change.
@@ -192,14 +249,23 @@ export function ChatPanel({
     }
   }, [brandSlug]);
 
-  // A brand switch resets the conversation; chat history is per brand.
+  // A brand switch resets the panel (the shell also remounts it via key),
+  // then the brand's own persisted history is restored — history is per brand.
   useEffect(() => {
-    setMessages([]);
     setInput("");
     setError(null);
     setState(null);
+    setMessages(restoreMessages(brandSlug));
+    setHydrated(true);
     loadState();
   }, [brandSlug, loadState]);
+
+  // Persist on every change so the conversation survives view switches
+  // (remount via key) and reloads.
+  useEffect(() => {
+    if (!hydrated) return;
+    persistMessages(brandSlug, messages);
+  }, [brandSlug, hydrated, messages]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -267,6 +333,12 @@ export function ChatPanel({
   );
 
   const suggestions = buildSuggestions(state);
+
+  // Until the restore ran we don't know whether a history exists — render
+  // nothing for that instant instead of flashing the hero over a chat view.
+  if (!hydrated) {
+    return <div className="h-full min-h-[60vh]" />;
+  }
 
   /* -------------------------------------------------- empty state (hero) -- */
   if (messages.length === 0) {

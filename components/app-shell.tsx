@@ -223,6 +223,15 @@ export function AppShell() {
         collapsed={collapsed}
         onToggleCollapsed={() => setCollapsed((c) => !c)}
         onNewChat={() => {
+          // "New" is an explicit fresh start: drop the persisted history of
+          // the active brand BEFORE the key bump remounts the chat panel —
+          // otherwise the remounted panel would restore the old conversation.
+          // (Brand switches keep each brand's history; only "New" clears.)
+          try {
+            window.localStorage.removeItem(`adloop_chat_${brandSlug}`);
+          } catch {
+            /* best effort — a failed clear only means the history persists */
+          }
           setChatKey((k) => k + 1);
           setView("chat");
         }}

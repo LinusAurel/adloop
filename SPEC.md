@@ -1,37 +1,38 @@
-# SPEC — Build-Anleitung für den Hackathon-Tag
+# SPEC — Technical design
 
-> Zweck: Diese Spec ist das Briefing für die Coding-Agents. Sie beschreibt WAS gebaut wird und in welcher Reihenfolge. Kein vorgebauter Code — Regelkonformität: Konzept/Notizen erlaubt, projektspezifischer Code entsteht erst am Tag.
+> What adloop is built from: stack, data model, API surface, pipeline contracts, and connector details. The README covers the product view; this document covers the implementation.
 
-## 0. Stack & Repo-Layout
+## 0. Stack & repo layout
 
-- **Next.js 15 (App Router, TS), Tailwind, shadcn/ui** — eine App für UI + API-Routen.
-- Persistenz: **JSON-Files unter `data/`** (ENTSCHIEDEN — kein Drizzle/SQLite, kein Hosting-Zwang; die App läuft am Demo-Tag lokal, damit State und lange Requests nie an Serverless-Limits sterben).
-- LLM: **Anthropic SDK**, Default überall **claude-sonnet-5** (schnell), **max. 1 Critic-Rewrite-Zyklus**. Model-Routing bleibt per Env konfigurierbar, aber teure Modelle sind für den Demo-Slice bewusst aus.
-- Struktur:
+- **Next.js 15 (App Router, TypeScript), Tailwind, shadcn/ui** — one app for UI and API routes.
+- Persistence: **JSON files under `data/`** — no database dependency, no hosting constraint. The app runs as a persistent Node process so state and long-running requests never hit serverless limits.
+- LLM: **Anthropic SDK**, default `claude-sonnet-5` everywhere, at most one Critic rewrite cycle per copy. Model routing is configurable per stage via env.
+- Structure:
 
 ```
-engine/            # generisch, open source
-  skills/          # *.md Prompt-Module (research, angles, copy, critic, creative-brief, mining)
-  agents/          # TS-Orchestrierung je Pipeline-Stufe
+engine/            # generic, open source
+  skills/          # *.md prompt modules (research, angles, copy, critic, creative-brief, mining)
+  agents/          # TS orchestration per pipeline stage
   connectors/      # firecrawl.ts, fal.ts, meta.ts, elevenlabs.ts
-brands/            # Daten-Layer — lokal und privat (Repo ist öffentlich, #17):
-  _example/        # einzige versionierte Brand (fiktiv, zeigt die Struktur)
-  <slug>/          # echte Brands (z. B. loyft) bleiben untracked, weitere via Onboarding
-app/               # Next.js UI + API-Routen
-data/              # SQLite / Run-Artefakte (gitignored)
+  playbooks/       # media-buying styles as swappable modules
+brands/            # data layer — local and private (repo is public):
+  _example/        # the only versioned brand (fictional, documents the structure)
+  <slug>/          # real brands stay untracked; added via onboarding
+app/               # Next.js UI + API routes
+data/              # JSON store / run artifacts (gitignored)
 ```
 
-## 1. Datenmodell (TS-Types / Drizzle-Tabellen)
+## 1. Data model (TypeScript types)
 
 ```ts
-Brand      { slug, name, url, product, conversionGoal: 'website_lead',   // heute fix: Website-Lead via Pixel; chat_start/purchase sind Post-Hackathon
+Brand      { slug, name, url, product, conversionGoal: 'website_lead',   // currently fixed: website lead via pixel; chat_start/purchase are on the roadmap
              targetCpa, guardrails: string[], designTokens,
-             meta: { adAccountId, pageId, pixelId, leadEventName,        // Pflicht-Assets für Publisher
-                     geoCountries: ['DE'], optimizationGoal: 'OFFSITE_CONVERSIONS',
+             meta: { adAccountId, pageId, pixelId, leadEventName,        // required assets for the Publisher
+                     geoCountries, optimizationGoal: 'OFFSITE_CONVERSIONS',
                      billingEvent: 'IMPRESSIONS', specialAdCategories: [],
-                     fixedDailyBudgetCents,                              // von Linus VORAB gesetzt, Code behandelt ihn als unveränderlich (Hard Stop 4)
-                     campaignId?, adsetId?,                              // nach Erst-Anlage gespeichert -> idempotenter Publish
-                     campaignTarget?: { metric: 'CPL'|'CPA', value } } } // Ziel pro Kampagne (#17); brand.targetCpa bleibt Fallback/Default
+                     fixedDailyBudgetCents,                              // set by a human up front; code treats it as immutable (hard stop)
+                     campaignId?, adsetId?,                              // stored after first creation -> idempotent publish
+                     campaignTarget?: { metric: 'CPL'|'CPA', value } } } // per-campaign target; brand.targetCpa is the fallback/default
 Evidence   { id, brandSlug, tag: 'real'|'external'|'hypothesis', source, text, createdBy }
 Angle      { id, brandSlug, name, segment, pain, mechanism, hookDirection,
              status: 'draft'|'approved'|'testing'|'validated'|'killed',
@@ -40,99 +41,78 @@ Asset      { id, angleId, kind: 'ad_copy'|'static'|'lp', payload(json),
              criticScore?, criticNotes?, status: 'draft'|'approved'|'rejected'|'published',
              metaIds?: { creativeId?, adId? } }
 Run        { id, brandSlug, stage, angleId?, log(jsonl), startedAt, finishedAt,
-             status?: 'running'|'finished'|'failed', error?, result? }   // füttert Live-Ticker + Job-Status (#7)
+             status?: 'running'|'finished'|'failed', error?, result? }   // feeds the live ticker + job status
 Learning   { id, brandSlug, source: 'meta_insights'|'human_review',
              pattern, evidenceRefs, appliedToSkill? }
 ```
 
-Angle-Diversität ist Schema-Pflicht: Der Strategist muss `hookDirection`/`segment`/`pain` paarweise unterscheidbar belegen (Andromeda: Konzepte, keine Varianten).
+Angle diversity is enforced at the schema level: the Strategist must produce pairwise-distinguishable `hookDirection`/`segment`/`pain` combinations — concepts, not cosmetic variants.
 
-## 2. API-Routen (Next.js route handlers)
+## 2. API routes (Next.js route handlers)
 
-- `POST /api/onboard` `{ url, name?, product? }` → Scout-Run → Brand + Evidence (Unified Research Doc)
-- `POST /api/brands/:slug/angles/generate` → Strategist (n Angles, default 5)
+- `POST /api/onboard` `{ url, name?, product? }` → Scout run → Brand + Evidence (unified research doc)
+- `POST /api/brands/:slug/angles/generate` → Strategist (n angles, default 5)
 - `POST /api/angles/:id/approve | kill`
-- `POST /api/angles/:id/assets/generate` `{ model? }` → Copywriter→Critic→Designer (AssetPair); optionales `model` wählt ein kuratiertes Fal-Modell aus `FAL_MODELS` (#17)
+- `POST /api/angles/:id/assets/generate` `{ model? }` → Copywriter → Critic → Designer (asset pair); optional `model` selects a curated fal.ai model from `FAL_MODELS`
 - `POST /api/assets/:id/approve | reject | regenerate`
-- `POST /api/brands/:slug/publish` → Publisher: fehlende Kampagne/AdSet anlegen (einmalig, IDs in Brand speichern), approved Assets als Ads pausiert. Idempotent: Idempotency-Key pro Asset, `status: PAUSED` wird beim Anlegen SERVERSEITIG erzwungen (Request-Werte werden ignoriert), Doppel-Klick/Retry erzeugt keine Duplikate. Aktivierung ist NIE Teil des Publish — sie ist ein bewusster menschlicher Klick auf der Status-Route (oder im Ads Manager)
-- `POST /api/campaigns/:id/status` `{ status: 'ACTIVE'|'PAUSED' }` → Human-Gate (#17): Delivery-Toggle für Kampagne oder Ad, admin-geschützt; akzeptiert nur IDs aus dem eigenen Store. Echte Meta-IDs gehen über die Graph API (`POST /{id}` mit `status`), Demo-IDs (`demo-…`) ändern nur den Store
-- `PATCH /api/brands/:slug` → Brand-Editing (#17), admin-geschützt, zod-validiert (`brandPatchSchema`): Teilmenge aus name, url, whatsappUrl, product, targetCpa, guardrails, copyRules, cta, fallbackCopy, designTokens, meta.campaignTarget, meta.fixedDailyBudgetCents; unbekannte Felder → 400. Schreibt Store und brands/<slug>/brand.json
-- `POST /api/brands/:slug/optimize` → Analyst/Mining (auch Ziel des n8n-Schedulers); misst gegen das aufgelöste Kampagnen-Ziel (campaignTarget, sonst targetCpa)
-- `GET  /api/brands/:slug/state` → alles fürs UI inkl. `economics.target` (polling reicht; SSE nur wenn trivial)
+- `POST /api/brands/:slug/publish` → Publisher: create missing campaign/ad set once (IDs stored on the brand), publish approved assets as ads. Idempotent: idempotency key per asset, `status: PAUSED` is enforced server-side on creation (request values are ignored), double-click/retry never creates duplicates. Activation is NEVER part of publish — it is a deliberate human click on the status route (or in Ads Manager)
+- `POST /api/campaigns/:id/status` `{ status: 'ACTIVE'|'PAUSED' }` → human gate: delivery toggle for a campaign or ad, admin-guarded; accepts only IDs from its own store. Real Meta IDs go through the Graph API (`POST /{id}` with `status`); demo IDs (`demo-…`) only mutate the store
+- `PATCH /api/brands/:slug` → brand editing, admin-guarded, zod-validated (`brandPatchSchema`): subset of name, url, whatsappUrl, product, targetCpa, guardrails, copyRules, cta, fallbackCopy, designTokens, meta.campaignTarget, meta.fixedDailyBudgetCents; unknown fields → 400. Writes the store and `brands/<slug>/brand.json`
+- `POST /api/brands/:slug/optimize` → Analyst/mining (also the target of the n8n scheduler); measures against the resolved campaign target (`campaignTarget`, falling back to `targetCpa`)
+- `GET  /api/brands/:slug/state` → everything the UI needs, including `economics.target` (polling)
 
-Job-Muster für lange Läufe (#7): `angles/generate`, `assets/generate`, `publish` und `optimize` antworten sofort mit `202 { ok, runId }`; die Arbeit läuft als Fire-and-forget-Promise im Node-Prozess weiter (lokal/Render, kein Serverless). Status (`running`/`finished`/`failed` inkl. `error`) und beim Analyst das Ergebnis (`run.result`) stehen am Run und sind über `GET /state` sichtbar — die UI wartet nie auf die HTTP-Response.
+Job pattern for long runs: `angles/generate`, `assets/generate`, `publish`, and `optimize` respond immediately with `202 { ok, runId }`; the work continues as a fire-and-forget promise in the Node process (persistent process, not serverless). Status (`running`/`finished`/`failed` incl. `error`) and, for the Analyst, the result (`run.result`) live on the Run and are visible via `GET /state` — the UI never waits on the HTTP response.
 
-## 3. Pipeline-Stufen: Verträge & Abnahme
+## 3. Pipeline stages: contracts
 
-| # | Stufe | Input → Output | Abnahme-Kriterium |
+| # | Stage | Input → Output | Acceptance criterion |
 |---|---|---|---|
-| 1 | Scout | URL → Research-JSON (Segmente, Awareness-%-Verteilung, Competitor-Big-Ideas, VoC-Sprache) + Evidence-Rows | `POST /api/onboard` mit fremder URL liefert in <90 s ein befülltes Research-Doc |
-| 2 | Strategist | Brand+Evidence → 5 Angles (divers, mit rationale + expectedCpl) | Angles erscheinen im Board, Approve funktioniert |
-| 3 | Copywriter | Angle → Outline → 2 Copy-Varianten (Hook/Primary/Headline/CTA) | strukturierter Output validiert (zod) |
-| 4 | Critic | Copy → Score (1–10) + Rubrik-Notes + ggf. Rewrite | Score < 7 triggert automatisch 1 Rewrite-Zyklus |
-| 5 | Designer | Copy+Brief+Design-Tokens → 1 Static (Fal, NUR 4:5) | Bild-URL im Asset-Studio sichtbar |
-| 6 | Publisher | approved Assets → Meta: 1 Kampagne (OUTCOME_LEADS, CBO, Advantage+ broad) + AdSet + Creatives + Ads, **alle PAUSED** | Ads im echten Ads Manager sichtbar (Screenshot für Video) |
-| 7 | Analyst | Insights-JSON → Winner/Loser + Learnings + Angle-Empfehlung | ZWEITEILIG (pausierte frische Ads liefern keine Daten — physikalisch): (a) echter Insights-Read gegen das Konto als Konnektivitätsbeweis, (b) Mining-Demo auf einer klar als solche gelabelten, realistischen Insights-Fixture. Nie als Live-Optimierung verkaufen |
+| 1 | Scout | URL → research JSON (segments, awareness distribution, competitor big ideas, VoC language) + evidence rows | `POST /api/onboard` with an arbitrary URL yields a populated research doc in <90 s |
+| 2 | Strategist | Brand + evidence → 5 angles (diverse, with rationale + expectedCpl) | angles appear on the board, approve works |
+| 3 | Copywriter | Angle → outline → 2 copy variants (hook/primary/headline/CTA) | structured output validated (zod) |
+| 4 | Critic | Copy → score (1–10) + rubric notes + rewrite if needed | score < 7 automatically triggers 1 rewrite cycle |
+| 5 | Designer | Copy + brief + design tokens → 1 static (fal.ai, 4:5 only) | image URL visible in the Asset Studio |
+| 6 | Publisher | Approved assets → Meta: 1 campaign (OUTCOME_LEADS, CBO, Advantage+ broad) + ad set + creatives + ads, **all PAUSED** | ads visible in the real Ads Manager |
+| 7 | Analyst | Insights JSON → winners/losers + learnings + angle recommendation | TWO-PART (freshly paused ads produce no data — physics): (a) real insights read against the account as connectivity proof, (b) mining run on a clearly labeled, realistic insights fixture. Never presented as live optimization |
 
-Guardrails/Sprachregeln aus `brands/<slug>/guardrails.md` werden Critic UND Copywriter in den Kontext gegeben (doppelt hält besser).
+Guardrails/language rules from `brands/<slug>/guardrails.md` are given to BOTH the Critic and the Copywriter as context.
 
-## 3b. Playbooks, Naming & Attribution
+## 3b. Playbooks, naming & attribution
 
-- **Playbook = konfigurierbarer Media-Buying-Stil.** Die Kampagnen-Struktur ist KEIN festes Engine-Verhalten, sondern ein austauschbares Modul unter `engine/playbooks/`. Heute implementiert: `single-cbo-broad` (1 CBO-Kampagne, 1 AdSet broad, Creatives gestackt — passt für kleine Budgets und maximale Signal-Konsolidierung). Post-Hackathon additiv: `abo-test-plus-cbo-scale` (Testing-ABO je Angle, Winner ab ~10 Conversions per Post-ID in Scaling-CBO), ASC u. a. Ein Playbook definiert: Kampagnen-Rollen (test/scale), Budget-Ebene (CBO/ABO), Bid-Strategie, AdSet-Logik, Kill-/Winner-Regeln, Skalierungs-Schritt. Brand wählt Playbook per Config.
-- **Naming-Konvention** (Utility mit build+parse, Underscore-Delimiter, keine Leerzeichen): Campaign `{BRAND}_{ROLE}_{OBJECTIVE}_{BUDGETLEVEL}_{BIDSTRATEGY}_{YYYYMMDD}` · AdSet `{BRAND}_{AUDIENCE}_{GEO}_{ANGLEID}` · Ad `{BRAND}_{ANGLEID}_{ASSETID}_{FORMAT}_{VERSION}`. Angle-/Asset-IDs im Namen sind Fremdschlüssel in den Store.
-- **Attribution: IDs first, Namen als Redundanz.** Create-Responses liefern campaign_id/adset_id/ad_id → sofort im Store persistieren; Insights-Zuordnung läuft NUR über ad_id → Asset → Angle (Namen kann jeder im Ads Manager umbenennen, IDs nie). Zusätzlich `url_tags` auf Creative-Ebene mit Meta-Makros (`utm_campaign={{campaign.id}}&utm_content={{ad.id}}`) für die Landingpage-/CRM-Schleife. Post-Hackathon: `adlabels` (`engine:v1`, `hyp:<id>`) als umbenennungsfeste Markierung eigener Objekte.
+- **Playbook = configurable media-buying style.** Campaign structure is NOT fixed engine behavior but a swappable module under `engine/playbooks/`. Implemented today: `single-cbo-broad` (1 CBO campaign, 1 broad ad set, creatives stacked — fits small budgets and maximum signal consolidation). Planned additions: `abo-test-plus-cbo-scale` (testing ABO per angle, winners promoted by post ID into a scaling CBO from ~10 conversions), ASC, and others. A playbook defines: campaign roles (test/scale), budget level (CBO/ABO), bid strategy, ad-set logic, kill/winner rules, scaling step. A brand selects its playbook via config.
+- **Naming convention** (utility with build + parse, underscore delimiter, no spaces): Campaign `{BRAND}_{ROLE}_{OBJECTIVE}_{BUDGETLEVEL}_{BIDSTRATEGY}_{YYYYMMDD}` · Ad set `{BRAND}_{AUDIENCE}_{GEO}_{ANGLEID}` · Ad `{BRAND}_{ANGLEID}_{ASSETID}_{FORMAT}_{VERSION}`. Angle/asset IDs in names are foreign keys into the store.
+- **Attribution: IDs first, names as redundancy.** Create responses return campaign_id/adset_id/ad_id → persist immediately; insights mapping runs ONLY via ad_id → asset → angle (anyone can rename objects in Ads Manager, IDs never change). Additionally `url_tags` at the creative level with Meta macros (`utm_campaign={{campaign.id}}&utm_content={{ad.id}}`) for the landing-page/CRM loop. Planned: `adlabels` (`engine:v1`, `hyp:<id>`) as a rename-proof marker for engine-owned objects.
 
-## 4. Skills (engine/skills/*.md — am Tag schreiben, Quellen liegen bereit)
+## 4. Skills (`engine/skills/*.md`)
 
-- `research.md` — die 7 klassischen Direct-Response-Research-Fragen + Awareness-Verteilung + VoC-Extraktion
-- `angles.md` — Angle-Schema, Diversitäts-Pflicht, Evidence-Verweise, Test-Hypothese
-- `copy.md` — Outline-first, Few-Shot aus der Winner-Bibliothek der Brand (Blank Slate: startet leer, wächst durch validierte Tests), Output-Schema
-- `critic.md` — Rubrik: Scroll-Stop-Hook, Ad→LP-Kongruenz, Awareness-Match, Mechanism, Pain-Dimensionalisierung, Spezifität + Guardrails; Score + priorisierte Fixes
-- `creative-brief.md` — Static-Brief für Fal (Bildidee, Text-im-Bild max. 8 Wörter, Brand-Tokens, Format)
-- `mining.md` — Winner/Loser-Klassifikation NUR über eigene Kampagnen-IDs/Namens-Prefix, mit Mindest-Schwellen (Spend/Impressions/Leads) gegen Kleinstmengen-Zufall; CPL statt CTR; `actions`-Listen explizit auf den Lead-`action_type` der Brand mappen (Strings → Zahlen normalisieren, 0-Spend/0-Lead-Fälle definiert behandeln)
+- `research.md` — the classic direct-response research questions + awareness distribution + VoC extraction
+- `angles.md` — angle schema, diversity requirement, evidence references, test hypothesis
+- `copy.md` — outline-first, few-shot from the brand's winner library (blank slate: starts empty, grows through validated tests), output schema
+- `critic.md` — rubric: scroll-stop hook, ad→LP congruence, awareness match, mechanism, pain dimensionalization, specificity + guardrails; score + prioritized fixes
+- `creative-brief.md` — static brief for fal.ai (image idea, text-in-image max 8 words, brand tokens, format)
+- `mining.md` — winner/loser classification ONLY via own campaign IDs/name prefix, with minimum thresholds (spend/impressions/leads) against small-sample noise; CPL over CTR; map `actions` lists explicitly to the brand's lead `action_type` (normalize strings → numbers, handle 0-spend/0-lead cases deterministically)
 
-## 5. Connectoren (First-Party only)
+## 5. Connectors (first-party SDKs only)
 
-- **Firecrawl:** npm `@mendable/firecrawl-js` (Paketname prüfen — NICHT `firecrawl` annehmen), `FIRECRAWL_API_KEY`. `scrape(url, formats:[{type:'json', schema}])` + `search('<brand> bewertungen trustpilot', {scrapeOptions})`. Scout ist ein separater, NICHT-blockierender Pfad — der loyft-Demo-Slice hängt nie an Firecrawl.
-- **Fal:** `@fal-ai/client`, `FAL_KEY`. `fal.subscribe(...)` mit **einem dünnen Adapter pro Modell** (Nano Banana Pro: `aspect_ratio`; GPT Image 2: `image_size` + anderer Input-Vertrag) — Modellwechsel ist Adapter-Auswahl, kein reiner Env-Switch.
-- **Meta:** Runtime-Publisher ist AUSSCHLIESSLICH **Graph API v25 direkt** (`connectors/meta.ts`, `META_ACCESS_TOKEN` System-User + `META_AD_ACCOUNT_ID`). Der Meta Ads MCP ist ein Client-Werkzeug (autorisiert den MCP-Client, nicht unsere App) — er dient nur als separater Sponsor-/Analyse-Beleg, nie als App-Connector. Reihenfolge pro Publish: Fal-Bild herunterladen → `POST /act_<id>/adimages` → `image_hash` ins Creative (mit `page_id`, Link, CTA, Message) → `POST /ads` (PAUSED). Kampagne: `OUTCOME_LEADS` mit `daily_budget` = `fixedDailyBudgetCents` (vorab menschlich fixiert) UND `bid_strategy=LOWEST_COST_WITHOUT_CAP` (v25-Pflicht beim CBO-Create — Pre-Flight-verifiziert am 25.07., Konto 000000000000000), `special_ad_categories: []`; AdSet mit `geo_locations`, `optimization_goal`, `billing_event`, `promoted_object` (Pixel + Event). Insights: `GET /act_<id>/insights?level=ad` gefiltert auf die EIGENE campaign_id.
-- **ElevenLabs:** `@elevenlabs/elevenlabs-js`, `ELEVENLABS_API_KEY`, ein Call: Briefing-Text → mp3. Could-Ausbau **Voice-Mode**: ElevenLabs-Agents-Widget (WebRTC, STT+TTS out of the box) im Mission Control einbetten; Agent-Tools per Webhook auf unsere API-Routen (`angles/generate`, `state`) — Zwei-Wege-Dialog ohne eigene Audio-Pipeline. Nur bauen, wenn Must+Should stehen; Live-Demo mit Mikro ist WLAN-Risiko → Video-Fallback.
-- **n8n:** separater 3-Node-Workflow (Schedule → HTTP POST `/api/brands/loyft/optimize` → Notification). Export-JSON ins Repo unter `integrations/n8n/`.
+- **Firecrawl:** npm `@mendable/firecrawl-js`, `FIRECRAWL_API_KEY`. `scrape(url, formats:[{type:'json', schema}])` + `search('<brand> reviews', {scrapeOptions})` for the outside view (review sites, third-party mentions). The Scout is a separate, non-blocking path — the rest of the pipeline never depends on it.
+- **fal.ai:** `@fal-ai/client`, `FAL_KEY`. `fal.subscribe(...)` with **one thin adapter per model** (different models have different input contracts, e.g. `aspect_ratio` vs `image_size`) — switching models is an adapter selection, not just an env switch.
+- **Meta:** the runtime publisher talks **directly to Graph API v25** (`connectors/meta.ts`, `META_ACCESS_TOKEN` system-user token + `META_AD_ACCOUNT_ID`). Publish order per asset: download the generated image → `POST /act_<id>/adimages` → `image_hash` into the creative (with `page_id`, link, CTA, message) → `POST /ads` (PAUSED). Campaign: `OUTCOME_LEADS` with `daily_budget` = `fixedDailyBudgetCents` (fixed by a human up front) and `bid_strategy=LOWEST_COST_WITHOUT_CAP` (required by v25 on CBO create), `special_ad_categories: []`; ad set with `geo_locations`, `optimization_goal`, `billing_event`, `promoted_object` (pixel + event). Insights: `GET /act_<id>/insights?level=ad` filtered to the engine's own campaign_id.
+- **ElevenLabs (roadmap):** `@elevenlabs/elevenlabs-js`, `ELEVENLABS_API_KEY`, one call: briefing text → mp3. Connector scaffold exists; the audio briefing feature is planned.
+- **n8n:** separate 3-node workflow (Schedule → HTTP POST `/api/brands/<slug>/optimize` → notification). Export JSON lives in the repo under `integrations/n8n/`.
 
-Env-Vars gesamt: `ANTHROPIC_API_KEY, FIRECRAWL_API_KEY, FAL_KEY, ELEVENLABS_API_KEY, META_ACCESS_TOKEN, META_AD_ACCOUNT_ID, MODEL_STRATEGIST, MODEL_COPY, FAL_MODEL_ID`.
+Env vars: see `.env.example` — every key is documented inline with its source.
 
-## 6. UI (Mission Control, 4 Views, eine Page mit Tabs reicht)
+## 6. UI (Mission Control)
 
-1. **Board** — Angle-Kanban (5 Spalten nach Status), Karte: Name, Segment, Hook-Richtung, expectedCpl/measuredCpl, Approve/Kill-Buttons
-2. **Studio** — AssetPair-Karten: Static-Preview im Meta-Feed-Rahmen + Copy + Critic-Score; Approve/Reject/Regenerate
-3. **Ticker** — Run-Log-Stream (polling auf `/state`), „Agent X macht Y“-Zeilen
-4. **Economics** — Kacheln: Spend, Leads, CPL (Konto-Historie live aus Insights), Zielfunktion (CPA-Grenze aus Brand-Config), Winner/Loser-Liste, Learnings-Feed; Audio-Briefing-Play-Button
+1. **Board** — angle kanban (5 columns by status); card: name, segment, hook direction, expectedCpl/measuredCpl, approve/kill buttons
+2. **Studio** — asset-pair cards: static preview in a Meta-feed frame + copy + critic score; approve/reject/regenerate
+3. **Ticker** — run-log stream (polling `/state`), "agent X is doing Y" lines
+4. **Economics** — tiles: spend, leads, CPL (account history live from insights), target function (CPA cap from brand config), winner/loser list, learnings feed
 
-Look: dunkel, wenige große Zahlen, Mint-Akzent (#00FF7F) — Lenn entscheidet final.
+Look: dark mission-control theme, few large numbers, mint accent.
 
-## 7. Build-Reihenfolge am Tag (parallele Agent-Streams)
+## 7. Deploy
 
-- **Stream A (Backbone):** Schema + `/state` + Board-UI-Gerüst → dann Stufe 2 (Strategist mit loyft-Seed, ohne Scout) → Stufe 3+4 → Stufe 5
-- **Stream B (Meta):** `connectors/meta.ts` + Publish-PAUSED mit Dummy-Creative testen (⚠️ Meilenstein 12:30) → Insights-Read
-- **Stream C (Scout):** Firecrawl-Onboarding (kann als letztes Must landen — loyft läuft aus dem Seed)
-- **Stream D (Lenn):** UI-Polish, Deck, Video-Regie
-- Reihenfolge-Prinzip: **Der Demo-Pfad wird von hinten nach vorne abgesichert** — Publish zuerst beweisen, dann verschönern.
-
-## 7b. Deploy & Demo-URL (ENTSCHIEDEN: Render)
-
-- **Render Web Service** statt Serverless: echter Node-Prozess ohne Function-Timeouts, JSON-State im Prozess-/Disk-Kontext funktioniert (ephemeral bis zum Redeploy — für den Demo-Tag okay). Deploy per `render.yaml` + `RENDER_API_KEY`, Auto-Deploy vom main-Branch.
-- **Mutations-Schutz PFLICHT im Deployment:** publish/optimize/approve nur mit `x-admin-secret: $ADLOOP_ADMIN_SECRET` (im öffentlichen Netz hängt sonst unser Meta-Token an offenen Routen). Read-Routen (`/state`, UI) bleiben offen — das ist die Demo-URL für die Submission.
-- **Entwicklung bleibt lokal** (schnellste Loops); Render zieht denselben Stand nach — Lenn nutzt die Render-URL als Live-Preview statt LAN-Gefrickel.
-- **`pitch/`** (HTML-Deck) wird mit deployt — eine URL für Demo und Deck.
-
-## 8. Fallbacks (vorab entschieden, keine Tages-Diskussion)
-
-| Risiko | Fallback |
-|---|---|
-| **Pre-Flight 09:00 (PFLICHT, vor jeder Code-Zeile):** minimaler echter PAUSED-Campaign-Create per curl gegen das Konto (Token, App-Zugang, Zahlungsmethode, Assets). Scheitert er → sofort Fallback-Leiter, nicht erst 12:30 | — |
-| Meta-Write klemmt trotz Pre-Flight | Sandbox-Ad-Account; letzter Ausweg: `generatepreviews` + Payload sichtbar im UI — im Pitch EXPLIZIT als degraded demo benennen |
-| Auch Token-Weg klemmt | Sandbox-Ad-Account; letzter Ausweg: `generatepreviews` + vorbereiteter Payload sichtbar im UI |
-| Fal-Modell schwächelt bei Text im Bild | Modell-Switch per Env; notfalls Bild ohne Text + CSS-Overlay im Preview |
-| Firecrawl-Limit/Ausfall | loyft-Seed trägt die Demo; Fremd-URL-Stunt streichen |
-| Zeit läuft weg | Scope-Leiter rückwärts: LP-Routen → n8n → ElevenLabs → Scout streichen; der Loop (2→6→7) bleibt unantastbar |
-```
+- **Persistent Node process** over serverless: no function timeouts, JSON state works in the process/disk context (ephemeral until redeploy — acceptable for a demo deployment). A `Dockerfile` and `render.yaml` are included; auto-deploy from the main branch.
+- **Mutation guard is mandatory in public deployments:** publish/optimize/approve only with `x-admin-secret: $ADLOOP_ADMIN_SECRET` (otherwise the Meta token hangs off open routes on the public internet). Read routes (`/state`, UI) stay open.
+- Development stays local (fastest loops); the deployment tracks the same main branch.

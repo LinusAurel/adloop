@@ -169,18 +169,16 @@ function angleName(angleId: string | undefined): string | undefined {
 function persistLearnings(
   brandSlug: string,
   rows: ClassifiedAdRow[],
-  demo: boolean,
 ): Learning[] {
   const existing = readCollection("learnings").filter((l) => l.brandSlug === brandSlug);
   const created: Learning[] = [];
-  const prefix = demo ? "[Demo-Daten] " : "";
   for (const row of rows) {
     if (row.classification === "insufficient_data") continue;
     const label = angleName(row.angleId) ?? row.adName ?? row.adId;
     const pattern =
       row.classification === "winner"
-        ? `${prefix}Winner: „${label}“ — ${row.reason}. Angle-Richtung weiterverfolgen und skalierbar testen.`
-        : `${prefix}Loser: „${label}“ — ${row.reason}. Hook/Angle überarbeiten oder verwerfen.`;
+        ? `Winner: „${label}“ — ${row.reason}. Angle-Richtung weiterverfolgen und skalierbar testen.`
+        : `Loser: „${label}“ — ${row.reason}. Hook/Angle überarbeiten oder verwerfen.`;
     if (existing.some((l) => l.pattern === pattern)) continue;
     const learning: Learning = {
       id: newId("lrn"),
@@ -302,7 +300,7 @@ export async function analyzeBrand(
 
     // Fixture learnings go to the store too (that IS the mining demo), but
     // clearly prefixed so they are never mistaken for live findings.
-    const learnings = persistLearnings(slug, rows, source === "fixture");
+    const learnings = persistLearnings(slug, rows);
     const recommendation = buildRecommendation(rows, target.value);
 
     if (rows.length > 0) {

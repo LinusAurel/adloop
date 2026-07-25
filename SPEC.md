@@ -105,10 +105,11 @@ Look: dunkel, wenige große Zahlen, Mint-Akzent (#00FF7F) — Lenn entscheidet f
 - **Stream D (Lenn):** UI-Polish, Deck, Video-Regie
 - Reihenfolge-Prinzip: **Der Demo-Pfad wird von hinten nach vorne abgesichert** — Publish zuerst beweisen, dann verschönern.
 
-## 7b. Deploy & Demo-URL
+## 7b. Deploy & Demo-URL (ENTSCHIEDEN: Render)
 
-- **Live-Läufe laufen LOKAL** (JSON-State + lange Runs vertragen kein Serverless). Lenn schaut über LAN/Hotspot zu (`--hostname 0.0.0.0`).
-- **Vercel = Showcase-Deploy am Nachmittag:** derselbe Code im Read-only-Modus (`SHOWCASE=1`), Daten-Snapshot eines echten Laufs wird zur Build-Zeit eingebacken — Board, Studio, Economics voll sichtbar, Mutations-Routen deaktiviert. Das ist die stabile Demo-URL für die Submission (Online-Erstbewertung!).
+- **Render Web Service** statt Serverless: echter Node-Prozess ohne Function-Timeouts, JSON-State im Prozess-/Disk-Kontext funktioniert (ephemeral bis zum Redeploy — für den Demo-Tag okay). Deploy per `render.yaml` + `RENDER_API_KEY`, Auto-Deploy vom main-Branch.
+- **Mutations-Schutz PFLICHT im Deployment:** publish/optimize/approve nur mit `x-admin-secret: $ADLOOP_ADMIN_SECRET` (im öffentlichen Netz hängt sonst unser Meta-Token an offenen Routen). Read-Routen (`/state`, UI) bleiben offen — das ist die Demo-URL für die Submission.
+- **Entwicklung bleibt lokal** (schnellste Loops); Render zieht denselben Stand nach — Lenn nutzt die Render-URL als Live-Preview statt LAN-Gefrickel.
 - **`pitch/`** (HTML-Deck) wird mit deployt — eine URL für Demo und Deck.
 
 ## 8. Fallbacks (vorab entschieden, keine Tages-Diskussion)

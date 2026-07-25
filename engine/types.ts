@@ -42,7 +42,8 @@ export interface Brand {
   whatsappUrl?: string;
   product: string;
   conversionGoal: ConversionGoal;
-  targetCpa: number;
+  // null for freshly onboarded brands (Scout) until a human sets a goal.
+  targetCpa: number | null;
   guardrails: string[];
   copyRules?: CopyRules;
   designTokens: Record<string, string>;

@@ -265,7 +265,10 @@ export async function analyzeBrand(
       logLine(run.id, AGENT, `mined Fixture-Insights (${raw.length} Ads, klar als Demo gelabelt) …`);
     }
 
-    const rows = classifyRows(raw, brand.targetCpa);
+    // Onboarded brands without a human-set goal cannot be classified yet.
+    const targetCpa = brand.targetCpa;
+    if (targetCpa == null) throw new Error("target_cpa_missing");
+    const rows = classifyRows(raw, targetCpa);
     const spend = rows.reduce((s, r) => s + r.spend, 0);
     const leads = rows.reduce((s, r) => s + r.leads, 0);
     const winners = rows.filter((r) => r.classification === "winner").length;
@@ -274,7 +277,7 @@ export async function analyzeBrand(
     // Fixture learnings go to the store too (that IS the mining demo), but
     // clearly prefixed so they are never mistaken for live findings.
     const learnings = persistLearnings(slug, rows, source === "fixture");
-    const recommendation = buildRecommendation(rows, brand.targetCpa);
+    const recommendation = buildRecommendation(rows, targetCpa);
 
     if (rows.length > 0) {
       logLine(
@@ -289,7 +292,7 @@ export async function analyzeBrand(
       source,
       note,
       totals: { spend, leads, cpl: leads > 0 ? spend / leads : null },
-      targetCpa: brand.targetCpa,
+      targetCpa,
       rows,
       learnings,
       recommendation,

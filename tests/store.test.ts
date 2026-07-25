@@ -60,7 +60,7 @@ test("getBrandState seeds loyft from brands/loyft/brand.json", () => {
   assert.equal(state.brand.slug, "loyft");
   assert.equal(state.brand.name, "loyft");
   assert.equal(state.brand.conversionGoal, "website_lead");
-  assert.ok(state.brand.targetCpa > 0);
+  assert.ok(state.brand.targetCpa != null && state.brand.targetCpa > 0);
   assert.deepEqual(state.angles.length, 1); // from previous test, same data dir
 });
 

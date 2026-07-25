@@ -32,7 +32,11 @@ function buildPrompt(brand: Brand, evidence: Evidence[], existing: Angle[]): str
   const parts: string[] = [];
   parts.push(`# Brand: ${brand.name} (${brand.url})`);
   parts.push(`Produkt: ${brand.product}`);
-  parts.push(`Ziel-CPA: ${brand.targetCpa} € (Conversion-Goal: ${brand.conversionGoal})`);
+  parts.push(
+    brand.targetCpa != null
+      ? `Ziel-CPA: ${brand.targetCpa} € (Conversion-Goal: ${brand.conversionGoal})`
+      : `Ziel-CPA: noch nicht gesetzt — schätze expectedCpl marktüblich konservativ (Conversion-Goal: ${brand.conversionGoal})`,
+  );
 
   const brandDoc = loadBrandDoc(brand.slug, "brand.md");
   if (brandDoc) parts.push("## Brand-Kontext\n" + brandDoc);

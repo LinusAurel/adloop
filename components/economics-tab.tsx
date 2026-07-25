@@ -194,7 +194,7 @@ export function EconomicsTab({ state }: { state: BrandState | null }) {
         <Tile label="CPL" value={euro(analysis?.totals.cpl ?? null)} />
         <Tile
           label="Zielfunktion"
-          value={state ? `≤ ${state.brand.targetCpa} €` : "—"}
+          value={state?.brand.targetCpa != null ? `≤ ${state.brand.targetCpa} €` : "—"}
           sub="CPA-Grenze aus Brand-Config"
         />
       </div>

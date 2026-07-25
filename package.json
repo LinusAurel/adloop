@@ -39,5 +39,13 @@
     "lefthook": "^2.1.10",
     "tailwindcss": "^4",
     "typescript": "^5"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "lefthook",
+      "sharp",
+      "unrs-resolver"
+    ],
+    "minimumReleaseAge": 0
   }
 }

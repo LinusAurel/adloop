@@ -1,0 +1,8 @@
+node_modules
+.next
+.git
+.worktrees
+data
+_local
+.env
+.env.*

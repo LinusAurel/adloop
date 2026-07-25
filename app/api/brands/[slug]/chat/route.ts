@@ -47,7 +47,7 @@ export async function POST(
       {
         ok: false,
         error: "invalid_body",
-        hint: "Body: { messages: [{ role: \"user\"|\"assistant\", content: string }] }, mindestens eine Nachricht",
+        hint: "Body: { messages: [{ role: \"user\"|\"assistant\", content: string }] }, at least one message",
       },
       { status: 400 },
     );

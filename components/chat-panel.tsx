@@ -3,7 +3,7 @@
 /*
   ChatPanel (#16) — the heart of the platform: the user steers the whole
   engine in dialogue. Before the first message the panel is a calm, centred
-  entry („Woran arbeiten wir?“) with contextual suggestion chips derived
+  entry ("What should we work on?") with contextual suggestion chips derived
   from the brand state; afterwards it is a classic chat view. Executed tool
   actions appear as small badges under the assistant reply. Design tokens
   come from app/globals.css; quiet surfaces, lots of whitespace, no emojis.
@@ -38,37 +38,37 @@ function buildSuggestions(state: BrandState | null): Suggestion[] {
   const draftAssets = assets.filter((a) => a.status === "draft");
   if (draftAssets.length > 0) {
     suggestions.push({
-      label: `${draftAssets.length} Asset${draftAssets.length === 1 ? "" : "s"} warten auf Freigabe — jetzt ansehen`,
-      prompt: "Zeig mir das Material, das auf Freigabe wartet, und gib mir Deine Empfehlung.",
+      label: `${draftAssets.length} asset${draftAssets.length === 1 ? "" : "s"} waiting for approval — review now`,
+      prompt: "Show me the assets waiting for approval and give me your recommendation.",
     });
   }
 
   const draftAngles = angles.filter((a) => a.status === "draft");
   if (draftAngles.length > 0) {
     suggestions.push({
-      label: `${draftAngles.length} Hypothese${draftAngles.length === 1 ? "" : "n"} warten auf Deine Entscheidung`,
-      prompt: "Geh mit mir die offenen Hypothesen durch — welche würdest Du freigeben und warum?",
+      label: `${draftAngles.length} ${draftAngles.length === 1 ? "hypothesis" : "hypotheses"} waiting for your decision`,
+      prompt: "Walk me through the open hypotheses — which ones would you approve, and why?",
     });
   }
 
   if (angles.length === 0) {
     suggestions.push({
-      label: "Neue Angles aus dem Research generieren",
-      prompt: "Starte den Strategist und melde neue Angle-Hypothesen an.",
+      label: "Generate new angles from the research",
+      prompt: "Start the Strategist and register new angle hypotheses.",
     });
   }
 
   const approvedAssets = assets.filter((a) => a.status === "approved");
   if (approvedAssets.length > 0) {
     suggestions.push({
-      label: "Kampagne veröffentlichen (startet pausiert)",
-      prompt: "Veröffentliche die freigegebenen Assets als Kampagne — pausiert, wie immer.",
+      label: "Publish the campaign (launches paused)",
+      prompt: "Publish the approved assets as a campaign — paused, as always.",
     });
   }
 
   suggestions.push({
-    label: "Wie steht die Brand gerade da?",
-    prompt: "Gib mir einen kurzen Überblick: Wo stehen wir, und was wäre jetzt der sinnvollste nächste Schritt?",
+    label: "How is the brand doing right now?",
+    prompt: "Give me a quick overview: where do we stand, and what would be the most sensible next step?",
   });
 
   return suggestions.slice(0, 4);
@@ -114,8 +114,8 @@ function Composer({
       <input
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        placeholder="Woran arbeiten wir?"
-        aria-label="Nachricht an den Kampagnen-Strategen"
+        placeholder="What should we work on?"
+        aria-label="Message the campaign strategist"
         disabled={busy}
         autoFocus={autoFocus}
         className="h-9 min-w-0 flex-1 bg-transparent text-[0.9375rem] text-foreground placeholder:text-text-faint focus:outline-none disabled:opacity-50"
@@ -123,7 +123,7 @@ function Composer({
       <button
         type="submit"
         disabled={busy || value.trim() === ""}
-        aria-label="Senden"
+        aria-label="Send"
         className="grid size-9 shrink-0 place-items-center rounded-full bg-foreground text-background transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-35"
       >
         <ArrowUp className="size-4" strokeWidth={2} />
@@ -193,7 +193,7 @@ export function ChatPanel({
           error?: string;
         };
         if (!res.ok || typeof data.reply !== "string") {
-          throw new Error(data.error ?? `Status ${res.status}`);
+          throw new Error(data.error ?? `status ${res.status}`);
         }
         setMessages((prev) => [
           ...prev,
@@ -204,7 +204,7 @@ export function ChatPanel({
         }
         loadState();
       } catch (e) {
-        setError(e instanceof Error ? e.message : "unbekannter Fehler");
+        setError(e instanceof Error ? e.message : "unknown error");
         // Roll the failed user message back into the composer.
         setMessages((prev) => prev.slice(0, -1));
         setInput(content);
@@ -223,10 +223,10 @@ export function ChatPanel({
       <div className="flex h-full min-h-[60vh] flex-col items-center justify-center px-6">
         <div className="w-full max-w-[640px]">
           <h1 className="text-center text-[2rem] font-semibold tracking-[-0.025em]">
-            Woran arbeiten wir?
+            What should we work on?
           </h1>
           <p className="mx-auto mt-3 max-w-[44ch] text-center text-[0.9375rem] leading-relaxed text-text-soft">
-            Der Kampagnen-Stratege kennt den Stand der Brand und führt aus, was Du entscheidest.
+            The campaign strategist knows the brand&apos;s current state and executes what you decide.
           </p>
 
           <div className="mt-8 flex flex-wrap justify-center gap-2">
@@ -255,12 +255,12 @@ export function ChatPanel({
 
           {busy ? (
             <p className="mt-4 animate-pulse text-center text-[0.8125rem] text-text-faint">
-              Stratege denkt nach …
+              Strategist is thinking …
             </p>
           ) : null}
           {error ? (
             <p className="mt-4 rounded-xl bg-signal-red/10 px-4 py-2.5 text-center text-[0.8125rem] text-signal-red">
-              Nachricht nicht angekommen: {error}
+              Message failed: {error}
             </p>
           ) : null}
         </div>
@@ -293,12 +293,12 @@ export function ChatPanel({
 
           {busy ? (
             <p className="animate-pulse text-[0.875rem] text-text-faint">
-              Stratege denkt nach …
+              Strategist is thinking …
             </p>
           ) : null}
           {error ? (
             <p className="rounded-xl bg-signal-red/10 px-4 py-2.5 text-[0.8125rem] text-signal-red">
-              Nachricht nicht angekommen: {error}
+              Message failed: {error}
             </p>
           ) : null}
           <div ref={endRef} />

@@ -61,11 +61,11 @@ test("Scout-Lauf im Mock-Modus endet erfolgreich und loggt die Recherche", async
   // Fortschritt der Research-Phase ist über appendRunLog sichtbar (Ticker).
   const messages = run.log.map((entry) => entry.message);
   assert.ok(
-    messages.some((m) => /^Suche 1\/\d:/.test(m)),
+    messages.some((m) => /^Search 1\/\d:/.test(m)),
     `Suchfortschritt fehlt im Run-Log: ${JSON.stringify(messages)}`,
   );
   assert.ok(
-    messages.some((m) => m.startsWith("liest Fundstelle 1/")),
+    messages.some((m) => m.startsWith("Reading source 1/")),
     "Scrape-Fortschritt fehlt im Run-Log",
   );
 

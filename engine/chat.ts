@@ -3,6 +3,8 @@
 // Long operations follow the async job pattern (#7): the tool starts the run
 // and reports the runId; progress arrives in the UI via /state polling.
 // Guardrail: every tool operates strictly on the brand of the given slug.
+// Product UI language is English; the assistant mirrors the user's language
+// while generated marketing content stays in the brand's market language.
 
 import Anthropic from "@anthropic-ai/sdk";
 import { analyzeBrand } from "./agents/analyst.ts";
@@ -46,78 +48,78 @@ function chatModel(): string {
 
 // Badge labels for executed tool actions (UI shows them under the reply).
 const ACTION_LABELS: Record<string, string> = {
-  get_brand_state: "Status gelesen",
-  generate_angles: "Strategist gestartet",
-  approve_angle: "Hypothese freigegeben",
-  reject_angle: "Hypothese verworfen",
-  generate_assets: "Asset-Pipeline gestartet",
-  approve_asset: "Asset freigegeben",
-  reject_asset: "Asset abgelehnt",
-  publish_campaign: "Publisher gestartet (PAUSED)",
-  mine_insights: "Analyst gestartet",
-  update_brand_data: "Brand-Daten aktualisiert",
+  get_brand_state: "State read",
+  generate_angles: "Strategist started",
+  approve_angle: "Angle approved",
+  reject_angle: "Angle rejected",
+  generate_assets: "Asset pipeline started",
+  approve_asset: "Asset approved",
+  reject_asset: "Asset rejected",
+  publish_campaign: "Publisher started (PAUSED)",
+  mine_insights: "Analyst started",
+  update_brand_data: "Brand data updated",
 };
 
 /* ------------------------------------------------------------- summary -- */
 
 function euro(value: number | null | undefined): string {
   if (value === undefined || value === null) return "—";
-  return `${value.toFixed(2).replace(".", ",")} €`;
+  return `€${value.toFixed(2)}`;
 }
 
-// Compact German state summary for the system prompt and the mock reply.
+// Compact state summary for the system prompt and the mock reply.
 export function buildStateSummary(state: BrandState): string {
   const { brand, angles, assets, runs, learnings } = state;
   const lines: string[] = [];
 
-  lines.push(`Brand: ${brand.name} (${brand.url}) — Produkt: ${brand.product}`);
+  lines.push(`Brand: ${brand.name} (${brand.url}) — product: ${brand.product}`);
   lines.push(
-    `Ziel-CPA: ${brand.targetCpa != null ? euro(brand.targetCpa) : "noch nicht gesetzt"} (Conversion-Goal: ${brand.conversionGoal})`,
+    `Target CPA: ${brand.targetCpa != null ? euro(brand.targetCpa) : "not set yet"} (conversion goal: ${brand.conversionGoal})`,
   );
 
   if (angles.length === 0) {
-    lines.push("Angles: noch keine — der Strategist kann Hypothesen anmelden.");
+    lines.push("Angles: none yet — the Strategist can register hypotheses.");
   } else {
     lines.push(`Angles (${angles.length}):`);
     for (const a of angles.slice(0, 20)) {
-      const measured = a.measuredCpl !== undefined ? `, gemessen ${euro(a.measuredCpl)}` : "";
+      const measured = a.measuredCpl !== undefined ? `, measured ${euro(a.measuredCpl)}` : "";
       lines.push(
-        `- [${a.status}] ${a.name} (${a.id}) — ${a.segment}; erwartet ${euro(a.expectedCpl)}${measured}`,
+        `- [${a.status}] ${a.name} (${a.id}) — ${a.segment}; expected ${euro(a.expectedCpl)}${measured}`,
       );
     }
   }
 
   if (assets.length === 0) {
-    lines.push("Assets: noch keine.");
+    lines.push("Assets: none yet.");
   } else {
     lines.push(`Assets (${assets.length}):`);
     for (const asset of assets.slice(0, 30)) {
       const angle = angles.find((a) => a.id === asset.angleId);
-      const score = asset.criticScore !== undefined ? `, Critic ${asset.criticScore}/10` : "";
-      const published = asset.metaIds?.adId ? ", bei Meta angelegt" : "";
+      const score = asset.criticScore !== undefined ? `, critic ${asset.criticScore}/10` : "";
+      const published = asset.metaIds?.adId ? ", created at Meta" : "";
       lines.push(
-        `- [${asset.status}] ${asset.kind} (${asset.id}) für „${angle?.name ?? asset.angleId}“${score}${published}`,
+        `- [${asset.status}] ${asset.kind} (${asset.id}) for "${angle?.name ?? asset.angleId}"${score}${published}`,
       );
     }
   }
 
   if (brand.meta.campaignId) {
     lines.push(
-      `Kampagne: angelegt (campaignId ${brand.meta.campaignId}${brand.meta.adsetId ? `, adsetId ${brand.meta.adsetId}` : ""}) — Ads starten IMMER pausiert.`,
+      `Campaign: created (campaignId ${brand.meta.campaignId}${brand.meta.adsetId ? `, adsetId ${brand.meta.adsetId}` : ""}) — ads ALWAYS launch paused.`,
     );
   } else {
-    lines.push("Kampagne: noch nicht veröffentlicht.");
+    lines.push("Campaign: not published yet.");
   }
   lines.push(
-    `Budget: ${brand.meta.fixedDailyBudgetCents != null ? euro(brand.meta.fixedDailyBudgetCents / 100) + " pro Tag, von einem Menschen fixiert" : "nicht konfiguriert"}`,
+    `Budget: ${brand.meta.fixedDailyBudgetCents != null ? euro(brand.meta.fixedDailyBudgetCents / 100) + " per day, fixed by a human" : "not configured"}`,
   );
 
   const active = runs.filter((r) => !r.finishedAt);
   if (active.length > 0) {
-    lines.push(`Laufende Jobs: ${active.map((r) => r.stage).join(", ")}`);
+    lines.push(`Active jobs: ${active.map((r) => r.stage).join(", ")}`);
   }
   if (learnings.length > 0) {
-    lines.push(`Learnings (${learnings.length}), zuletzt: ${learnings.at(-1)?.pattern ?? "—"}`);
+    lines.push(`Learnings (${learnings.length}), latest: ${learnings.at(-1)?.pattern ?? "—"}`);
   }
 
   return lines.join("\n");
@@ -129,23 +131,23 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: "get_brand_state",
     description:
-      "Liest den aktuellen Zustand der Brand (Angles, Assets, Kampagne, Läufe, Learnings) frisch aus dem Store. Nutze das, wenn Du Details brauchst, die über die Zusammenfassung im Systemprompt hinausgehen, oder nach eigenen Mutationen.",
+      "Reads the brand's current state (angles, assets, campaign, runs, learnings) fresh from the store. Use it when you need details beyond the summary in the system prompt, or after your own mutations.",
     input_schema: { type: "object", properties: {} },
   },
   {
     name: "generate_angles",
     description:
-      "Startet den Strategist als Hintergrund-Job: er meldet neue testbare Angle-Hypothesen mit erwartetem CPL an. Antwortet sofort mit einer Run-ID; das Ergebnis erscheint im Board.",
+      "Starts the Strategist as a background job: it registers new testable angle hypotheses with an expected CPL. Returns a run ID immediately; the result appears on the board.",
     input_schema: { type: "object", properties: {} },
   },
   {
     name: "approve_angle",
     description:
-      "Gibt einen Angle frei (Status approved). Menschliches Gate: nur ausführen, wenn der Nutzer die Freigabe ausdrücklich verlangt hat.",
+      "Approves an angle (status approved). Human gate: only execute when the user explicitly asked for the approval.",
     input_schema: {
       type: "object",
       properties: {
-        angleId: { type: "string", description: "ID des Angles, z. B. ang_…" },
+        angleId: { type: "string", description: "ID of the angle, e.g. ang_…" },
       },
       required: ["angleId"],
     },
@@ -153,11 +155,11 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: "reject_angle",
     description:
-      "Verwirft einen Angle (Status killed). Menschliches Gate: nur ausführen, wenn der Nutzer das ausdrücklich verlangt hat.",
+      "Rejects an angle (status killed). Human gate: only execute when the user explicitly asked for it.",
     input_schema: {
       type: "object",
       properties: {
-        angleId: { type: "string", description: "ID des Angles, z. B. ang_…" },
+        angleId: { type: "string", description: "ID of the angle, e.g. ang_…" },
       },
       required: ["angleId"],
     },
@@ -165,11 +167,11 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: "generate_assets",
     description:
-      "Startet die Asset-Pipeline (Copywriter → Critic → Designer) für einen freigegebenen Angle als Hintergrund-Job. Ergebnis (Copy + Motiv) erscheint im Studio.",
+      "Starts the asset pipeline (Copywriter → Critic → Designer) for an approved angle as a background job. The result (copy + creative) appears in the studio.",
     input_schema: {
       type: "object",
       properties: {
-        angleId: { type: "string", description: "ID des Angles, z. B. ang_…" },
+        angleId: { type: "string", description: "ID of the angle, e.g. ang_…" },
       },
       required: ["angleId"],
     },
@@ -177,11 +179,11 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: "approve_asset",
     description:
-      "Gibt ein Asset frei (Status approved). Menschliches Gate: nur ausführen, wenn der Nutzer die Freigabe ausdrücklich verlangt hat.",
+      "Approves an asset (status approved). Human gate: only execute when the user explicitly asked for the approval.",
     input_schema: {
       type: "object",
       properties: {
-        assetId: { type: "string", description: "ID des Assets, z. B. ast_…" },
+        assetId: { type: "string", description: "ID of the asset, e.g. ast_…" },
       },
       required: ["assetId"],
     },
@@ -189,11 +191,11 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: "reject_asset",
     description:
-      "Lehnt ein Asset ab (Status rejected). Menschliches Gate: nur ausführen, wenn der Nutzer das ausdrücklich verlangt hat.",
+      "Rejects an asset (status rejected). Human gate: only execute when the user explicitly asked for it.",
     input_schema: {
       type: "object",
       properties: {
-        assetId: { type: "string", description: "ID des Assets, z. B. ast_…" },
+        assetId: { type: "string", description: "ID of the asset, e.g. ast_…" },
       },
       required: ["assetId"],
     },
@@ -201,13 +203,13 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: "publish_campaign",
     description:
-      "Startet den Publisher als Hintergrund-Job: freigegebene Assets werden als Ads bei Meta angelegt — IMMER mit Status PAUSED, aktiviert wird nur von einem Menschen im Ads Manager.",
+      "Starts the Publisher as a background job: approved assets are created as ads at Meta — ALWAYS with status PAUSED; only a human activates them in Ads Manager.",
     input_schema: { type: "object", properties: {} },
   },
   {
     name: "mine_insights",
     description:
-      "Startet den Analyst als Hintergrund-Job: liest Meta-Insights, klassifiziert Winner/Loser und zieht Learnings. Ergebnis erscheint unter Economics.",
+      "Starts the Analyst as a background job: reads Meta insights, classifies winners/losers and extracts learnings. The result appears under economics.",
     input_schema: {
       type: "object",
       properties: {
@@ -215,7 +217,7 @@ const TOOLS: Anthropic.Tool[] = [
           type: "string",
           enum: ["auto", "live", "fixture"],
           description:
-            "auto (Default): erst echte Insights, bei leerem Konto Demo-Fixture; live: nur echte Daten; fixture: nur Demo-Daten.",
+            "auto (default): real insights first, demo fixture when the account is empty; live: real data only; fixture: demo data only.",
         },
       },
     },
@@ -223,7 +225,7 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: "update_brand_data",
     description:
-      "Ändert Stammdaten der Brand im Store. Erlaubt: name, product, url, whatsappUrl, targetCpa (Euro, null zum Löschen), guardrails (vollständige Liste). Budget- und Meta-Konfiguration sind tabu — die setzt ein Mensch.",
+      "Updates the brand's master data in the store. Allowed: name, product, url, whatsappUrl, targetCpa (euro, null to clear), guardrails (full list). Budget and Meta configuration are off limits — a human sets those.",
     input_schema: {
       type: "object",
       properties: {
@@ -231,7 +233,7 @@ const TOOLS: Anthropic.Tool[] = [
         product: { type: "string" },
         url: { type: "string" },
         whatsappUrl: { type: "string" },
-        targetCpa: { type: ["number", "null"], description: "Ziel-CPA in Euro oder null" },
+        targetCpa: { type: ["number", "null"], description: "Target CPA in euro, or null" },
         guardrails: { type: "array", items: { type: "string" } },
       },
     },
@@ -261,29 +263,29 @@ function setAngleStatus(slug: string, angleId: string, status: Angle["status"]):
   const angles = readCollection("angles");
   const angle = angles.find((a) => a.id === angleId && a.brandSlug === slug);
   if (!angle) {
-    return { result: `Angle ${angleId} gehört nicht zu dieser Brand oder existiert nicht.`, isError: true };
+    return { result: `Angle ${angleId} does not belong to this brand or does not exist.`, isError: true };
   }
   angle.status = status;
   writeCollection("angles", angles);
   return {
-    result: `Angle „${angle.name}“ ist jetzt ${status === "approved" ? "freigegeben" : "verworfen"}.`,
+    result: `Angle "${angle.name}" is now ${status === "approved" ? "approved" : "rejected"}.`,
     mutated: true,
   };
 }
 
 function setAssetStatus(slug: string, assetId: string, status: Asset["status"]): ToolOutcome {
   if (!findBrandAsset(slug, assetId)) {
-    return { result: `Asset ${assetId} gehört nicht zu dieser Brand oder existiert nicht.`, isError: true };
+    return { result: `Asset ${assetId} does not belong to this brand or does not exist.`, isError: true };
   }
   const assets = readCollection("assets");
   const asset = assets.find((a) => a.id === assetId);
   if (!asset) {
-    return { result: `Asset ${assetId} existiert nicht.`, isError: true };
+    return { result: `Asset ${assetId} does not exist.`, isError: true };
   }
   asset.status = status;
   writeCollection("assets", assets);
   return {
-    result: `Asset ${assetId} (${asset.kind}) ist jetzt ${status === "approved" ? "freigegeben" : "abgelehnt"}.`,
+    result: `Asset ${assetId} (${asset.kind}) is now ${status === "approved" ? "approved" : "rejected"}.`,
     mutated: true,
   };
 }
@@ -297,27 +299,27 @@ function updateBrandData(brand: Brand, input: Record<string, unknown>): ToolOutc
     const value = input[key];
     if (key === "targetCpa") {
       if (value !== null && typeof value !== "number") {
-        return { result: "targetCpa muss eine Zahl (Euro) oder null sein.", isError: true };
+        return { result: "targetCpa must be a number (euro) or null.", isError: true };
       }
       brand.targetCpa = value;
     } else if (key === "guardrails") {
       if (!Array.isArray(value) || value.some((v) => typeof v !== "string")) {
-        return { result: "guardrails muss eine Liste von Strings sein.", isError: true };
+        return { result: "guardrails must be a list of strings.", isError: true };
       }
       brand.guardrails = value as string[];
     } else {
       if (typeof value !== "string") {
-        return { result: `${key} muss ein String sein.`, isError: true };
+        return { result: `${key} must be a string.`, isError: true };
       }
       brand[key] = value;
     }
     changed.push(key);
   }
   if (changed.length === 0) {
-    return { result: "Keine erlaubten Felder übergeben (name, product, url, whatsappUrl, targetCpa, guardrails).", isError: true };
+    return { result: "No allowed fields provided (name, product, url, whatsappUrl, targetCpa, guardrails).", isError: true };
   }
   upsert("brands", brand);
-  return { result: `Aktualisiert: ${changed.join(", ")}.`, mutated: true };
+  return { result: `Updated: ${changed.join(", ")}.`, mutated: true };
 }
 
 // Async job pattern identical to the mutation routes (#7): create the run,
@@ -334,7 +336,7 @@ function startJob(
     finishRun(run.id, err instanceof Error ? err.message : String(err));
   });
   return {
-    result: `Job gestartet (runId ${run.id}). Läuft im Hintergrund — das Ergebnis erscheint ${doneWhere}.`,
+    result: `Job started (runId ${run.id}). Running in the background — the result will appear ${doneWhere}.`,
     mutated: true,
   };
 }
@@ -354,7 +356,7 @@ export async function executeChatTool(
       return { result: buildStateSummary(state) };
 
     case "generate_angles":
-      return startJob(slug, "strategist", (run) => runStrategist(slug, { run }), "im Board");
+      return startJob(slug, "strategist", (run) => runStrategist(slug, { run }), "on the board");
 
     case "approve_angle":
       return setAngleStatus(slug, String(input.angleId ?? ""), "approved");
@@ -366,13 +368,13 @@ export async function executeChatTool(
       const angleId = String(input.angleId ?? "");
       const angle = findBrandAngle(slug, angleId);
       if (!angle) {
-        return { result: `Angle ${angleId} gehört nicht zu dieser Brand oder existiert nicht.`, isError: true };
+        return { result: `Angle ${angleId} does not belong to this brand or does not exist.`, isError: true };
       }
       return startJob(
         slug,
         "assets",
         (run) => generateAssetPair(angle.id, { run }),
-        "im Studio",
+        "in the studio",
         angle.id,
       );
     }
@@ -388,7 +390,7 @@ export async function executeChatTool(
       if (!brand.meta.adAccountId || !brand.meta.pageId || !brand.meta.fixedDailyBudgetCents) {
         return {
           result:
-            "Publish nicht konfiguriert: adAccountId, pageId oder fixedDailyBudgetCents fehlen — die setzt ein Mensch in brand.json, kein Agent.",
+            "Publish is not configured: adAccountId, pageId or fixedDailyBudgetCents are missing — a human sets those in brand.json, never an agent.",
           isError: true,
         };
       }
@@ -396,7 +398,7 @@ export async function executeChatTool(
         slug,
         "publish",
         (run) => publishBrand(slug, { run }),
-        "im Ticker (alle Ads starten PAUSED)",
+        "in the ticker (all ads launch PAUSED)",
       );
     }
 
@@ -409,7 +411,7 @@ export async function executeChatTool(
         slug,
         "optimize",
         (run) => analyzeBrand(slug, { mode, run }),
-        "unter Economics",
+        "under economics",
       );
     }
 
@@ -417,7 +419,7 @@ export async function executeChatTool(
       return updateBrandData(brand, input);
 
     default:
-      return { result: `Unbekanntes Tool: ${name}`, isError: true };
+      return { result: `Unknown tool: ${name}`, isError: true };
   }
 }
 
@@ -425,31 +427,32 @@ export async function executeChatTool(
 
 function buildSystem(brand: Brand, summary: string): string {
   return [
-    `Du bist der Kampagnen-Stratege der Brand „${brand.name}“ in adloop, einer agentischen Paid-Ads-Engine (Scout → Strategist → Copywriter → Critic → Designer → Publisher → Analyst).`,
+    `You are the campaign strategist for the brand "${brand.name}" in adloop, an agentic paid-ads engine (Scout → Strategist → Copywriter → Critic → Designer → Publisher → Analyst).`,
     "",
-    "Aktueller Stand der Brand:",
+    "Current state of the brand:",
     summary,
     "",
-    "Regeln:",
-    "- Antworte knapp, konkret und handlungsorientiert. Immer auf Deutsch mit korrekten Umlauten (ä, ö, ü, ß) und deutschen Anführungszeichen („…“).",
-    "- Schlichter Fließtext, kein Markdown: keine **Sternchen**, keine #-Überschriften, keine Tabellen. Kurze Absätze und einfache Spiegelstriche (-) sind in Ordnung.",
-    "- Führe Aktionen ausschließlich über Tools aus — behaupte nie eine Aktion, die Du nicht per Tool ausgeführt hast.",
-    "- Freigeben und Verwerfen (Angles, Assets) sind Entscheidungen des Nutzers: nur ausführen, wenn er sie ausdrücklich verlangt; sonst eine Empfehlung geben und fragen.",
-    "- Lange Operationen (Angles, Assets, Publish, Insights) laufen als Hintergrund-Jobs: Job starten, melden, dass das Ergebnis im Board, Studio oder Ticker erscheint. Nicht warten, nicht blockieren.",
-    "- Der Publisher legt Kampagnen und Ads IMMER pausiert (PAUSED) an; aktiviert wird nur von einem Menschen im Ads Manager. Budget oder Spend verwaltest Du nie.",
-    "- Du arbeitest ausschließlich mit dieser einen Brand — keine Daten anderer Brands lesen oder ändern.",
-    "- Wenn der Nutzer den Stand wissen will, reicht meist die Zusammenfassung oben; hole frische Details nur bei Bedarf per get_brand_state.",
+    "Rules:",
+    "- Reply briefly, concretely and action-oriented. Reply in the language the user writes in; default to English.",
+    "- Generated marketing content (ad copy, angles, hooks) stays in the brand's market language — for German brands that means German with correct umlauts (ä, ö, ü, ß), never ae/oe/ue.",
+    "- Plain prose, no Markdown: no **asterisks**, no # headings, no tables. Short paragraphs and simple dashes (-) are fine.",
+    "- Execute actions exclusively through tools — never claim an action you did not perform via a tool.",
+    "- Approving and rejecting (angles, assets) are the user's decisions: only execute them when explicitly requested; otherwise give a recommendation and ask.",
+    "- Long operations (angles, assets, publish, insights) run as background jobs: start the job, report that the result will appear on the board, in the studio or in the ticker. Do not wait, do not block.",
+    "- The Publisher ALWAYS creates campaigns and ads paused (PAUSED); only a human activates them in Ads Manager. You never manage budget or spend.",
+    "- You work exclusively with this one brand — never read or modify data of other brands.",
+    "- When the user asks for the current state, the summary above is usually enough; fetch fresh details via get_brand_state only when needed.",
   ].join("\n");
 }
 
 function buildMockReply(summary: string): string {
   return [
-    mockModeHint(),
+    "MOCK mode active: ANTHROPIC_API_KEY is not set — this is a deterministic sample reply, not a real model response.",
     "",
-    "Aktueller Stand der Brand:",
+    "Current state of the brand:",
     summary,
     "",
-    "Sobald ein ANTHROPIC_API_KEY gesetzt ist, steuere ich die Engine hier im Dialog: Hypothesen anmelden, freigeben oder verwerfen, Material erzeugen, die Kampagne veröffentlichen (immer PAUSED) und Insights auswerten.",
+    "Once an ANTHROPIC_API_KEY is set, I steer the engine right here in the chat: register hypotheses, approve or reject them, generate assets, publish the campaign (always PAUSED) and mine insights.",
   ].join("\n");
 }
 
@@ -496,7 +499,7 @@ export async function runChat(slug: string, messages: ChatMessage[]): Promise<Ch
     if (text) reply = text;
 
     if (response.stop_reason === "refusal") {
-      reply = reply || "Diese Anfrage kann ich nicht bearbeiten — bitte anders formulieren.";
+      reply = reply || "I cannot handle this request — please rephrase it.";
       break;
     }
     if (response.stop_reason !== "tool_use") break;
@@ -527,7 +530,7 @@ export async function runChat(slug: string, messages: ChatMessage[]): Promise<Ch
   }
 
   if (!reply) {
-    reply = "Erledigt — Details stehen im Board bzw. Ticker.";
+    reply = "Done — details are on the board and in the ticker.";
   }
   return { reply, actions, stateChanged };
 }

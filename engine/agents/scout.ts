@@ -244,7 +244,7 @@ async function runWebResearch(
       appendRunLog(
         runId,
         AGENT,
-        `Search "${query}" failed (${message}) — continuing with the rest`,
+        `Search failed for ${query} (${message}) — continuing with remaining queries`,
         "warn",
       );
       perQuery.push([]);
@@ -440,7 +440,7 @@ function persistEvidence(
     count += 1;
   }
 
-  appendRunLog(runId, AGENT, `Stored ${count} evidence entries (hypothesis/external)`);
+  appendRunLog(runId, AGENT, `${count} evidence entries saved (hypothesis/external)`);
   return count;
 }
 
@@ -476,7 +476,7 @@ export async function runScout(
     const brandName = input.name?.trim() || extraction.brandName?.trim() || slug;
     // Deep Research (#19): non-blocking — Fehler je Suche/Fundstelle werden
     // innerhalb von runWebResearch toleriert, der Scout-Pfad stirbt nie daran.
-    appendRunLog(run.id, AGENT, `Starting web research on "${brandName}" …`);
+    appendRunLog(run.id, AGENT, `Starting web research for ${brandName} …`);
     const webResearch = await runWebResearch(brandName, extraction.category, url, run.id);
     const hasExternalSources = webResearch.sources.length > 0;
 
@@ -498,13 +498,13 @@ export async function runScout(
       product: input.product?.trim() || extraction.product?.trim() || research.productSummary,
     };
     upsert("brands", brand);
-    appendRunLog(run.id, AGENT, `Brand "${brand.name}" (${brand.slug}) updated in store`);
+    appendRunLog(run.id, AGENT, `Brand ${brand.name} (${brand.slug}) updated in store`);
 
     persistEvidence(brand, research, hasExternalSources, run.id);
     appendRunLog(
       run.id,
       AGENT,
-      "Done: research doc ready — publishing stays disabled until Meta configuration and budget are set by a human",
+      "Done: research doc ready — publish stays disabled until Meta configuration and budget are set by a human",
     );
     finishRun(run.id);
     return { runId: run.id, brand, research };

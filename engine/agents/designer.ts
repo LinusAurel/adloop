@@ -83,7 +83,7 @@ export async function runDesigner(
   variant: CopyVariant,
   runId: string,
 ): Promise<Asset> {
-  appendRunLog(runId, AGENT, `Creating creative brief for angle "${angle.name}" …`);
+  appendRunLog(runId, AGENT, `erstellt Creative-Brief für Angle „${angle.name}“ …`);
   const brief = await createBrief(brand, angle, variant);
 
   appendRunLog(runId, AGENT, "generiert Static (4:5) via Fal …");
@@ -91,7 +91,7 @@ export async function runDesigner(
 
   const assetId = newId("ast");
   const localPath = await downloadImage(imageUrl, assetId);
-  appendRunLog(runId, AGENT, `Static saved (${path.basename(localPath)})`);
+  appendRunLog(runId, AGENT, `Static gespeichert (${path.basename(localPath)})`);
 
   const asset: Asset = {
     id: assetId,

@@ -16,9 +16,9 @@ export function isFirecrawlMockMode(): boolean {
 // hat (gitignored) und sonst still im Mock-Modus landet.
 export function firecrawlMockHint(): string {
   return (
-    "MOCK-Modus aktiv: FIRECRAWL_API_KEY fehlt im Server-Prozess " +
-    `(cwd: ${process.cwd()}) — Scrape- und Suchergebnisse sind Beispieldaten. ` +
-    "Die .env liegt nur im Haupt-Checkout; im Worktree eine Kopie anlegen."
+    "MOCK mode active: FIRECRAWL_API_KEY missing in server process " +
+    `(cwd: ${process.cwd()}) — scrape and search results are sample data. ` +
+    "The .env lives only in the main checkout; create a copy when running from a worktree."
   );
 }
 
@@ -82,8 +82,8 @@ function mockSearchHits(query: string, limit: number): SearchHit[] {
   ];
   return hosts.slice(0, Math.max(1, Math.min(limit, hosts.length))).map((host, i) => ({
     url: `https://${host}/${slug}`,
-    title: `MOCK-Treffer ${i + 1} zu „${query}“`,
-    description: `MOCK: deterministisches Beispiel-Suchergebnis für „${query}“ (ohne API-Key)`,
+    title: `MOCK result ${i + 1} for ${query}`,
+    description: `MOCK: deterministic sample search result for ${query} (no API key)`,
     position: i + 1,
   }));
 }
@@ -105,7 +105,7 @@ export async function firecrawlSearch(query: string, limit = 5): Promise<SearchH
     body: JSON.stringify({ query, limit }),
   });
   if (!res.ok) {
-    throw new Error(`Firecrawl-Suche fehlgeschlagen (HTTP ${res.status})`);
+    throw new Error(`Firecrawl search failed (HTTP ${res.status})`);
   }
   const payload = (await res.json()) as {
     success?: boolean;
@@ -114,7 +114,7 @@ export async function firecrawlSearch(query: string, limit = 5): Promise<SearchH
     };
   };
   if (!payload.success) {
-    throw new Error("Firecrawl-Suche fehlgeschlagen (success=false)");
+    throw new Error("Firecrawl search failed (success=false)");
   }
   return (payload.data?.web ?? [])
     .filter(
@@ -139,7 +139,7 @@ export async function searchWeb(query: string, limit = 5) {
       web: mockSearchHits(query, limit).map((hit) => ({
         url: hit.url,
         title: hit.title,
-        markdown: `${hit.description}\n\nMOCK: Beispieltext einer externen Quelle zu „${query}“.`,
+        markdown: `${hit.description}\n\nMOCK: sample text of an external source for ${query}.`,
       })),
     };
   }

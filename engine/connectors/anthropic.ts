@@ -31,8 +31,8 @@ export function isMockMode(): boolean {
 // a worktree without .env — the cwd pinpoints which checkout misses the key.
 export function mockModeHint(): string {
   return (
-    "Mock mode active: ANTHROPIC_API_KEY missing in the server process " +
-    `(cwd: ${process.cwd()}) — outputs are sample data, not real results`
+    "MOCK-Modus aktiv: ANTHROPIC_API_KEY fehlt im Server-Prozess " +
+    `(cwd: ${process.cwd()}) — Outputs sind Beispieldaten, keine echten Ergebnisse`
   );
 }
 

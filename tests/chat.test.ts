@@ -1,6 +1,6 @@
 // Chat-Agent (#16): Mock-Pfad und Brand-Isolation. Ohne ANTHROPIC_API_KEY
-// muss runChat eine deterministische deutsche Antwort mit State-Zusammenfassung
-// liefern; die Tools des Chats dürfen strikt nur Daten der eigenen Brand lesen
+// muss runChat eine deterministische englische Antwort mit State-Zusammenfassung
+// liefern (Produkt-UI ist Englisch); die Tools dürfen strikt nur Daten der eigenen Brand lesen
 // und verändern. Store über ADLOOP_DATA_DIR in ein Temp-Verzeichnis umgeleitet
 // (node --test startet pro Testdatei einen eigenen Prozess).
 
@@ -78,6 +78,7 @@ test("Mock-Pfad: deterministische Antwort mit State-Zusammenfassung", async () =
   ]);
 
   assert.match(result.reply, /MOCK/, "Antwort muss den Mock-Modus benennen");
+  assert.match(result.reply, /Current state of the brand/, "Mock-Antwort ist englisch");
   assert.match(result.reply, /Alpha Marke/);
   assert.match(result.reply, /Alpha-Exklusiv-Angle/);
   assert.equal(result.stateChanged, false);
@@ -165,7 +166,7 @@ test("update_brand_data ändert nur erlaubte Felder der eigenen Brand", async ()
 test("publish_campaign verweigert ohne menschliche Meta-Konfiguration", async () => {
   const outcome = await executeChatTool("chat-brand-a", "publish_campaign", {});
   assert.equal(outcome.isError, true);
-  assert.match(outcome.result, /Mensch/);
+  assert.match(outcome.result, /human/);
 });
 
 test("runChat wirft brand_not_found für unbekannte Brands", async () => {

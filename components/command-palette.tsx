@@ -66,7 +66,13 @@ export function CommandPalette({
         group: "Angles",
         label: a.name,
         detail: a.segment,
-        run: () => onView("board"),
+        // The app shell listens for this and opens board + detail drawer.
+        run: () =>
+          window.dispatchEvent(
+            new CustomEvent("adloop:open-angle", {
+              detail: { angleId: a.id },
+            }),
+          ),
       })),
     ];
     return all.filter((i) => matches(query, i.label, i.detail, i.group));

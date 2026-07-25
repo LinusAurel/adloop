@@ -229,7 +229,7 @@ async function runWebResearch(
   const hits: SearchHit[] = [];
 
   for (const [i, query] of queries.entries()) {
-    appendRunLog(runId, AGENT, `Suche ${i + 1}/${queries.length}: ${query} …`);
+    appendRunLog(runId, AGENT, `Search ${i + 1}/${queries.length}: ${query} …`);
     try {
       const results = await firecrawlSearch(query, RESULTS_PER_SEARCH);
       const fresh = results.filter((hit) => {
@@ -244,7 +244,7 @@ async function runWebResearch(
       appendRunLog(
         runId,
         AGENT,
-        `Suche „${query}“ fehlgeschlagen (${message}) — weiter mit den übrigen`,
+        `Search "${query}" failed (${message}) — continuing with the rest`,
         "warn",
       );
       perQuery.push([]);
@@ -270,7 +270,7 @@ async function runWebResearch(
   appendRunLog(
     runId,
     AGENT,
-    `Web-Recherche: ${hits.length} Treffer, ${targets.length} fremde Fundstellen werden gelesen`,
+    `Web research: ${hits.length} results, reading ${targets.length} external sources`,
   );
 
   const sources: ExternalSource[] = [];
@@ -281,7 +281,7 @@ async function runWebResearch(
     } catch {
       // URL kam aus der Suche; im Zweifel die Roh-URL loggen.
     }
-    appendRunLog(runId, AGENT, `liest Fundstelle ${i + 1}/${targets.length}: ${host} …`);
+    appendRunLog(runId, AGENT, `Reading source ${i + 1}/${targets.length}: ${host} …`);
     try {
       const extraction = ((await scrapeJson(
         target.url,
@@ -294,7 +294,7 @@ async function runWebResearch(
       appendRunLog(
         runId,
         AGENT,
-        `Fundstelle ${host} nicht lesbar (${message}) — übersprungen`,
+        `Source ${host} not readable (${message}) — skipped`,
         "warn",
       );
     }
@@ -440,7 +440,7 @@ function persistEvidence(
     count += 1;
   }
 
-  appendRunLog(runId, AGENT, `${count} Evidence-Einträge gespeichert (hypothesis/external)`);
+  appendRunLog(runId, AGENT, `Stored ${count} evidence entries (hypothesis/external)`);
   return count;
 }
 
@@ -461,7 +461,7 @@ export async function runScout(
   try {
     // A mock run must be recognizable as such in the UI, not only on stdout (#12).
     if (isMockMode()) appendRunLog(run.id, AGENT, mockModeHint(), "warn");
-    appendRunLog(run.id, AGENT, `liest ${url} (Firecrawl-Extraktion) …`);
+    appendRunLog(run.id, AGENT, `Reading ${url} (Firecrawl extraction) …`);
     const extraction = ((await scrapeJson(
       url,
       SCRAPE_SCHEMA,
@@ -470,17 +470,17 @@ export async function runScout(
     appendRunLog(
       run.id,
       AGENT,
-      `Website erfasst: ${extraction.product?.slice(0, 120) ?? "keine Produkt-Extraktion"}`,
+      `Website captured: ${extraction.product?.slice(0, 120) ?? "no product extraction"}`,
     );
 
     const brandName = input.name?.trim() || extraction.brandName?.trim() || slug;
     // Deep Research (#19): non-blocking — Fehler je Suche/Fundstelle werden
     // innerhalb von runWebResearch toleriert, der Scout-Pfad stirbt nie daran.
-    appendRunLog(run.id, AGENT, `startet Web-Recherche zu „${brandName}“ …`);
+    appendRunLog(run.id, AGENT, `Starting web research on "${brandName}" …`);
     const webResearch = await runWebResearch(brandName, extraction.category, url, run.id);
     const hasExternalSources = webResearch.sources.length > 0;
 
-    appendRunLog(run.id, AGENT, "destilliert das Unified Research Document …");
+    appendRunLog(run.id, AGENT, "Distilling the unified research document …");
     const research = await completeStructured({
       role: "scout",
       system: loadSkill("research"),
@@ -498,19 +498,19 @@ export async function runScout(
       product: input.product?.trim() || extraction.product?.trim() || research.productSummary,
     };
     upsert("brands", brand);
-    appendRunLog(run.id, AGENT, `Brand „${brand.name}“ (${brand.slug}) im Store aktualisiert`);
+    appendRunLog(run.id, AGENT, `Brand "${brand.name}" (${brand.slug}) updated in store`);
 
     persistEvidence(brand, research, hasExternalSources, run.id);
     appendRunLog(
       run.id,
       AGENT,
-      "fertig: Research-Doc steht — Publish bleibt deaktiviert, bis Meta-Konfiguration und Budget menschlich gesetzt sind",
+      "Done: research doc ready — publishing stays disabled until Meta configuration and budget are set by a human",
     );
     finishRun(run.id);
     return { runId: run.id, brand, research };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    appendRunLog(run.id, AGENT, `Fehler: ${message}`, "error");
+    appendRunLog(run.id, AGENT, `Error: ${message}`, "error");
     finishRun(run.id, message);
     throw err;
   }

@@ -81,7 +81,7 @@ export async function generateAssetPair(
         "Critic",
         `bester Score ${results[chosen].score} < ${REWRITE_THRESHOLD} — genau ein Rewrite-Zyklus`,
       );
-      appendRunLog(run.id, "Copywriter", "überarbeitet beide Varianten nach Critic-Fixes …");
+      appendRunLog(run.id, "Copywriter", "Rewriting both variants after critic fixes …");
       draft = await writeCopy(brand, angle, { previous: draft, fixes });
       results = await critiqueAll(brand, angle, draft, run.id);
       chosen = bestIndex(results);
@@ -118,12 +118,12 @@ export async function generateAssetPair(
     );
 
     const staticAsset = await runDesigner(brand, angle, draft.variants[chosen], run.id);
-    appendRunLog(run.id, "Designer", "AssetPair vollständig — bereit fürs Studio");
+    appendRunLog(run.id, "Designer", "Asset pair complete — ready for the studio");
     finishRun(run.id);
     return { runId: run.id, copyAsset, staticAsset };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    appendRunLog(run.id, "Pipeline", `Fehler: ${message}`, "error");
+    appendRunLog(run.id, "Pipeline", `Error: ${message}`, "error");
     finishRun(run.id, message);
     throw err;
   }

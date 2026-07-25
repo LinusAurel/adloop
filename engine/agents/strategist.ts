@@ -111,7 +111,7 @@ export async function runStrategist(
 
     const system = buildSystem(brand);
     const prompt = buildPrompt(brand, evidence, existing);
-    appendRunLog(run.id, AGENT, `erzeugt ${ANGLE_COUNT} diverse Angles …`);
+    appendRunLog(run.id, AGENT, `Generating ${ANGLE_COUNT} diverse angles …`);
 
     let draft: AngleList = await completeStructured({
       role: "strategist",
@@ -177,12 +177,12 @@ export async function runStrategist(
       );
     }
 
-    appendRunLog(run.id, AGENT, `fertig: ${angles.length} Angles im Board`);
+    appendRunLog(run.id, AGENT, `Done: ${angles.length} angles on the board`);
     finishRun(run.id);
     return { runId: run.id, angles };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    appendRunLog(run.id, AGENT, `Fehler: ${message}`, "error");
+    appendRunLog(run.id, AGENT, `Error: ${message}`, "error");
     finishRun(run.id, message);
     throw err;
   }

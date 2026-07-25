@@ -7,4 +7,4 @@ COPY . .
 RUN pnpm build
 ENV NODE_ENV=production
 EXPOSE 10000
-CMD ["pnpm", "start"]
+CMD ["./node_modules/.bin/next", "start"]

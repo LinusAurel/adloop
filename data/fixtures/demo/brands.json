@@ -6,6 +6,14 @@
     "product": "KI-Ökosystem in Stuttgart: Community-Membership mit wöchentlichen Builder-Sessions, Hands-on-Workshops und Events, die KI-Professionals, Gründer und Corporate-Innovation-Teams zusammenbringen.",
     "conversionGoal": "website_lead",
     "targetCpa": 40,
+    "cta": {
+      "label": "Jetzt Teil des Netzwerks werden",
+      "subline": "Unverbindliche Anfrage. Wir melden uns persönlich bei Dir."
+    },
+    "fallbackCopy": {
+      "message": "KI baut man nicht allein: CREATORS bringt Builder, Gründer und Innovation-Teams in Stuttgart an einen Tisch. Wöchentliche Sessions, echte Projekte, ehrliches Feedback.",
+      "headline": "Das KI-Ökosystem in Stuttgart"
+    },
     "guardrails": [
       "Kein erfundener Social Proof, keine erfundenen Mitglieder-Testimonials",
       "Keine Heilsversprechen zu Karriere oder Umsatz; erlaubt: konkrete Programm-Inhalte",

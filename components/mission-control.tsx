@@ -38,7 +38,10 @@ import type {
 import type { CopyVariant } from "@/engine/schemas";
 import { EconomicsTab } from "@/components/economics-tab";
 
-const DEFAULT_BRAND_SLUG = "loyft";
+// Default brand is data/config, not code (#17): env override first, sonst die
+// versionierte Demo-Brand (brands/<slug> echter Brands liegt nur lokal).
+const DEFAULT_BRAND_SLUG =
+  process.env.NEXT_PUBLIC_DEFAULT_BRAND ?? "creators-demo";
 const POLL_MS = 5000;
 
 // Mutations answer 202 + runId (#7); progress comes from /state polling.
@@ -1135,7 +1138,8 @@ function TickerView({
 /* ---------------------------------------------------------------- shell -- */
 
 export function MissionControl() {
-  // Brand switcher: every brand in the store is selectable, loyft is default.
+  // Brand switcher: every brand in the store is selectable; the default
+  // comes from NEXT_PUBLIC_DEFAULT_BRAND (or the versioned demo brand).
   const [brandSlug, setBrandSlug] = useState(DEFAULT_BRAND_SLUG);
   const [brands, setBrands] = useState<{ slug: string; name: string }[]>([]);
   const [state, setState] = useState<BrandState | null>(null);

@@ -4,10 +4,26 @@
     "brandSlug": "creators-demo",
     "stage": "scout",
     "log": [
-      { "ts": "2026-07-20T09:12:04.000Z", "agent": "Scout", "message": "crawlt https://creators-ecosystem.de (Startseite, Membership, Events) …" },
-      { "ts": "2026-07-20T09:12:41.000Z", "agent": "Scout", "message": "3 Seiten geladen, extrahiere Produkt, Segmente und Tonalität …" },
-      { "ts": "2026-07-20T09:13:38.000Z", "agent": "Scout", "message": "Research-Dokument erstellt: 3 Segmente (KI-Professionals, Gründer, Corporate-Innovation), Awareness-Verteilung als Hypothese markiert" },
-      { "ts": "2026-07-20T09:13:52.000Z", "agent": "Scout", "message": "Brand „creators-demo“ angelegt, 6 Evidence-Einträge gespeichert (Tag: hypothesis/external)" }
+      {
+        "ts": "2026-07-20T09:12:04.000Z",
+        "agent": "Scout",
+        "message": "crawlt https://creators-ecosystem.de (Startseite, Membership, Events) …"
+      },
+      {
+        "ts": "2026-07-20T09:12:41.000Z",
+        "agent": "Scout",
+        "message": "3 Seiten geladen, extrahiere Produkt, Segmente und Tonalität …"
+      },
+      {
+        "ts": "2026-07-20T09:13:38.000Z",
+        "agent": "Scout",
+        "message": "Research-Dokument erstellt: 3 Segmente (KI-Professionals, Gründer, Corporate-Innovation), Awareness-Verteilung als Hypothese markiert"
+      },
+      {
+        "ts": "2026-07-20T09:13:52.000Z",
+        "agent": "Scout",
+        "message": "Brand „creators-demo“ angelegt, 6 Evidence-Einträge gespeichert (Tag: hypothesis/external)"
+      }
     ],
     "startedAt": "2026-07-20T09:12:04.000Z",
     "finishedAt": "2026-07-20T09:13:55.000Z",
@@ -18,9 +34,21 @@
     "brandSlug": "creators-demo",
     "stage": "strategist",
     "log": [
-      { "ts": "2026-07-20T10:02:11.000Z", "agent": "Strategist", "message": "lädt Brand-Kontext und Scout-Research (6 Evidence-Einträge) …" },
-      { "ts": "2026-07-20T10:03:29.000Z", "agent": "Strategist", "message": "8 Angle-Kandidaten generiert, prüfe Diversität (Segment, Schmerz, Hook paarweise unterscheidbar) …" },
-      { "ts": "2026-07-20T10:03:44.000Z", "agent": "Strategist", "message": "Diversitäts-Check bestanden, 8 Angles als draft gespeichert. Freigabe ist Menschen-Entscheidung (Human-Gate)." }
+      {
+        "ts": "2026-07-20T10:02:11.000Z",
+        "agent": "Strategist",
+        "message": "lädt Brand-Kontext und Scout-Research (6 Evidence-Einträge) …"
+      },
+      {
+        "ts": "2026-07-20T10:03:29.000Z",
+        "agent": "Strategist",
+        "message": "8 Angle-Kandidaten generiert, prüfe Diversität (Segment, Schmerz, Hook paarweise unterscheidbar) …"
+      },
+      {
+        "ts": "2026-07-20T10:03:44.000Z",
+        "agent": "Strategist",
+        "message": "Diversitäts-Check bestanden, 8 Angles als draft gespeichert. Freigabe ist Menschen-Entscheidung (Human-Gate)."
+      }
     ],
     "startedAt": "2026-07-20T10:02:11.000Z",
     "finishedAt": "2026-07-20T10:03:46.000Z",
@@ -32,12 +60,36 @@
     "stage": "assets",
     "angleId": "ang_demo01",
     "log": [
-      { "ts": "2026-07-21T08:41:19.000Z", "agent": "Copywriter", "message": "schreibt 2 Copy-Varianten für Angle „Community statt Alleingang“ …" },
-      { "ts": "2026-07-21T08:42:36.000Z", "agent": "Critic", "message": "prüft Copy gegen Guardrails und Copy-Rules …" },
-      { "ts": "2026-07-21T08:43:04.000Z", "agent": "Critic", "message": "Score 9/10: Hook trifft den sozialen Schmerz, Guardrails sauber. Freigegeben für Design." },
-      { "ts": "2026-07-21T08:43:12.000Z", "agent": "Designer", "message": "erstellt Creative-Brief für Angle „Community statt Alleingang“ …" },
-      { "ts": "2026-07-21T08:43:58.000Z", "agent": "Designer", "message": "generiert Static (4:5) via Fal …" },
-      { "ts": "2026-07-21T08:44:47.000Z", "agent": "Designer", "message": "Static gespeichert (ast_demo01s.png)" }
+      {
+        "ts": "2026-07-21T08:41:19.000Z",
+        "agent": "Copywriter",
+        "message": "schreibt 2 Copy-Varianten für Angle „Community statt Alleingang“ …"
+      },
+      {
+        "ts": "2026-07-21T08:42:36.000Z",
+        "agent": "Critic",
+        "message": "prüft Copy gegen Guardrails und Copy-Rules …"
+      },
+      {
+        "ts": "2026-07-21T08:43:04.000Z",
+        "agent": "Critic",
+        "message": "Score 9/10: Hook trifft den sozialen Schmerz, Guardrails sauber. Freigegeben für Design."
+      },
+      {
+        "ts": "2026-07-21T08:43:12.000Z",
+        "agent": "Designer",
+        "message": "erstellt Creative-Brief für Angle „Community statt Alleingang“ …"
+      },
+      {
+        "ts": "2026-07-21T08:43:58.000Z",
+        "agent": "Designer",
+        "message": "generiert Static (4:5) via Fal …"
+      },
+      {
+        "ts": "2026-07-21T08:44:47.000Z",
+        "agent": "Designer",
+        "message": "Static gespeichert (ast_demo01s.png)"
+      }
     ],
     "startedAt": "2026-07-21T08:41:19.000Z",
     "finishedAt": "2026-07-21T08:44:49.000Z",
@@ -49,12 +101,36 @@
     "stage": "assets",
     "angleId": "ang_demo02",
     "log": [
-      { "ts": "2026-07-21T09:10:02.000Z", "agent": "Copywriter", "message": "schreibt 2 Copy-Varianten für Angle „Hands-on statt Hype“ …" },
-      { "ts": "2026-07-21T09:11:15.000Z", "agent": "Critic", "message": "Score 5/10: Wettbewerber-Bashing („die einzige Community …“) verletzt Guardrail. Rewrite angefordert." },
-      { "ts": "2026-07-21T09:11:20.000Z", "agent": "Copywriter", "message": "Rewrite: Abgrenzung über eigenes Format statt Abwertung anderer …" },
-      { "ts": "2026-07-21T09:12:33.000Z", "agent": "Critic", "message": "Score 7/10: Bashing entfernt, Hook 1 stark. Freigegeben für Design." },
-      { "ts": "2026-07-21T09:12:41.000Z", "agent": "Designer", "message": "generiert Static (4:5) via Fal …" },
-      { "ts": "2026-07-21T09:13:28.000Z", "agent": "Designer", "message": "Static gespeichert (ast_demo02s.png)" }
+      {
+        "ts": "2026-07-21T09:10:02.000Z",
+        "agent": "Copywriter",
+        "message": "schreibt 2 Copy-Varianten für Angle „Hands-on statt Hype“ …"
+      },
+      {
+        "ts": "2026-07-21T09:11:15.000Z",
+        "agent": "Critic",
+        "message": "Score 5/10: Wettbewerber-Bashing („die einzige Community …“) verletzt Guardrail. Rewrite angefordert."
+      },
+      {
+        "ts": "2026-07-21T09:11:20.000Z",
+        "agent": "Copywriter",
+        "message": "Rewrite: Abgrenzung über eigenes Format statt Abwertung anderer …"
+      },
+      {
+        "ts": "2026-07-21T09:12:33.000Z",
+        "agent": "Critic",
+        "message": "Score 7/10: Bashing entfernt, Hook 1 stark. Freigegeben für Design."
+      },
+      {
+        "ts": "2026-07-21T09:12:41.000Z",
+        "agent": "Designer",
+        "message": "generiert Static (4:5) via Fal …"
+      },
+      {
+        "ts": "2026-07-21T09:13:28.000Z",
+        "agent": "Designer",
+        "message": "Static gespeichert (ast_demo02s.png)"
+      }
     ],
     "startedAt": "2026-07-21T09:10:02.000Z",
     "finishedAt": "2026-07-21T09:13:30.000Z",
@@ -66,10 +142,26 @@
     "stage": "assets",
     "angleId": "ang_demo03",
     "log": [
-      { "ts": "2026-07-21T09:31:47.000Z", "agent": "Copywriter", "message": "schreibt 2 Copy-Varianten für Angle „Netzwerk für KI-Gründer“ …" },
-      { "ts": "2026-07-21T09:33:01.000Z", "agent": "Critic", "message": "Score 8/10: klarer Nutzen ohne Erfolgsversprechen. Freigegeben für Design." },
-      { "ts": "2026-07-21T09:33:09.000Z", "agent": "Designer", "message": "generiert Static (4:5) via Fal …" },
-      { "ts": "2026-07-21T09:33:55.000Z", "agent": "Designer", "message": "Static gespeichert (ast_demo03s.png)" }
+      {
+        "ts": "2026-07-21T09:31:47.000Z",
+        "agent": "Copywriter",
+        "message": "schreibt 2 Copy-Varianten für Angle „Netzwerk für KI-Gründer“ …"
+      },
+      {
+        "ts": "2026-07-21T09:33:01.000Z",
+        "agent": "Critic",
+        "message": "Score 8/10: klarer Nutzen ohne Erfolgsversprechen. Freigegeben für Design."
+      },
+      {
+        "ts": "2026-07-21T09:33:09.000Z",
+        "agent": "Designer",
+        "message": "generiert Static (4:5) via Fal …"
+      },
+      {
+        "ts": "2026-07-21T09:33:55.000Z",
+        "agent": "Designer",
+        "message": "Static gespeichert (ast_demo03s.png)"
+      }
     ],
     "startedAt": "2026-07-21T09:31:47.000Z",
     "finishedAt": "2026-07-21T09:33:57.000Z",
@@ -80,10 +172,26 @@
     "brandSlug": "creators-demo",
     "stage": "publish",
     "log": [
-      { "ts": "2026-07-21T14:05:10.000Z", "agent": "Publisher", "message": "erstellt Kampagne ADLOOP-CREATORS-DEMO_CORE_LEADS_CBO_HV_20260721 (status PAUSED) … [Demo: simulierte Meta-IDs]" },
-      { "ts": "2026-07-21T14:05:24.000Z", "agent": "Publisher", "message": "Kampagne demo-camp-creators-001, AdSet demo-adset-creators-001 angelegt (beide PAUSED)" },
-      { "ts": "2026-07-21T14:06:02.000Z", "agent": "Publisher", "message": "4 Ads angelegt (ang_demo01, ang_demo02, ang_demo03, ang_demo07), alle status PAUSED" },
-      { "ts": "2026-07-21T14:06:08.000Z", "agent": "Publisher", "message": "Hard Stop beachtet: Aktivierung macht ausschließlich ein Mensch im Ads Manager." }
+      {
+        "ts": "2026-07-21T14:05:10.000Z",
+        "agent": "Publisher",
+        "message": "erstellt Kampagne ADLOOP-CREATORS-DEMO_CORE_LEADS_CBO_HV_20260721 (status PAUSED) … [Demo: simulierte Meta-IDs]"
+      },
+      {
+        "ts": "2026-07-21T14:05:24.000Z",
+        "agent": "Publisher",
+        "message": "Kampagne demo-camp-creators-001, AdSet demo-adset-creators-001 angelegt (beide PAUSED)"
+      },
+      {
+        "ts": "2026-07-21T14:06:02.000Z",
+        "agent": "Publisher",
+        "message": "4 Ads angelegt (ang_demo01, ang_demo02, ang_demo03, ang_demo07), alle status PAUSED"
+      },
+      {
+        "ts": "2026-07-21T14:06:08.000Z",
+        "agent": "Publisher",
+        "message": "Hard Stop beachtet: Aktivierung macht ausschließlich ein Mensch im Ads Manager."
+      }
     ],
     "startedAt": "2026-07-21T14:05:10.000Z",
     "finishedAt": "2026-07-21T14:06:10.000Z",
@@ -94,9 +202,21 @@
     "brandSlug": "creators-demo",
     "stage": "optimize",
     "log": [
-      { "ts": "2026-07-22T18:30:05.000Z", "agent": "Analyst", "message": "Demo-Brand (simulierte Meta-IDs) — Insights aus Fixture, klar als Demo gelabelt" },
-      { "ts": "2026-07-22T18:30:19.000Z", "agent": "Analyst", "message": "Tag 1: 412,60 € Spend, 9 Leads, CPL 45,84 € (Ziel ≤ 40 €) — noch über Ziel, Lernphase" },
-      { "ts": "2026-07-22T18:30:26.000Z", "agent": "Analyst", "message": "Event-Kalender-Ads fressen Spend ohne Leads — Beobachtung fortsetzen, noch unter Kill-Schwelle" }
+      {
+        "ts": "2026-07-22T18:30:05.000Z",
+        "agent": "Analyst",
+        "message": "Demo-Brand (simulierte Meta-IDs) — Insights aus Fixture, klar als Demo gelabelt"
+      },
+      {
+        "ts": "2026-07-22T18:30:19.000Z",
+        "agent": "Analyst",
+        "message": "Tag 1: 412,60 € Spend, 9 Leads, CPL 45,84 € (Ziel ≤ 40 €) — noch über Ziel, Lernphase"
+      },
+      {
+        "ts": "2026-07-22T18:30:26.000Z",
+        "agent": "Analyst",
+        "message": "Event-Kalender-Ads fressen Spend ohne Leads — Beobachtung fortsetzen, noch unter Kill-Schwelle"
+      }
     ],
     "startedAt": "2026-07-22T18:30:05.000Z",
     "finishedAt": "2026-07-22T18:30:28.000Z",
@@ -107,9 +227,21 @@
     "brandSlug": "creators-demo",
     "stage": "optimize",
     "log": [
-      { "ts": "2026-07-23T18:30:04.000Z", "agent": "Analyst", "message": "Demo-Brand (simulierte Meta-IDs) — Insights aus Fixture, klar als Demo gelabelt" },
-      { "ts": "2026-07-23T18:30:17.000Z", "agent": "Analyst", "message": "Tag 2 kumuliert: 861,40 € Spend, 24 Leads, CPL 35,89 € — unter Ziel, Trend sinkend" },
-      { "ts": "2026-07-23T18:30:24.000Z", "agent": "Analyst", "message": "„Community statt Alleingang“ klarer Winner (CPL 23,10 €); Event-Kalender-Angle über Kill-Schwelle — Empfehlung: verwerfen (Mensch entscheidet im Board)" }
+      {
+        "ts": "2026-07-23T18:30:04.000Z",
+        "agent": "Analyst",
+        "message": "Demo-Brand (simulierte Meta-IDs) — Insights aus Fixture, klar als Demo gelabelt"
+      },
+      {
+        "ts": "2026-07-23T18:30:17.000Z",
+        "agent": "Analyst",
+        "message": "Tag 2 kumuliert: 861,40 € Spend, 24 Leads, CPL 35,89 € — unter Ziel, Trend sinkend"
+      },
+      {
+        "ts": "2026-07-23T18:30:24.000Z",
+        "agent": "Analyst",
+        "message": "„Community statt Alleingang“ klarer Winner (CPL 23,10 €); Event-Kalender-Angle über Kill-Schwelle — Empfehlung: verwerfen (Mensch entscheidet im Board)"
+      }
     ],
     "startedAt": "2026-07-23T18:30:04.000Z",
     "finishedAt": "2026-07-23T18:30:26.000Z",
@@ -120,13 +252,172 @@
     "brandSlug": "creators-demo",
     "stage": "optimize",
     "log": [
-      { "ts": "2026-07-25T06:30:03.000Z", "agent": "Analyst", "message": "Demo-Brand (simulierte Meta-IDs) — Insights aus Fixture, klar als Demo gelabelt" },
-      { "ts": "2026-07-25T06:30:16.000Z", "agent": "Analyst", "message": "Kumuliert: 1.238,30 € Spend, 38 Leads, CPL 32,59 € (Ziel ≤ 40 €) — Trend weiter sinkend: 45,84 → 35,89 → 32,59 €" },
-      { "ts": "2026-07-25T06:30:23.000Z", "agent": "Analyst", "message": "Klassifikation: 3 Winner, 2 Loser, 1× zu wenig Daten (Schwellen: ≥ 20 € Spend UND ≥ 3 Leads)" },
-      { "ts": "2026-07-25T06:30:29.000Z", "agent": "Analyst", "message": "Empfehlung: Angle hinter „Community statt Alleingang“ ausbauen (bester CPL 22,81 €) — 2 neue Hook-Varianten testen. Loser pausiert lassen (Mensch entscheidet im Board)." }
+      {
+        "ts": "2026-07-25T06:30:03.000Z",
+        "agent": "Analyst",
+        "message": "Demo-Brand (simulierte Meta-IDs) — Insights aus Fixture, klar als Demo gelabelt"
+      },
+      {
+        "ts": "2026-07-25T06:30:16.000Z",
+        "agent": "Analyst",
+        "message": "Kumuliert: 1.238,30 € Spend, 38 Leads, CPL 32,59 € (Ziel ≤ 40 €) — Trend weiter sinkend: 45,84 → 35,89 → 32,59 €"
+      },
+      {
+        "ts": "2026-07-25T06:30:23.000Z",
+        "agent": "Analyst",
+        "message": "Klassifikation: 3 Winner, 2 Loser, 1× zu wenig Daten (Schwellen: ≥ 20 € Spend UND ≥ 3 Leads)"
+      },
+      {
+        "ts": "2026-07-25T06:30:29.000Z",
+        "agent": "Analyst",
+        "message": "Empfehlung: Angle hinter „Community statt Alleingang“ ausbauen (bester CPL 22,81 €) — 2 neue Hook-Varianten testen. Loser pausiert lassen (Mensch entscheidet im Board)."
+      }
     ],
     "startedAt": "2026-07-25T06:30:03.000Z",
     "finishedAt": "2026-07-25T06:30:31.000Z",
-    "status": "finished"
+    "status": "finished",
+    "result": {
+      "runId": "run_9bfa4c1a-039",
+      "source": "fixture",
+      "note": "Demo-Brand (simulierte Meta-IDs) — 6 Ads aus Fixture, kein Live-Read",
+      "totals": {
+        "spend": 1238.3000000000002,
+        "leads": 38,
+        "cpl": 32.586842105263166
+      },
+      "target": {
+        "metric": "CPL",
+        "value": 40
+      },
+      "targetCpa": 40,
+      "rows": [
+        {
+          "adId": "demo-ad-cd01",
+          "adName": "ADLOOP-CREATORS-DEMO_ANG-DEMO01_AST-DEMO01S_4X5_V1",
+          "angleId": "ang_demo01",
+          "assetId": "ast_demo01s",
+          "spend": 342.2,
+          "impressions": 48210,
+          "clicks": 1103,
+          "leads": 15,
+          "cpl": 22.813333333333333,
+          "classification": "winner",
+          "reason": "15 Leads bei CPL 22.81 € (Ziel ≤ 40 €)"
+        },
+        {
+          "adId": "demo-ad-cd03",
+          "adName": "ADLOOP-CREATORS-DEMO_ANG-DEMO03_AST-DEMO03S_4X5_V1",
+          "angleId": "ang_demo03",
+          "assetId": "ast_demo03s",
+          "spend": 305,
+          "impressions": 41577,
+          "clicks": 934,
+          "leads": 12,
+          "cpl": 25.416666666666668,
+          "classification": "winner",
+          "reason": "12 Leads bei CPL 25.42 € (Ziel ≤ 40 €)"
+        },
+        {
+          "adId": "demo-ad-cd02",
+          "adName": "ADLOOP-CREATORS-DEMO_ANG-DEMO02_AST-DEMO02S_4X5_V1",
+          "angleId": "ang_demo02",
+          "assetId": "ast_demo02s",
+          "spend": 231.1,
+          "impressions": 35904,
+          "clicks": 671,
+          "leads": 6,
+          "cpl": 38.516666666666666,
+          "classification": "winner",
+          "reason": "6 Leads bei CPL 38.52 € (Ziel ≤ 40 €)"
+        },
+        {
+          "adId": "demo-ad-cd07",
+          "adName": "ADLOOP-CREATORS-DEMO_ANG-DEMO07_AST-DEMO07S_4X5_V1",
+          "angleId": "ang_demo07",
+          "assetId": "ast_demo07s",
+          "spend": 219.5,
+          "impressions": 39882,
+          "clicks": 512,
+          "leads": 3,
+          "cpl": 73.16666666666667,
+          "classification": "loser",
+          "reason": "CPL 73.17 € über Ziel 40 €"
+        },
+        {
+          "adId": "demo-ad-cd07b",
+          "adName": "ADLOOP-CREATORS-DEMO_ANG-DEMO07_AST-DEMO07T_4X5_V2",
+          "angleId": "ang_demo07",
+          "assetId": "ast_demo07t",
+          "spend": 121.9,
+          "impressions": 24560,
+          "clicks": 238,
+          "leads": 0,
+          "cpl": null,
+          "classification": "loser",
+          "reason": "121.90 € Spend ohne einen einzigen Lead"
+        },
+        {
+          "adId": "demo-ad-cd03b",
+          "adName": "ADLOOP-CREATORS-DEMO_ANG-DEMO03_AST-DEMO03T_4X5_V2",
+          "angleId": "ang_demo03",
+          "assetId": "ast_demo03t",
+          "spend": 18.6,
+          "impressions": 3105,
+          "clicks": 88,
+          "leads": 2,
+          "cpl": 9.3,
+          "classification": "insufficient_data",
+          "reason": "Spend 18.60 € unter Schwelle 20 € — keine Aussage möglich"
+        }
+      ],
+      "learnings": [
+        {
+          "id": "lrn_f5862439-0f3",
+          "brandSlug": "creators-demo",
+          "source": "meta_insights",
+          "pattern": "Winner: „Community statt Alleingang“ — 15 Leads bei CPL 22.81 € (Ziel ≤ 40 €). Angle-Richtung weiterverfolgen und skalierbar testen.",
+          "evidenceRefs": [
+            "demo-ad-cd01"
+          ]
+        },
+        {
+          "id": "lrn_c6199f7f-981",
+          "brandSlug": "creators-demo",
+          "source": "meta_insights",
+          "pattern": "Winner: „Netzwerk für KI-Gründer“ — 12 Leads bei CPL 25.42 € (Ziel ≤ 40 €). Angle-Richtung weiterverfolgen und skalierbar testen.",
+          "evidenceRefs": [
+            "demo-ad-cd03"
+          ]
+        },
+        {
+          "id": "lrn_11519d80-669",
+          "brandSlug": "creators-demo",
+          "source": "meta_insights",
+          "pattern": "Winner: „Hands-on statt Hype“ — 6 Leads bei CPL 38.52 € (Ziel ≤ 40 €). Angle-Richtung weiterverfolgen und skalierbar testen.",
+          "evidenceRefs": [
+            "demo-ad-cd02"
+          ]
+        },
+        {
+          "id": "lrn_f2e51ccb-fbb",
+          "brandSlug": "creators-demo",
+          "source": "meta_insights",
+          "pattern": "Loser: „Event-Kalender als Produkt“ — CPL 73.17 € über Ziel 40 €. Hook/Angle überarbeiten oder verwerfen.",
+          "evidenceRefs": [
+            "demo-ad-cd07"
+          ]
+        },
+        {
+          "id": "lrn_28d90411-6b3",
+          "brandSlug": "creators-demo",
+          "source": "meta_insights",
+          "pattern": "Loser: „Event-Kalender als Produkt“ — 121.90 € Spend ohne einen einzigen Lead. Hook/Angle überarbeiten oder verwerfen.",
+          "evidenceRefs": [
+            "demo-ad-cd07b"
+          ]
+        }
+      ],
+      "recommendation": "Empfehlung: Angle hinter „Community statt Alleingang“ ausbauen (bester CPL 22.81 € bei Ziel ≤ 40 €) — 2 neue Hook-Varianten testen. 2 Loser pausiert lassen bzw. verwerfen (Mensch entscheidet im Board)."
+    }
   }
 ]

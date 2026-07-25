@@ -77,8 +77,8 @@ export type CreativeBrief = z.infer<typeof creativeBriefSchema>;
 // evidence rows created from it carry the tag "hypothesis".
 export const scoutSegmentSchema = z.object({
   name: z.string().min(3).max(120),
-  psychographics: z.string().min(20).max(600),
-  pains: z.array(z.string().min(5).max(300)).min(1).max(6),
+  psychographics: z.string().min(20).max(1500),
+  pains: z.array(z.string().min(5).max(500)).min(1).max(6),
 });
 export type ScoutSegment = z.infer<typeof scoutSegmentSchema>;
 
@@ -91,16 +91,18 @@ export const awarenessDistributionSchema = z.object({
 });
 export type AwarenessDistribution = z.infer<typeof awarenessDistributionSchema>;
 
+// Upper bounds are deliberately generous (see file header): a verbose but
+// correct research doc must not crash the onboarding stunt.
 export const scoutResearchSchema = z.object({
-  productSummary: z.string().min(20).max(800),
-  valueProposition: z.string().min(10).max(600),
-  pricingModel: z.string().min(3).max(400),
-  tonality: z.string().min(3).max(400),
+  productSummary: z.string().min(20).max(2000),
+  valueProposition: z.string().min(10).max(1500),
+  pricingModel: z.string().min(3).max(1000),
+  tonality: z.string().min(3).max(1000),
   segments: z.array(scoutSegmentSchema).min(2).max(6),
   awarenessDistribution: awarenessDistributionSchema,
-  awarenessRationale: z.string().min(20).max(800),
-  competitorNotes: z.array(z.string().min(10).max(400)).max(8),
-  vocPhrases: z.array(z.string().min(3).max(300)).max(12),
-  objections: z.array(z.string().min(5).max(300)).max(8),
+  awarenessRationale: z.string().min(20).max(2500),
+  competitorNotes: z.array(z.string().min(10).max(800)).max(8),
+  vocPhrases: z.array(z.string().min(3).max(500)).max(12),
+  objections: z.array(z.string().min(5).max(500)).max(8),
 });
 export type ScoutResearch = z.infer<typeof scoutResearchSchema>;

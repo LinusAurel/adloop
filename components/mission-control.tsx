@@ -4,7 +4,14 @@
 // Skeleton only — visual polish happens in a separate design stream.
 
 import { useCallback, useEffect, useState } from "react";
-import type { Angle, AngleStatus, BrandState, RunLogEntry } from "@/engine/types";
+import type {
+  Angle,
+  AngleStatus,
+  Asset,
+  BrandState,
+  RunLogEntry,
+} from "@/engine/types";
+import type { CopyVariant } from "@/engine/schemas";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,15 +29,44 @@ const BOARD_COLUMNS: { status: AngleStatus; label: string }[] = [
   { status: "killed", label: "Verworfen" },
 ];
 
+// Payload shapes written by the asset pipeline (engine/agents/pipeline.ts).
+interface CopyAssetPayload {
+  outline?: string;
+  variants?: CopyVariant[];
+  chosenIndex?: number;
+}
+
+interface StaticAssetPayload {
+  imageUrl?: string;
+}
+
 function formatCpl(value?: number): string {
   return value === undefined || value === null ? "—" : `${value} €`;
 }
 
-function AngleCard({ angle }: { angle: Angle }) {
+function AngleCard({ angle, onChanged }: { angle: Angle; onChanged: () => void }) {
+  const [busy, setBusy] = useState<string | null>(null);
+
   const act = async (action: "approve" | "kill") => {
-    // Stub routes today; wired for real in the Strategist work package.
-    await fetch(`/api/angles/${angle.id}/${action}`, { method: "POST" });
+    setBusy(action);
+    try {
+      await fetch(`/api/angles/${angle.id}/${action}`, { method: "POST" });
+      onChanged();
+    } finally {
+      setBusy(null);
+    }
   };
+
+  const generateAssets = async () => {
+    setBusy("assets");
+    try {
+      await fetch(`/api/angles/${angle.id}/assets/generate`, { method: "POST" });
+      onChanged();
+    } finally {
+      setBusy(null);
+    }
+  };
+
   return (
     <Card className="bg-zinc-900 border-zinc-800">
       <CardHeader className="pb-2">
@@ -47,13 +83,131 @@ function AngleCard({ angle }: { angle: Angle }) {
           <div className="flex gap-2 pt-1">
             <Button
               size="sm"
+              disabled={busy !== null}
               style={{ backgroundColor: MINT, color: "#002429" }}
               onClick={() => act("approve")}
             >
               Freigeben
             </Button>
-            <Button size="sm" variant="destructive" onClick={() => act("kill")}>
+            <Button
+              size="sm"
+              variant="destructive"
+              disabled={busy !== null}
+              onClick={() => act("kill")}
+            >
               Verwerfen
+            </Button>
+          </div>
+        )}
+        {angle.status === "approved" && (
+          <div className="pt-1">
+            <Button
+              size="sm"
+              disabled={busy !== null}
+              style={{ backgroundColor: MINT, color: "#002429" }}
+              onClick={generateAssets}
+            >
+              {busy === "assets" ? "Pipeline läuft …" : "Assets generieren"}
+            </Button>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function AssetPairCard({
+  angle,
+  copyAsset,
+  staticAsset,
+  onChanged,
+}: {
+  angle: Angle;
+  copyAsset?: Asset;
+  staticAsset?: Asset;
+  onChanged: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+
+  const payload = (copyAsset?.payload ?? {}) as CopyAssetPayload;
+  const variant = payload.variants?.[payload.chosenIndex ?? 0];
+  const imageUrl = ((staticAsset?.payload ?? {}) as StaticAssetPayload).imageUrl;
+  const status = copyAsset?.status ?? staticAsset?.status ?? "draft";
+
+  const act = async (action: "approve" | "reject") => {
+    setBusy(true);
+    try {
+      for (const asset of [copyAsset, staticAsset]) {
+        if (!asset) continue;
+        await fetch(`/api/assets/${asset.id}/${action}`, { method: "POST" });
+      }
+      onChanged();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card className="bg-zinc-900 border-zinc-800">
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-center justify-between text-sm text-zinc-100">
+          <span>{angle.name}</span>
+          <Badge variant="outline" className="border-zinc-700 text-zinc-400">
+            {status}
+          </Badge>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3 text-xs text-zinc-400">
+        {imageUrl ? (
+          // Static preview in a Meta-feed-like 4:5 frame.
+          <div className="overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={imageUrl}
+              alt={`Static für ${angle.name}`}
+              className="aspect-[4/5] w-full object-cover"
+            />
+          </div>
+        ) : (
+          <div className="flex aspect-[4/5] items-center justify-center rounded-lg border border-dashed border-zinc-800 text-zinc-600">
+            kein Static
+          </div>
+        )}
+        {variant && (
+          <div className="space-y-1">
+            <p className="font-semibold text-zinc-200">{variant.hook}</p>
+            <p className="whitespace-pre-line">{variant.primary}</p>
+            <p className="text-zinc-300">
+              {variant.headline} · <span style={{ color: MINT }}>{variant.cta}</span>
+            </p>
+          </div>
+        )}
+        <p>
+          Critic-Score:{" "}
+          <span style={{ color: MINT }}>{copyAsset?.criticScore ?? "—"}</span>
+          {copyAsset?.criticNotes ? (
+            <span className="mt-1 block whitespace-pre-line text-zinc-500">
+              {copyAsset.criticNotes}
+            </span>
+          ) : null}
+        </p>
+        {status === "draft" && (
+          <div className="flex gap-2 pt-1">
+            <Button
+              size="sm"
+              disabled={busy}
+              style={{ backgroundColor: MINT, color: "#002429" }}
+              onClick={() => act("approve")}
+            >
+              Freigeben
+            </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              disabled={busy}
+              onClick={() => act("reject")}
+            >
+              Ablehnen
             </Button>
           </div>
         )}
@@ -86,6 +240,7 @@ function StatTile({ label, value }: { label: string; value: string }) {
 export function MissionControl() {
   const [state, setState] = useState<BrandState | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [generating, setGenerating] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -104,10 +259,33 @@ export function MissionControl() {
     return () => clearInterval(timer);
   }, [load]);
 
+  const generateAngles = async () => {
+    setGenerating(true);
+    try {
+      await fetch(`/api/brands/${BRAND_SLUG}/angles/generate`, { method: "POST" });
+      await load();
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   const tickerLines: (RunLogEntry & { runId: string })[] = (state?.runs ?? [])
     .flatMap((run) => run.log.map((entry) => ({ ...entry, runId: run.id })))
     .sort((a, b) => b.ts.localeCompare(a.ts))
     .slice(0, 100);
+
+  // AssetPairs for the Studio: one card per angle that has assets.
+  const anglesById = new Map((state?.angles ?? []).map((a) => [a.id, a]));
+  const pairs = [...anglesById.values()]
+    .map((angle) => {
+      const assets = (state?.assets ?? []).filter((a) => a.angleId === angle.id);
+      return {
+        angle,
+        copyAsset: assets.findLast((a) => a.kind === "ad_copy"),
+        staticAsset: assets.findLast((a) => a.kind === "static"),
+      };
+    })
+    .filter((p) => p.copyAsset || p.staticAsset);
 
   return (
     <main className="min-h-screen bg-zinc-950 px-6 py-8 text-zinc-100">
@@ -135,6 +313,16 @@ export function MissionControl() {
         </TabsList>
 
         <TabsContent value="board" className="mt-6">
+          <div className="mb-4 flex justify-end">
+            <Button
+              size="sm"
+              disabled={generating}
+              style={{ backgroundColor: MINT, color: "#002429" }}
+              onClick={generateAngles}
+            >
+              {generating ? "Strategist läuft …" : "Angles generieren"}
+            </Button>
+          </div>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
             {BOARD_COLUMNS.map((col) => {
               const angles = (state?.angles ?? []).filter((a) => a.status === col.status);
@@ -149,7 +337,9 @@ export function MissionControl() {
                       leer
                     </div>
                   ) : (
-                    angles.map((a) => <AngleCard key={a.id} angle={a} />)
+                    angles.map((a) => (
+                      <AngleCard key={a.id} angle={a} onChanged={load} />
+                    ))
                   )}
                 </section>
               );
@@ -157,28 +347,25 @@ export function MissionControl() {
           </div>
           {(state?.angles ?? []).length === 0 && (
             <p className="mt-6 text-sm text-zinc-500">
-              Noch keine Angles. Der Strategist erzeugt sie über „Angles
-              generieren“, sobald die Pipeline-Stufe 2 angeschlossen ist.
+              Noch keine Angles. „Angles generieren“ startet den Strategist mit
+              dem loyft-Seed.
             </p>
           )}
         </TabsContent>
 
         <TabsContent value="studio" className="mt-6">
-          {(state?.assets ?? []).length === 0 ? (
-            <EmptyState text="Noch keine Assets. Copywriter, Critic und Designer folgen als nächste Pipeline-Stufen." />
+          {pairs.length === 0 ? (
+            <EmptyState text="Noch keine Assets. Einen freigegebenen Angle im Board auswählen und „Assets generieren“ starten." />
           ) : (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-              {state?.assets.map((asset) => (
-                <Card key={asset.id} className="bg-zinc-900 border-zinc-800">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm">
-                      {asset.kind} · {asset.status}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="text-xs text-zinc-400">
-                    Critic-Score: {asset.criticScore ?? "—"}
-                  </CardContent>
-                </Card>
+              {pairs.map((pair) => (
+                <AssetPairCard
+                  key={pair.angle.id}
+                  angle={pair.angle}
+                  copyAsset={pair.copyAsset}
+                  staticAsset={pair.staticAsset}
+                  onChanged={load}
+                />
               ))}
             </div>
           )}

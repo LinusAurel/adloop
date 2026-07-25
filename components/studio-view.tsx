@@ -6,7 +6,7 @@
 // a curated image-model picker). Publishing creates PAUSED ads only (Hard
 // Stop 2).
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import type { Angle, Asset, BrandState } from "@/engine/types";
 import type { CopyVariant } from "@/engine/schemas";
@@ -287,15 +287,22 @@ export function StudioView({
   runningAssetAngleIds,
   publishRunning,
   onChanged,
+  focusAngleId,
 }: {
   state: BrandState | null;
   brandSlug: string;
   runningAssetAngleIds: Set<string | undefined>;
   publishRunning: boolean;
   onChanged: () => void;
+  // Optional deep-link (additive, #16): app shell sets this when an
+  // adloop:open-asset event asks the Studio to focus a specific angle.
+  focusAngleId?: string | null;
 }) {
   const brandName = state?.brand.name ?? brandSlug;
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  useEffect(() => {
+    if (focusAngleId) setSelectedId(focusAngleId);
+  }, [focusAngleId]);
 
   // One entry per angle that has assets.
   const entries = useMemo<Entry[]>(

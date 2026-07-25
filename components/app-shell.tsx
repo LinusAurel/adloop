@@ -53,6 +53,12 @@ export function AppShell() {
   const [chatKey, setChatKey] = useState(0);
   const [onboarding, setOnboarding] = useState(false);
   const [onboardError, setOnboardError] = useState<string | null>(null);
+  // Cross-view navigation targets: the open board drawer and the angle the
+  // Studio should focus (set via adloop:open-angle / adloop:open-asset).
+  const [openAngleId, setOpenAngleId] = useState<string | null>(null);
+  const [studioFocusAngleId, setStudioFocusAngleId] = useState<string | null>(
+    null,
+  );
 
   const load = useCallback(async () => {
     try {
@@ -96,9 +102,38 @@ export function AppShell() {
     setBrandSlug((current) => {
       if (slug === current) return current;
       setState(null);
+      setOpenAngleId(null);
+      setStudioFocusAngleId(null);
       return slug;
     });
   }, []);
+
+  // Cross-view events: anything in the app (⌘K palette, angle drawer, chat)
+  // can deep-link to an angle on the board or an asset in the Studio.
+  //   adloop:open-angle {detail:{angleId}} → board + detail drawer
+  //   adloop:open-asset {detail:{assetId}} → studio + that asset's angle
+  useEffect(() => {
+    const onOpenAngle = (e: Event) => {
+      const angleId = (e as CustomEvent<{ angleId?: string }>).detail?.angleId;
+      if (!angleId) return;
+      setView("board");
+      setOpenAngleId(angleId);
+    };
+    const onOpenAsset = (e: Event) => {
+      const assetId = (e as CustomEvent<{ assetId?: string }>).detail?.assetId;
+      if (!assetId) return;
+      const asset = state?.assets.find((a) => a.id === assetId);
+      setOpenAngleId(null);
+      setView("studio");
+      if (asset) setStudioFocusAngleId(asset.angleId);
+    };
+    window.addEventListener("adloop:open-angle", onOpenAngle);
+    window.addEventListener("adloop:open-asset", onOpenAsset);
+    return () => {
+      window.removeEventListener("adloop:open-angle", onOpenAngle);
+      window.removeEventListener("adloop:open-asset", onOpenAsset);
+    };
+  }, [state]);
 
   // Onboarding: URL in, Scout runs async (202 + runId, #7); the UI switches
   // to the new brand and follows progress via /state polling.
@@ -230,6 +265,8 @@ export function AppShell() {
               strategistRunning={strategistRunning}
               runningAssetAngleIds={runningAssetAngleIds}
               onChanged={load}
+              openAngleId={openAngleId}
+              onOpenAngle={setOpenAngleId}
             />
           ) : null}
           {view === "studio" ? (
@@ -239,6 +276,7 @@ export function AppShell() {
               runningAssetAngleIds={runningAssetAngleIds}
               publishRunning={publishRunning}
               onChanged={load}
+              focusAngleId={studioFocusAngleId}
             />
           ) : null}
           {view === "economics" ? (

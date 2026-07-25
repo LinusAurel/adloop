@@ -19,7 +19,7 @@ import { ErrorNote } from "@/components/bits";
 import { accentForBrand } from "@/lib/brand-accent";
 // Chat lands as components/chat-panel.tsx from a parallel stream — swap this
 // import to "@/components/chat-panel" once the file exists.
-import { ChatPanel } from "@/components/chat-placeholder";
+import { ChatPanel } from "@/components/chat-panel";
 
 const DEFAULT_BRAND_SLUG = "loyft";
 const POLL_MS = 5000;

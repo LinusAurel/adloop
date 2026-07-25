@@ -50,6 +50,16 @@ function bestIndex(results: CriticResult[]): number {
   );
 }
 
+// Regenerating never replaces an asset: each run appends a NEW asset with the
+// next version number for (angleId, kind); previous versions stay untouched
+// in the store as history (#16).
+function nextVersion(angleId: string, kind: Asset["kind"]): number {
+  const existing = readCollection("assets").filter(
+    (a) => a.angleId === angleId && a.kind === kind,
+  );
+  return existing.reduce((max, a) => Math.max(max, a.version ?? 1), 0) + 1;
+}
+
 // opts.run: pre-created by the route so it can answer 202 + runId before
 // the pipeline work happens (#7); without it the agent creates its own run.
 // opts.model: optional curated Fal model id for the Designer (#17).
@@ -94,6 +104,7 @@ export async function generateAssetPair(
       id: newId("ast"),
       angleId: angle.id,
       kind: "ad_copy",
+      version: nextVersion(angle.id, "ad_copy"),
       payload: {
         outline: draft.outline,
         variants: draft.variants,
@@ -118,6 +129,11 @@ export async function generateAssetPair(
       `Variante ${chosen + 1} gewählt (Score ${best.score}/10) — Copy-Asset gespeichert`,
     );
 
+    // Versioning happens here (not in the Designer) so ALL regenerate paths
+    // share one rule: new row, version+1, previous asset kept as history.
+    // Computed BEFORE the Designer upserts the new row, so the fresh asset
+    // does not count itself.
+    const staticVersion = nextVersion(angle.id, "static");
     const staticAsset = await runDesigner(
       brand,
       angle,
@@ -125,6 +141,8 @@ export async function generateAssetPair(
       run.id,
       opts.model,
     );
+    staticAsset.version = staticVersion;
+    upsert("assets", staticAsset);
     appendRunLog(run.id, "Designer", "AssetPair vollständig — bereit fürs Studio");
     finishRun(run.id);
     return { runId: run.id, copyAsset, staticAsset };

@@ -8,6 +8,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { ChevronDown } from "lucide-react";
+import type { AnalysisResult, ClassifiedAdRow } from "@/engine/agents/analyst";
 import type { Angle, Asset, BrandState } from "@/engine/types";
 import type { CopyVariant } from "@/engine/schemas";
 import {
@@ -18,6 +19,7 @@ import {
   postAction,
   useSettle,
 } from "@/components/bits";
+import { euro } from "@/lib/format";
 import { FAL_MODELS } from "@/lib/fal-models";
 
 // Payload shapes written by the asset pipeline (engine/agents/pipeline.ts).
@@ -35,6 +37,10 @@ interface Entry {
   angle: Angle;
   copyAsset?: Asset;
   staticAsset?: Asset;
+  // All static versions of the angle, newest first (#16): regenerating
+  // appends a new version instead of replacing the image, so earlier
+  // visuals stay reviewable as a small history.
+  staticHistory: Asset[];
 }
 
 const ASSET_STATUS_LABEL: Record<string, string> = {
@@ -43,6 +49,28 @@ const ASSET_STATUS_LABEL: Record<string, string> = {
   rejected: "rejected",
   published: "published",
 };
+
+// Cost label per campaign target metric — mirrors the Economics view so the
+// architecture carries different optimization goals (#16).
+const METRIC_LABELS: Record<string, string> = {
+  CPL: "Cost per lead",
+  CPA: "Cost per acquisition",
+  CPP: "Cost per purchase",
+  CPC: "Cost per click",
+  CPE: "Cost per engagement",
+};
+
+// Version-aware ordering: explicit version wins, store order (append =
+// chronological) breaks ties for rows written before versioning.
+function byVersion(assets: Asset[]): Asset[] {
+  return assets
+    .map((asset, index) => ({ asset, index }))
+    .sort(
+      (a, b) =>
+        (a.asset.version ?? 1) - (b.asset.version ?? 1) || a.index - b.index,
+    )
+    .map((x) => x.asset);
+}
 
 function FeedPreview({
   entry,
@@ -100,10 +128,74 @@ function FeedPreview({
   );
 }
 
+// Performance rows from the latest analysis that belong to this entry's
+// assets (any version). The ad name carries the asset id, the Analyst
+// resolves it into row.assetId.
+function performanceRows(
+  entry: Entry,
+  analysis: AnalysisResult | null,
+): ClassifiedAdRow[] {
+  if (!analysis) return [];
+  const ids = new Set(
+    [entry.copyAsset, entry.staticAsset, ...entry.staticHistory]
+      .filter((a): a is Asset => Boolean(a))
+      .map((a) => a.id),
+  );
+  return analysis.rows.filter((r) => r.assetId && ids.has(r.assetId));
+}
+
+function PerformanceSection({
+  rows,
+  metric,
+}: {
+  rows: ClassifiedAdRow[];
+  metric: string | undefined;
+}) {
+  const costLabel =
+    (metric ? METRIC_LABELS[metric.toUpperCase()] : undefined) ??
+    "Cost per result";
+  return (
+    <div className="mt-5 rounded-2xl bg-ink-800 p-5">
+      <p className="text-[0.8125rem] font-medium text-text-soft">Performance</p>
+      <div className="mt-3 space-y-3">
+        {rows.map((row) => (
+          <div key={row.adId} className="flex flex-wrap items-center gap-x-5 gap-y-1">
+            {row.classification === "winner" ? (
+              <span className="rounded-lg bg-emerald-600/15 px-2 py-0.5 text-[0.6875rem] font-medium text-emerald-500">
+                Winner
+              </span>
+            ) : row.classification === "loser" ? (
+              <span className="rounded-lg bg-signal-red/12 px-2 py-0.5 text-[0.6875rem] font-medium text-signal-red">
+                Loser
+              </span>
+            ) : (
+              <span className="rounded-lg bg-ink-750 px-2 py-0.5 text-[0.6875rem] font-medium text-text-faint">
+                Testing
+              </span>
+            )}
+            <span className="text-[0.8125rem] text-text-soft">
+              Leads <span className="tnum text-foreground">{row.leads}</span>
+            </span>
+            <span className="text-[0.8125rem] text-text-soft">
+              {costLabel}{" "}
+              <span className="tnum text-foreground">{euro(row.cpl)}</span>
+            </span>
+            <span className="text-[0.8125rem] text-text-soft">
+              Spend{" "}
+              <span className="tnum text-foreground">{euro(row.spend)}</span>
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function Detail({
   entry,
   brandSlug,
   brandName,
+  analysis,
   pipelineRunning,
   publishRunning,
   onChanged,
@@ -111,6 +203,7 @@ function Detail({
   entry: Entry;
   brandSlug: string;
   brandName: string;
+  analysis: AnalysisResult | null;
   pipelineRunning: boolean;
   publishRunning: boolean;
   onChanged: () => void;
@@ -123,6 +216,7 @@ function Detail({
     entry.copyAsset?.status ?? entry.staticAsset?.status ?? "draft";
   const settling = useSettle(status);
   const critic = entry.copyAsset;
+  const perfRows = performanceRows(entry, analysis);
 
   const fire = async (key: string, fn: () => Promise<void>) => {
     setBusy(key);
@@ -203,6 +297,15 @@ function Detail({
             </p>
           </div>
 
+          {/* What this asset earned in the live campaign (#16); only shown
+              when the analysis actually contains it. */}
+          {perfRows.length > 0 ? (
+            <PerformanceSection
+              rows={perfRows}
+              metric={analysis?.target?.metric}
+            />
+          ) : null}
+
           {status === "draft" ? (
             <div className="mt-5 flex flex-wrap items-center gap-2">
               <ActionButton
@@ -272,7 +375,54 @@ function Detail({
                 onClick={regenerate}
               />
             </div>
+            <p className="mt-2 text-[0.75rem] leading-relaxed text-text-faint">
+              Regenerating creates a new version; earlier versions are kept
+              below.
+            </p>
           </div>
+
+          {/* Version history (#16): every regenerate appends a new static
+              version, nothing gets overwritten. Newest first. */}
+          {entry.staticHistory.length > 1 ? (
+            <div className="mt-6 border-t border-rule pt-5">
+              <p className="group-heading mb-2.5">
+                Versions ({entry.staticHistory.length})
+              </p>
+              <div className="flex flex-wrap gap-3">
+                {entry.staticHistory.map((asset, i) => {
+                  const url = ((asset.payload ?? {}) as StaticAssetPayload)
+                    .imageUrl;
+                  const version =
+                    asset.version ?? entry.staticHistory.length - i;
+                  const current = i === 0;
+                  return (
+                    <figure key={asset.id} className="w-[92px]">
+                      {url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={url}
+                          alt={`Version ${version} for ${entry.angle.name}`}
+                          className={`aspect-[4/5] w-full rounded-xl object-cover ${
+                            current
+                              ? "ring-1 ring-rule-2"
+                              : "opacity-60"
+                          }`}
+                        />
+                      ) : (
+                        <span className="grid aspect-[4/5] w-full place-items-center rounded-xl bg-ink-800 text-[0.6875rem] text-text-faint">
+                          no visual
+                        </span>
+                      )}
+                      <figcaption className="mt-1.5 text-[0.6875rem] text-text-faint">
+                        V{version}
+                        {current ? " · current" : ""}
+                      </figcaption>
+                    </figure>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
 
           {failed ? <ErrorNote text={failed} /> : null}
         </div>
@@ -304,7 +454,8 @@ export function StudioView({
     if (focusAngleId) setSelectedId(focusAngleId);
   }, [focusAngleId]);
 
-  // One entry per angle that has assets.
+  // One entry per angle that has assets. Latest version per kind is shown;
+  // earlier static versions stay available as history (#16).
   const entries = useMemo<Entry[]>(
     () =>
       (state?.angles ?? [])
@@ -312,10 +463,13 @@ export function StudioView({
           const assets = (state?.assets ?? []).filter(
             (a) => a.angleId === angle.id,
           );
+          const statics = byVersion(assets.filter((a) => a.kind === "static"));
+          const copies = byVersion(assets.filter((a) => a.kind === "ad_copy"));
           return {
             angle,
-            copyAsset: assets.findLast((a) => a.kind === "ad_copy"),
-            staticAsset: assets.findLast((a) => a.kind === "static"),
+            copyAsset: copies.at(-1),
+            staticAsset: statics.at(-1),
+            staticHistory: [...statics].reverse(),
           };
         })
         .filter((p) => p.copyAsset || p.staticAsset),
@@ -323,6 +477,29 @@ export function StudioView({
   );
 
   const selected = entries.find((e) => e.angle.id === selectedId) ?? entries[0];
+
+  // Latest finished analysis (Economics run) — wires results to assets (#16).
+  const analysis = useMemo<AnalysisResult | null>(() => {
+    const run = (state?.runs ?? []).findLast(
+      (r) => r.stage === "optimize" && r.finishedAt && r.result,
+    );
+    return run ? (run.result as AnalysisResult) : null;
+  }, [state]);
+
+  // Deep link from other views (e.g. Economics winner/loser rows): a
+  // CustomEvent "adloop:open-asset" with {assetId} selects the angle that
+  // owns the asset. Defensive: unknown ids are ignored.
+  useEffect(() => {
+    const onOpen = (event: Event) => {
+      const assetId = (event as CustomEvent<{ assetId?: string }>).detail
+        ?.assetId;
+      if (!assetId) return;
+      const owner = (state?.assets ?? []).find((a) => a.id === assetId);
+      if (owner) setSelectedId(owner.angleId);
+    };
+    window.addEventListener("adloop:open-asset", onOpen);
+    return () => window.removeEventListener("adloop:open-asset", onOpen);
+  }, [state]);
 
   if (entries.length === 0) {
     return (
@@ -382,6 +559,7 @@ export function StudioView({
               entry={selected}
               brandSlug={brandSlug}
               brandName={brandName}
+              analysis={analysis}
               pipelineRunning={runningAssetAngleIds.has(selected.angle.id)}
               publishRunning={publishRunning}
               onChanged={onChanged}

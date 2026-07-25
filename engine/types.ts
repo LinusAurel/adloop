@@ -113,6 +113,10 @@ export interface Asset {
   id: string;
   angleId: string;
   kind: AssetKind;
+  // Version within (angleId, kind): regenerating creates a NEW asset with
+  // version+1 instead of mutating the previous one; older versions stay in
+  // the store as history (#16). Missing = 1 (rows written before versioning).
+  version?: number;
   payload: unknown;
   criticScore?: number;
   criticNotes?: string;

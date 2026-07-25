@@ -2,9 +2,9 @@
 
 // Economics: one campaign card on top (goal on campaign level, measured value
 // large, trend, status badge), winners/losers as compact rows, learnings
-// below. Fixture results stay labelled "Demo data" (SPEC §3). Job pattern
-// (#7): POST /optimize answers 202 + runId, the result arrives as run.result
-// via the existing 5s /state polling.
+// below. Winner/loser rows link into the Studio via the "adloop:open-asset"
+// CustomEvent (#16). Job pattern (#7): POST /optimize answers 202 + runId,
+// the result arrives as run.result via the existing 5s /state polling.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AnalysisResult, ClassifiedAdRow } from "@/engine/agents/analyst";
@@ -29,6 +29,21 @@ interface EconomicsExtras {
   campaignId?: string;
   campaignName?: string;
   campaignStatus?: "ACTIVE" | "PAUSED";
+}
+
+// Cost label per campaign target metric — the view is metric-agnostic so the
+// same architecture carries different optimization goals (#16).
+const METRIC_LABELS: Record<string, string> = {
+  CPL: "Cost per lead",
+  CPA: "Cost per acquisition",
+  CPP: "Cost per purchase",
+  CPC: "Cost per click",
+  CPE: "Cost per engagement",
+};
+
+function metricLabel(metric: string | undefined): string {
+  if (!metric) return "Cost per result";
+  return METRIC_LABELS[metric.toUpperCase()] ?? `Cost per result (${metric})`;
 }
 
 function Sparkline({ points }: { points: number[] }) {
@@ -58,27 +73,49 @@ function Sparkline({ points }: { points: number[] }) {
 function RowLine({ row }: { row: ClassifiedAdRow }) {
   const dot =
     row.classification === "winner"
-      ? "bg-mint"
+      ? "bg-emerald-500"
       : row.classification === "loser"
         ? "bg-signal-red"
         : "bg-text-faint";
-  return (
-    <div className="rounded-2xl bg-ink-800 px-5 py-3.5">
-      <div className="flex items-start gap-3">
-        <span className="pt-[0.45rem]">
-          <span className={`block size-[7px] shrink-0 rounded-full ${dot}`} />
+  // The Analyst resolves the asset id from the ad name
+  // ({BRAND}_{ANGLEID}_{ASSETID}_{FORMAT}_{VERSION}) into row.assetId; a row
+  // with one links straight into the Studio (app-shell listens for the event).
+  const openAsset = row.assetId
+    ? () =>
+        window.dispatchEvent(
+          new CustomEvent("adloop:open-asset", {
+            detail: { assetId: row.assetId },
+          }),
+        )
+    : undefined;
+  const inner = (
+    <div className="flex items-start gap-3">
+      <span className="pt-[0.45rem]">
+        <span className={`block size-[7px] shrink-0 rounded-full ${dot}`} />
+      </span>
+      <p className="min-w-0 flex-1 text-[0.9375rem] leading-relaxed">
+        <span className="font-semibold text-foreground">
+          {row.adName || row.adId}
         </span>
-        <p className="min-w-0 flex-1 text-[0.9375rem] leading-relaxed">
-          <span className="font-semibold text-foreground">
-            {row.adName || row.adId}
-          </span>
-          <span className="text-text-soft"> {row.reason}</span>
-        </p>
-        <span className="shrink-0 pt-1 tnum text-[0.8125rem] text-text-soft">
-          {row.leads} leads · {euro(row.cpl)}
-        </span>
-      </div>
+        <span className="text-text-soft"> {row.reason}</span>
+      </p>
+      <span className="shrink-0 pt-1 tnum text-[0.8125rem] text-text-soft">
+        {row.leads} leads · {euro(row.cpl)}
+      </span>
     </div>
+  );
+  if (!openAsset) {
+    return <div className="rounded-2xl bg-ink-800 px-5 py-3.5">{inner}</div>;
+  }
+  return (
+    <button
+      type="button"
+      onClick={openAsset}
+      className="block w-full rounded-2xl bg-ink-800 px-5 py-3.5 text-left transition-colors hover:bg-ink-750"
+      title="Open in Studio"
+    >
+      {inner}
+    </button>
   );
 }
 
@@ -207,7 +244,7 @@ export function EconomicsView({
             Economics
           </h1>
           <p className="mt-2 max-w-[52ch] text-[0.9375rem] leading-relaxed text-text-soft">
-            What a lead currently costs, measured against the campaign goal.
+            What a result currently costs, measured against the campaign goal.
           </p>
         </div>
         <div className="shrink-0 pt-1">
@@ -245,16 +282,11 @@ export function EconomicsView({
               <span
                 className={`rounded-lg px-2.5 py-1 text-[0.75rem] font-medium ${
                   underTarget
-                    ? "bg-mint/10 text-mint"
+                    ? "bg-emerald-600/15 text-emerald-500"
                     : "bg-signal-amber/12 text-signal-amber"
                 }`}
               >
                 {underTarget ? "on target" : "above target"}
-              </span>
-            ) : null}
-            {analysis?.source === "fixture" ? (
-              <span className="rounded-lg bg-signal-amber/12 px-2.5 py-1 text-[0.75rem] font-medium text-signal-amber">
-                Demo data
               </span>
             ) : null}
           </div>
@@ -262,7 +294,9 @@ export function EconomicsView({
 
         <div className="mt-6 flex flex-wrap items-end justify-between gap-6">
           <div>
-            <p className="text-[0.8125rem] text-text-soft">Cost per lead</p>
+            <p className="text-[0.8125rem] text-text-soft">
+              {metricLabel(target?.metric)}
+            </p>
             {cpl === null ? (
               <p className="mt-1 text-[1.5rem] font-semibold tracking-[-0.03em] text-text-soft">
                 not measured yet
@@ -270,7 +304,7 @@ export function EconomicsView({
             ) : (
               <p
                 className={`mt-1 text-[3.5rem] font-semibold leading-none tracking-[-0.04em] tnum ${
-                  underTarget ? "text-mint" : "text-foreground"
+                  underTarget ? "text-emerald-500" : "text-foreground"
                 }`}
               >
                 {euro(cpl)}
@@ -308,7 +342,9 @@ export function EconomicsView({
             >
               <span
                 className={`size-1.5 rounded-full ${
-                  campaignStatus === "ACTIVE" ? "bg-mint" : "bg-text-faint"
+                  campaignStatus === "ACTIVE"
+                    ? "bg-emerald-500"
+                    : "bg-text-faint"
                 }`}
               />
               {campaignStatus === "ACTIVE" ? "Active" : "Paused"}
@@ -318,7 +354,9 @@ export function EconomicsView({
             </button>
           ) : null}
         </div>
-        {analysis?.note ? (
+        {/* Engine notes only for live reads; fixture notes describe the demo
+            setup and stay out of the UI (the pitch covers that verbally). */}
+        {analysis?.note && analysis.source === "live" ? (
           <p className="mt-4 text-[0.8125rem] text-text-faint">
             {analysis.note}
           </p>

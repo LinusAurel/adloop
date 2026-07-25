@@ -2,8 +2,13 @@
 // rationale and expectedCpl. Diversity violations trigger exactly one rewrite;
 // a second violation is logged as a warning but does not block the demo flow.
 
-import { completeStructured } from "../connectors/anthropic.ts";
-import { angleListSchema, checkAngleDiversity, type AngleList } from "../schemas.ts";
+import { completeStructured, isMockMode, mockModeHint } from "../connectors/anthropic.ts";
+import {
+  angleListSchema,
+  checkAngleDiversity,
+  type AngleDraft,
+  type AngleList,
+} from "../schemas.ts";
 import { loadBrandDoc, loadSkill } from "../skills.ts";
 import {
   appendRunLog,
@@ -68,6 +73,18 @@ function buildPrompt(brand: Brand, evidence: Evidence[], existing: Angle[]): str
   return parts.join("\n\n");
 }
 
+// Brand isolation (#12): id, brandSlug and status are OWNED by this function —
+// the spread comes first so no draft field (e.g. a stray brandSlug from an
+// unvalidated mock payload) can ever override them.
+export function draftsToAngles(drafts: AngleDraft[], slug: string): Angle[] {
+  return drafts.map((d) => ({
+    ...d,
+    id: newId("ang"),
+    brandSlug: slug,
+    status: "draft" as const,
+  }));
+}
+
 // opts.run: pre-created by the route so it can answer 202 + runId before
 // the LLM work happens (#7); without it the agent creates its own run.
 export async function runStrategist(
@@ -79,6 +96,9 @@ export async function runStrategist(
 
   const run = opts.run ?? createRun(slug, "strategist");
   try {
+    // A mock run must be recognizable as such in the UI, not only on stdout —
+    // silent mock output caused fake angles under a real brand (#12).
+    if (isMockMode()) appendRunLog(run.id, AGENT, mockModeHint(), "warn");
     const evidence = readCollection("evidence").filter((e) => e.brandSlug === slug);
     const existing = readCollection("angles").filter((a) => a.brandSlug === slug);
     appendRunLog(
@@ -129,12 +149,23 @@ export async function runStrategist(
       }
     }
 
-    const angles: Angle[] = draft.angles.map((d) => ({
-      id: newId("ang"),
-      brandSlug: slug,
-      status: "draft" as const,
-      ...d,
-    }));
+    // Deterministic duplicate guard: identical names for the same brand are
+    // never inserted twice (mock mode reproduces the same drafts every run).
+    const existingNames = new Set(existing.map((a) => a.name.trim().toLowerCase()));
+    const freshDrafts = draft.angles.filter(
+      (d) => !existingNames.has(d.name.trim().toLowerCase()),
+    );
+    const skipped = draft.angles.length - freshDrafts.length;
+    if (skipped > 0) {
+      appendRunLog(
+        run.id,
+        AGENT,
+        `${skipped} Angle(s) übersprungen — Name existiert für diese Brand bereits`,
+        "warn",
+      );
+    }
+
+    const angles = draftsToAngles(freshDrafts, slug);
     for (const angle of angles) {
       upsert("angles", angle);
       appendRunLog(

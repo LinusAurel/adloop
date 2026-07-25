@@ -4,7 +4,7 @@
 // New brands get NO Meta publisher fields — publish stays disabled until a
 // human configures account, page and budget (Hard Stops 2/4).
 
-import { completeStructured } from "../connectors/anthropic.ts";
+import { completeStructured, isMockMode, mockModeHint } from "../connectors/anthropic.ts";
 import { scrapeJson, searchWeb } from "../connectors/firecrawl.ts";
 import { scoutResearchSchema, type ScoutResearch } from "../schemas.ts";
 import { loadSkill } from "../skills.ts";
@@ -278,6 +278,8 @@ export async function runScout(
 
   const run = opts.run ?? createRun(slug, "scout");
   try {
+    // A mock run must be recognizable as such in the UI, not only on stdout (#12).
+    if (isMockMode()) appendRunLog(run.id, AGENT, mockModeHint(), "warn");
     appendRunLog(run.id, AGENT, `liest ${url} (Firecrawl-Extraktion) …`);
     const extraction = ((await scrapeJson(
       url,

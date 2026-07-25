@@ -176,6 +176,62 @@ test("runChat wirft brand_not_found für unbekannte Brands", async () => {
   );
 });
 
+test("Fuzzy-Match: Angle per Namen (case-insensitiv, partiell) freigeben", async () => {
+  // Zustand zurücksetzen — der Vortest hat ANGLE_A auf killed gestellt.
+  const angles = readCollection("angles");
+  const angleA = angles.find((a) => a.id === ANGLE_A);
+  if (angleA) angleA.status = "draft";
+  writeCollection("angles", angles);
+
+  const outcome = await executeChatTool("chat-brand-a", "approve_angle", {
+    angleId: "alpha-exklusiv",
+  });
+  assert.notEqual(outcome.isError, true, outcome.result);
+  assert.equal(outcome.mutated, true);
+  assert.equal(
+    readCollection("angles").find((a) => a.id === ANGLE_A)?.status,
+    "approved",
+  );
+  assert.ok(
+    outcome.refs?.some((r) => r.type === "angle" && r.id === ANGLE_A),
+    "Outcome muss eine klickbare Angle-Referenz liefern",
+  );
+});
+
+test("Fuzzy-Match: fremde Angle-Namen lösen nie auf", async () => {
+  const outcome = await executeChatTool("chat-brand-a", "approve_angle", {
+    angleId: "Beta-Geheim-Angle",
+  });
+  assert.equal(outcome.isError, true);
+
+  const angleB = readCollection("angles").find((a) => a.id === ANGLE_B);
+  assert.equal(angleB?.status, "draft", "fremder Angle darf nie mutieren");
+});
+
+test("Fuzzy-Match: generate_assets akzeptiert Angle-Namen", async () => {
+  const outcome = await executeChatTool("chat-brand-a", "generate_assets", {
+    angleId: "Alpha-Exklusiv-Angle",
+  });
+  assert.notEqual(outcome.isError, true, outcome.result);
+  assert.match(outcome.result, /Alpha-Exklusiv-Angle/);
+  assert.ok(outcome.refs?.some((r) => r.type === "angle" && r.id === ANGLE_A));
+});
+
+test("Antworten liefern refs für erwähnte Angles (Mock-Pfad)", async () => {
+  const result = await runChat("chat-brand-a", [
+    { role: "user", content: "Status?" },
+  ]);
+  assert.ok(Array.isArray(result.refs), "runChat muss refs liefern");
+  assert.ok(
+    result.refs.some((r) => r.type === "angle" && r.id === ANGLE_A),
+    "erwähnter Angle muss als Referenz auftauchen",
+  );
+  assert.ok(
+    result.refs.every((r) => !r.id.includes("brand-b")),
+    "refs bleiben brand-isoliert",
+  );
+});
+
 after(() => {
   fs.rmSync(tmpDataDir, { recursive: true, force: true });
   delete process.env.ADLOOP_DATA_DIR;

@@ -32,9 +32,18 @@ export interface ChatAction {
   label: string;
 }
 
+// Clickable reference to an angle or asset the reply talks about; the UI
+// renders these as chips that open the board detail / studio.
+export interface ChatRef {
+  type: "angle" | "asset";
+  id: string;
+  label: string;
+}
+
 export interface ChatResult {
   reply: string;
   actions: ChatAction[];
+  refs: ChatRef[];
   stateChanged: boolean;
 }
 
@@ -147,7 +156,11 @@ const TOOLS: Anthropic.Tool[] = [
     input_schema: {
       type: "object",
       properties: {
-        angleId: { type: "string", description: "ID of the angle, e.g. ang_…" },
+        angleId: {
+          type: "string",
+          description:
+            "ID (ang_…) or angle name — names match case-insensitively, partial names work when unambiguous.",
+        },
       },
       required: ["angleId"],
     },
@@ -159,7 +172,11 @@ const TOOLS: Anthropic.Tool[] = [
     input_schema: {
       type: "object",
       properties: {
-        angleId: { type: "string", description: "ID of the angle, e.g. ang_…" },
+        angleId: {
+          type: "string",
+          description:
+            "ID (ang_…) or angle name — names match case-insensitively, partial names work when unambiguous.",
+        },
       },
       required: ["angleId"],
     },
@@ -171,7 +188,11 @@ const TOOLS: Anthropic.Tool[] = [
     input_schema: {
       type: "object",
       properties: {
-        angleId: { type: "string", description: "ID of the angle, e.g. ang_…" },
+        angleId: {
+          type: "string",
+          description:
+            "ID (ang_…) or angle name — names match case-insensitively, partial names work when unambiguous.",
+        },
       },
       required: ["angleId"],
     },
@@ -244,11 +265,43 @@ interface ToolOutcome {
   result: string;
   isError?: boolean;
   mutated?: boolean;
+  refs?: ChatRef[];
+}
+
+// Loose text normalisation for name matching (the user knows names, not IDs).
+function normalizeName(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9äöüß]+/g, " ").trim();
 }
 
 // Brand isolation: an angle only resolves when it belongs to the route slug.
-function findBrandAngle(slug: string, angleId: string): Angle | undefined {
-  return readCollection("angles").find((a) => a.id === angleId && a.brandSlug === slug);
+// Accepts the exact ID or a (partial, case-insensitive) angle name; a fuzzy
+// name only resolves when it is unambiguous within the brand.
+function findBrandAngle(slug: string, ref: string): Angle | undefined {
+  const angles = readCollection("angles").filter((a) => a.brandSlug === slug);
+  const byId = angles.find((a) => a.id === ref);
+  if (byId) return byId;
+  const needle = normalizeName(ref);
+  if (!needle) return undefined;
+  const exact = angles.filter((a) => normalizeName(a.name) === needle);
+  if (exact.length === 1) return exact[0];
+  const fuzzy = angles.filter((a) => {
+    const name = normalizeName(a.name);
+    return name.includes(needle) || needle.includes(name);
+  });
+  return fuzzy.length === 1 ? fuzzy[0] : undefined;
+}
+
+function angleRef(angle: Angle): ChatRef {
+  return { type: "angle", id: angle.id, label: angle.name };
+}
+
+function assetRef(asset: Asset, angle?: Angle): ChatRef {
+  const kind = asset.kind.replace(/_/g, " ");
+  return {
+    type: "asset",
+    id: asset.id,
+    label: angle ? `${kind} — ${angle.name}` : kind,
+  };
 }
 
 // Assets carry no brandSlug — resolve via their angle and check that.
@@ -259,17 +312,25 @@ function findBrandAsset(slug: string, assetId: string): Asset | undefined {
   return angle?.brandSlug === slug ? asset : undefined;
 }
 
-function setAngleStatus(slug: string, angleId: string, status: Angle["status"]): ToolOutcome {
+function setAngleStatus(slug: string, angleRefInput: string, status: Angle["status"]): ToolOutcome {
+  const resolved = findBrandAngle(slug, angleRefInput);
+  if (!resolved) {
+    return {
+      result: `Angle "${angleRefInput}" does not belong to this brand, does not exist, or the name is ambiguous — check get_brand_state for the exact name or ID.`,
+      isError: true,
+    };
+  }
   const angles = readCollection("angles");
-  const angle = angles.find((a) => a.id === angleId && a.brandSlug === slug);
+  const angle = angles.find((a) => a.id === resolved.id);
   if (!angle) {
-    return { result: `Angle ${angleId} does not belong to this brand or does not exist.`, isError: true };
+    return { result: `Angle ${resolved.id} does not exist.`, isError: true };
   }
   angle.status = status;
   writeCollection("angles", angles);
   return {
-    result: `Angle "${angle.name}" is now ${status === "approved" ? "approved" : "rejected"}.`,
+    result: `Angle "${angle.name}" (${angle.id}) is now ${status === "approved" ? "approved" : "rejected"}.`,
     mutated: true,
+    refs: [angleRef(angle)],
   };
 }
 
@@ -284,9 +345,11 @@ function setAssetStatus(slug: string, assetId: string, status: Asset["status"]):
   }
   asset.status = status;
   writeCollection("assets", assets);
+  const angle = readCollection("angles").find((a) => a.id === asset.angleId);
   return {
     result: `Asset ${assetId} (${asset.kind}) is now ${status === "approved" ? "approved" : "rejected"}.`,
     mutated: true,
+    refs: [assetRef(asset, angle)],
   };
 }
 
@@ -368,15 +431,19 @@ export async function executeChatTool(
       const angleId = String(input.angleId ?? "");
       const angle = findBrandAngle(slug, angleId);
       if (!angle) {
-        return { result: `Angle ${angleId} does not belong to this brand or does not exist.`, isError: true };
+        return {
+          result: `Angle "${angleId}" does not belong to this brand, does not exist, or the name is ambiguous — check get_brand_state for the exact name or ID.`,
+          isError: true,
+        };
       }
-      return startJob(
+      const job = startJob(
         slug,
         "assets",
         (run) => generateAssetPair(angle.id, { run }),
         "in the studio",
         angle.id,
       );
+      return { ...job, result: `Angle "${angle.name}" (${angle.id}): ${job.result}`, refs: [angleRef(angle)] };
     }
 
     case "approve_asset":
@@ -437,6 +504,9 @@ function buildSystem(brand: Brand, summary: string): string {
     "- Generated marketing content (ad copy, angles, hooks) stays in the brand's market language — for German brands that means German with correct umlauts (ä, ö, ü, ß), never ae/oe/ue.",
     "- Plain prose, no Markdown: no **asterisks**, no # headings, no tables. Short paragraphs and simple dashes (-) are fine.",
     "- Execute actions exclusively through tools — never claim an action you did not perform via a tool.",
+    "- Make real decisions on parameters: when the user says \"our best angle\", \"the weakest hypothesis\" or similar, pick the fitting angle yourself from the state (measured CPL beats expected CPL; the status must fit the action) and say in one short sentence which one you picked and why.",
+    "- Be concrete: refer to angles and assets by name and cite the actual numbers from the state (expected/measured CPL, critic scores, counts) instead of vague phrases.",
+    "- After every action, tell the user where the result appears (angles on the board, assets in the studio, publishing in the ticker, insights under economics) and suggest the single most sensible next step.",
     "- Approving and rejecting (angles, assets) are the user's decisions: only execute them when explicitly requested; otherwise give a recommendation and ask.",
     "- Long operations (angles, assets, publish, insights) run as background jobs: start the job, report that the result will appear on the board, in the studio or in the ticker. Do not wait, do not block.",
     "- The Publisher ALWAYS creates campaigns and ads paused (PAUSED); only a human activates them in Ads Manager. You never manage budget or spend.",
@@ -456,6 +526,39 @@ function buildMockReply(summary: string): string {
   ].join("\n");
 }
 
+// Refs derived from the reply text: every brand angle whose name appears in
+// the reply becomes a clickable chip. Robust because it needs no cooperation
+// from the model — it only mentions names it read from the state.
+function refsFromReply(slug: string, reply: string): ChatRef[] {
+  const lower = reply.toLowerCase();
+  const refs: ChatRef[] = [];
+  for (const angle of readCollection("angles")) {
+    if (angle.brandSlug !== slug) continue;
+    const name = angle.name?.trim();
+    if (!name) continue;
+    if (lower.includes(name.toLowerCase()) || lower.includes(angle.id.toLowerCase())) {
+      refs.push(angleRef(angle));
+    }
+  }
+  return refs;
+}
+
+const MAX_REFS = 6;
+
+function mergeRefs(...groups: ChatRef[][]): ChatRef[] {
+  const seen = new Set<string>();
+  const merged: ChatRef[] = [];
+  for (const group of groups) {
+    for (const ref of group) {
+      const key = `${ref.type}:${ref.id}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      merged.push(ref);
+    }
+  }
+  return merged.slice(0, MAX_REFS);
+}
+
 // Runs one chat turn: tool-use loop over the engine, strictly brand-scoped.
 export async function runChat(slug: string, messages: ChatMessage[]): Promise<ChatResult> {
   const state = getBrandState(slug);
@@ -464,9 +567,11 @@ export async function runChat(slug: string, messages: ChatMessage[]): Promise<Ch
 
   if (isMockMode()) {
     console.log(`[MOCK] chat: ${mockModeHint()}`);
+    const reply = buildMockReply(summary);
     return {
-      reply: buildMockReply(summary),
+      reply,
       actions: [{ type: "get_brand_state", label: ACTION_LABELS.get_brand_state }],
+      refs: refsFromReply(slug, reply),
       stateChanged: false,
     };
   }
@@ -479,6 +584,7 @@ export async function runChat(slug: string, messages: ChatMessage[]): Promise<Ch
   }));
 
   const actions: ChatAction[] = [];
+  const toolRefs: ChatRef[] = [];
   let stateChanged = false;
   let reply = "";
 
@@ -518,6 +624,7 @@ export async function runChat(slug: string, messages: ChatMessage[]): Promise<Ch
       if (!outcome.isError) {
         actions.push({ type: block.name, label: ACTION_LABELS[block.name] ?? block.name });
         if (outcome.mutated) stateChanged = true;
+        if (outcome.refs) toolRefs.push(...outcome.refs);
       }
       toolResults.push({
         type: "tool_result",
@@ -532,5 +639,8 @@ export async function runChat(slug: string, messages: ChatMessage[]): Promise<Ch
   if (!reply) {
     reply = "Done — details are on the board and in the ticker.";
   }
-  return { reply, actions, stateChanged };
+  // Tool-derived refs first (they reflect what actually happened), then any
+  // further angles the reply mentions by name.
+  const refs = mergeRefs(toolRefs, refsFromReply(slug, reply));
+  return { reply, actions, refs, stateChanged };
 }

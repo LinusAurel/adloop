@@ -154,10 +154,13 @@ function buildResearchPrompt(
   }
   parts.push(
     "## Auftrag\nErstelle das Unified Research Document nach dem Skill und dem " +
-      "vorgegebenen Schema: 2-6 Segmente mit Psychographie und Schmerzen, " +
+      "vorgegebenen Schema: 2-4 Segmente mit Psychographie und Schmerzen, " +
       "geschätzte Awareness-Verteilung in Prozent (Summe ~100, explizit eine " +
       "Hypothese ohne Datenbasis), Competitor-Hinweise, wörtliche VoC-Sprache " +
-      "(nur aus den Fundstücken zitieren, nichts erfinden) und Einwände. Deutsch.",
+      "(nur aus den Fundstücken zitieren, nichts erfinden) und Einwände. Deutsch. " +
+      "WICHTIG: kompakt schreiben — 1-3 Sätze pro Feld, keine Absätze, " +
+      "Gesamtdokument unter 500 Wörter. Das Doc ist Arbeitsgrundlage für den " +
+      "Strategist, kein Bericht.",
   );
   return parts.join("\n\n");
 }
@@ -298,6 +301,9 @@ export async function runScout(
       prompt: buildResearchPrompt({ ...brand, name: brandName }, extraction, reviewSnippets),
       schema: scoutResearchSchema,
       schemaName: "scout_research",
+      // German prose is token-hungry; a truncated doc must never kill the
+      // onboarding stunt (<90 s, SPEC §3 Stufe 1).
+      maxTokens: 16384,
     });
 
     brand = {

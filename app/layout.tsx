@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
+import { AdminKeyBridge } from "@/components/admin-key-bridge";
+
 // Geist is a quiet product grotesque with true tabular figures: it recedes at
 // small sizes and holds up when set large on a projector (DESIGN.md).
 const geistSans = Geist({
@@ -19,7 +21,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "adloop — Mission Control",
-  description: "Agentische Paid-Ads-Engine",
+  description: "Agentic paid-ads engine",
 };
 
 export default function RootLayout({
@@ -34,7 +36,10 @@ export default function RootLayout({
       lang="de"
       className={`dark ${geistSans.variable} ${geistMono.variable}`}
     >
-      <body>{children}</body>
+      <body>
+        <AdminKeyBridge />
+        {children}
+      </body>
     </html>
   );
 }

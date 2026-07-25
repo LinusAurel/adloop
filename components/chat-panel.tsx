@@ -18,10 +18,19 @@ interface ChatAction {
   label: string;
 }
 
+// Clickable references (angles/assets) the reply talks about; clicking one
+// dispatches an app-wide event that opens the board detail or the studio.
+interface ChatRef {
+  type: "angle" | "asset";
+  id: string;
+  label: string;
+}
+
 interface PanelMessage {
   role: "user" | "assistant";
   content: string;
   actions?: ChatAction[];
+  refs?: ChatRef[];
 }
 
 interface Suggestion {
@@ -72,6 +81,33 @@ function buildSuggestions(state: BrandState | null): Suggestion[] {
   });
 
   return suggestions.slice(0, 4);
+}
+
+function openRef(ref: ChatRef) {
+  if (ref.type === "angle") {
+    window.dispatchEvent(new CustomEvent("adloop:open-angle", { detail: { angleId: ref.id } }));
+  } else {
+    window.dispatchEvent(new CustomEvent("adloop:open-asset", { detail: { assetId: ref.id } }));
+  }
+}
+
+function RefChips({ refs }: { refs?: ChatRef[] }) {
+  if (!refs || refs.length === 0) return null;
+  return (
+    <div className="mt-2 flex flex-wrap gap-1.5">
+      {refs.map((ref) => (
+        <button
+          key={`${ref.type}-${ref.id}`}
+          type="button"
+          onClick={() => openRef(ref)}
+          className="inline-flex items-center gap-1 rounded-full border border-rule px-2.5 py-1 text-[0.6875rem] font-medium text-text-soft transition-colors hover:bg-ink-750 hover:text-foreground"
+        >
+          <span className="text-text-faint">{ref.type === "angle" ? "Angle" : "Asset"}</span>
+          {ref.label}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 function ActionBadges({ actions }: { actions?: ChatAction[] }) {
@@ -185,10 +221,13 @@ export function ChatPanel({
           body: JSON.stringify({
             messages: history.map((m) => ({ role: m.role, content: m.content })),
           }),
+          // Long tool chains are fine, hangs are not: cap a turn at 3 minutes.
+          signal: AbortSignal.timeout(180_000),
         });
         const data = (await res.json()) as {
           reply?: string;
           actions?: ChatAction[];
+          refs?: ChatRef[];
           stateChanged?: boolean;
           error?: string;
         };
@@ -197,14 +236,26 @@ export function ChatPanel({
         }
         setMessages((prev) => [
           ...prev,
-          { role: "assistant", content: data.reply as string, actions: data.actions },
+          {
+            role: "assistant",
+            content: data.reply as string,
+            actions: data.actions,
+            refs: data.refs,
+          },
         ]);
         if (data.stateChanged) {
           onStateChanged?.();
         }
         loadState();
       } catch (e) {
-        setError(e instanceof Error ? e.message : "unknown error");
+        // Friendly demo-safe messages instead of raw error strings.
+        const friendly =
+          e instanceof DOMException && (e.name === "TimeoutError" || e.name === "AbortError")
+            ? "The strategist took too long to respond. Your message is back in the composer — please try again."
+            : e instanceof TypeError
+              ? "Could not reach the strategist. Check the connection and try again — your message is back in the composer."
+              : "Something went wrong on our side. Your message is back in the composer — please try again.";
+        setError(friendly);
         // Roll the failed user message back into the composer.
         setMessages((prev) => prev.slice(0, -1));
         setInput(content);
@@ -260,7 +311,7 @@ export function ChatPanel({
           ) : null}
           {error ? (
             <p className="mt-4 rounded-xl bg-signal-red/10 px-4 py-2.5 text-center text-[0.8125rem] text-signal-red">
-              Message failed: {error}
+              {error}
             </p>
           ) : null}
         </div>
@@ -287,6 +338,7 @@ export function ChatPanel({
                   {message.content}
                 </p>
                 <ActionBadges actions={message.actions} />
+                <RefChips refs={message.refs} />
               </div>
             ),
           )}
@@ -298,7 +350,7 @@ export function ChatPanel({
           ) : null}
           {error ? (
             <p className="rounded-xl bg-signal-red/10 px-4 py-2.5 text-[0.8125rem] text-signal-red">
-              Message failed: {error}
+              {error}
             </p>
           ) : null}
           <div ref={endRef} />

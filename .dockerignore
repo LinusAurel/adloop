@@ -2,7 +2,8 @@ node_modules
 .next
 .git
 .worktrees
-data
+data/*
+!data/fixtures
 _local
 .env
 .env.*

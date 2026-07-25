@@ -151,11 +151,22 @@ function AssetPairCard({
   return (
     <Card className="bg-zinc-900 border-zinc-800">
       <CardHeader className="pb-2">
-        <CardTitle className="flex items-center justify-between text-sm text-zinc-100">
+        <CardTitle className="flex items-center justify-between gap-2 text-sm text-zinc-100">
           <span>{angle.name}</span>
-          <Badge variant="outline" className="border-zinc-700 text-zinc-400">
-            {status}
-          </Badge>
+          <span className="flex items-center gap-2">
+            {/* LP-Demo (Message-Match): Ad und Landingpage nebeneinander zeigbar. */}
+            <a
+              href={`/lp/${angle.id}`}
+              target="_blank"
+              rel="noreferrer"
+              className="text-xs font-normal text-zinc-400 underline underline-offset-2 hover:text-zinc-200"
+            >
+              LP ansehen
+            </a>
+            <Badge variant="outline" className="border-zinc-700 text-zinc-400">
+              {status}
+            </Badge>
+          </span>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3 text-xs text-zinc-400">

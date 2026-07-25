@@ -38,6 +38,8 @@ export interface Brand {
   slug: string;
   name: string;
   url: string;
+  // Optional wa.me placeholder for the landing page CTA; falls back to url.
+  whatsappUrl?: string;
   product: string;
   conversionGoal: ConversionGoal;
   targetCpa: number;

@@ -12,7 +12,7 @@ import path from "node:path";
 import { getInsights, type MetaInsightRow } from "../connectors/meta.ts";
 import { parseAdName } from "../naming.ts";
 import { ensureBrandSeed, newId, readCollection, upsert } from "../store.ts";
-import type { Learning } from "../types.ts";
+import type { Brand, Learning } from "../types.ts";
 import { endRun, logLine, startRun } from "./run.ts";
 
 const AGENT = "Analyst";
@@ -205,12 +205,28 @@ export interface AnalyzeOptions {
   mode?: "auto" | "live" | "fixture";
 }
 
+// The store row can predate the first publish (no campaign_id yet) while the
+// seed file already carries the persisted IDs — refresh from seed in that case.
+function withMetaIds(brand: Brand): Brand {
+  if (brand.meta.campaignId) return brand;
+  const seedFile = path.join(process.cwd(), "brands", brand.slug, "brand.json");
+  if (!fs.existsSync(seedFile)) return brand;
+  const seed = JSON.parse(fs.readFileSync(seedFile, "utf8")) as Brand;
+  if (seed.meta.campaignId) {
+    brand.meta.campaignId = seed.meta.campaignId;
+    brand.meta.adsetId = seed.meta.adsetId;
+    upsert("brands", brand);
+  }
+  return brand;
+}
+
 export async function analyzeBrand(
   slug: string,
   options: AnalyzeOptions = {},
 ): Promise<AnalysisResult> {
-  const brand = ensureBrandSeed(slug);
-  if (!brand) throw new Error(`brand_not_found: ${slug}`);
+  const seeded = ensureBrandSeed(slug);
+  if (!seeded) throw new Error(`brand_not_found: ${slug}`);
+  const brand = withMetaIds(seeded);
   const mode = options.mode ?? "auto";
   const run = startRun(slug, "optimize");
 
@@ -221,7 +237,8 @@ export async function analyzeBrand(
 
     if (mode !== "fixture") {
       if (!brand.meta.campaignId) {
-        logLine(run.id, AGENT, "keine campaign_id in der Brand — Live-Read übersprungen", "warn");
+        note = "keine campaign_id in der Brand — erst publishen, dann liefert der Live-Read Daten";
+        logLine(run.id, AGENT, note, "warn");
       } else {
         logLine(run.id, AGENT, `liest echte Insights (campaign_id ${brand.meta.campaignId}) …`);
         raw = await getInsights(brand.meta.campaignId);

@@ -3,7 +3,9 @@
     "slug": "creators-demo",
     "name": "CREATORS",
     "url": "https://creators-ecosystem.de",
-    "product": "KI-Ökosystem in Stuttgart: Community-Membership mit wöchentlichen Builder-Sessions, Hands-on-Workshops und Events, die KI-Professionals, Gründer und Corporate-Innovation-Teams zusammenbringen.",
+    "product": "AI-Ökosystem und Creator-Netzwerk aus Stuttgart: Community, Events und Enablement in einem. Membership mit wöchentlichen Builder-Sessions, Hands-on-Workshops und Abendformaten, die Corporates, Startups und KI-Interessierte in Baden-Württemberg an konkreten Projekten zusammenbringen.",
+    "audience": "Corporates, Startups und KI-Interessierte in Baden-Württemberg: Innovation-Teams etablierter Unternehmen, Gründer und Produktleute junger Firmen sowie Professionals, die KI im Alltag konkret einsetzen wollen statt nur darüber zu lesen.",
+    "tone": "Hands-on statt Hype: konkret, kollegial, auf Augenhöhe. Wir zeigen, was gebaut wurde und was es bringt, nicht was theoretisch möglich wäre. Kurze Sätze, klare Aussagen, kein Buzzword-Bingo.",
     "conversionGoal": "website_lead",
     "targetCpa": 40,
     "cta": {
@@ -15,6 +17,7 @@
       "headline": "Das KI-Ökosystem in Stuttgart"
     },
     "guardrails": [
+      "Kein KI-Hype-Vokabular ohne konkreten Nutzen (kein revolutionär, disruptiv, Game-Changer)",
       "Kein erfundener Social Proof, keine erfundenen Mitglieder-Testimonials",
       "Keine Heilsversprechen zu Karriere oder Umsatz; erlaubt: konkrete Programm-Inhalte",
       "Keine falsche Dringlichkeit oder erfundene Knappheit bei Memberships und Events",
@@ -37,7 +40,7 @@
     },
     "designTokens": {
       "primary": "#0F766E",
-      "accent": "#00FF7F",
+      "accent": "#2DD4BF",
       "background": "#0B1220",
       "font": "Inter, sans-serif",
       "imagery": "Dokumentarisch, echte Arbeitssituationen, warmes Licht, keine Stock-Posen"

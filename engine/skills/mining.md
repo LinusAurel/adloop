@@ -45,6 +45,28 @@ Ein einzelner billiger Lead bei 6 € Spend ist Rauschen, kein Winner.
 
 `targetCpa` kommt aus `brands/<slug>/brand.json` (Beispiel: 100 €).
 
+## Entscheidungsregeln (Interpretation der Klassifikation)
+
+- **Keine Signifikanz unter den Schwellen:** unter 20 € Spend oder unter 3
+  Leads gibt es keine Aussage — auch keine „Tendenz“. `insufficient_data`
+  heißt: weiterlaufen lassen und Daten sammeln, nicht anfassen, nicht
+  interpretieren.
+- **CPL gegen das Kampagnen-Ziel, nicht gegen Gefühl:** bewertet wird
+  ausschließlich CPL vs. `targetCpa` der Brand. Ein hoher CTR oder billige
+  Klicks retten keinen Loser — Klicks sind kein Ziel, Leads sind es.
+- **Winner skalieren = neue Varianten desselben Angles:** die Empfehlung ist
+  immer, 2 neue Hook-/Copy-Varianten des Winner-Angles zu testen — der Angle
+  ist validiert, variiert wird die Ausführung. Nie Budget-Empfehlungen
+  aussprechen oder umsetzen (Hard Stop 4).
+- **Loser killen = Learning mit Ursachen-Hypothese:** jeder Loser wird als
+  Learning festgehalten (Klassifikationsgrund in der Row); die
+  Ursachen-Hypothese benennt, WAS vermutlich versagt hat: Hook stoppt nicht
+  (viel Spend, wenig Klicks), Angle trifft kein reales Bedürfnis (Klicks ohne
+  Leads → auch LP prüfen) oder CPL strukturell über Ziel. „Hat nicht
+  funktioniert“ ohne Ursache ist kein Learning.
+- **Kill und Aktivierung entscheidet der Mensch:** der Analyst legt Empfehlung
+  und Learning vor, die Entscheidung fällt im Board (Hard Stop 3).
+
 ## Output
 
 - Pro Winner/Loser eine Learning-Row (`source: meta_insights`, `evidenceRefs`

@@ -31,11 +31,14 @@ async function graphRequest<T>(
     body = new URLSearchParams({ ...params, access_token: token });
   }
   const res = await fetch(url, { method, body });
-  const json = (await res.json()) as T & { error?: { message?: string; type?: string; code?: number } };
+  const json = (await res.json()) as T & {
+    error?: { message?: string; type?: string; code?: number; error_user_msg?: string };
+  };
   if (!res.ok || json.error) {
     // Only the Graph error message — never the token or full request.
+    const detail = json.error?.error_user_msg ? ` — ${json.error.error_user_msg}` : "";
     throw new Error(
-      `Meta Graph ${method} /${path} fehlgeschlagen: ${json.error?.message ?? res.status} (code ${json.error?.code ?? res.status})`,
+      `Meta Graph ${method} /${path} fehlgeschlagen: ${json.error?.message ?? res.status} (code ${json.error?.code ?? res.status})${detail}`,
     );
   }
   return json;
@@ -75,6 +78,10 @@ export async function createAdSet(args: {
   geoCountries: string[];
   optimizationGoal: string;
   billingEvent: string;
+  // EU DSA (verified against the live account): without dsa_beneficiary the
+  // create fails with subcode 3858081 for EU-targeted ad sets.
+  dsaBeneficiary: string;
+  dsaPayor?: string;
   // Without a pixel the caller falls back to LINK_CLICKS and omits this.
   promotedObject?: { pixelId: string; leadEventName: string };
 }): Promise<{ id: string }> {
@@ -85,6 +92,8 @@ export async function createAdSet(args: {
     optimization_goal: args.optimizationGoal,
     billing_event: args.billingEvent,
     targeting: JSON.stringify({ geo_locations: { countries: args.geoCountries } }),
+    dsa_beneficiary: args.dsaBeneficiary,
+    dsa_payor: args.dsaPayor ?? args.dsaBeneficiary,
   };
   if (args.promotedObject) {
     const event = args.promotedObject.leadEventName.toUpperCase();

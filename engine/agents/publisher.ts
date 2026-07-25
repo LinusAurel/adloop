@@ -110,14 +110,13 @@ export async function publishBrand(slug: string): Promise<PublishResult> {
 
   try {
     logLine(run.id, AGENT, "prüft Kampagnen-Struktur (Playbook single-cbo-broad) …");
-    const structure = await ensureSingleCboBroad(brand);
+    // Persist runs directly after EVERY create inside the playbook — a later
+    // failure must never orphan an already-created campaign.
+    const structure = await ensureSingleCboBroad(brand, (b) => persistBrand(b, raw));
     for (const note of structure.notes) {
       logLine(run.id, AGENT, note, note.startsWith("TODO") ? "warn" : "info");
     }
     if (structure.createdCampaign || structure.createdAdSet) {
-      brand.meta.campaignId = structure.campaignId;
-      brand.meta.adsetId = structure.adsetId;
-      persistBrand(brand, raw);
       logLine(run.id, AGENT, "IDs persistiert (Store + brand.json)");
     }
 

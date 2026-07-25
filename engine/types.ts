@@ -24,6 +24,10 @@ export interface BrandMeta {
   optimizationGoal: string;
   billingEvent: string;
   specialAdCategories: string[];
+  // EU DSA: who is promoted / who pays (required for EU-targeted ad sets).
+  // Falls back to the brand name when unset.
+  dsaBeneficiary?: string;
+  dsaPayor?: string;
   // Set by a human upfront; code treats this as immutable (Hard Stop 4).
   fixedDailyBudgetCents: number | null;
   campaignId?: string;

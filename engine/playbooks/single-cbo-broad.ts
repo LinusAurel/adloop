@@ -16,7 +16,12 @@ export interface StructureResult {
   notes: string[];
 }
 
-export async function ensureSingleCboBroad(brand: Brand): Promise<StructureResult> {
+// persist is called IMMEDIATELY after every successful create — a failure
+// later in the chain must never orphan an already-created Meta object.
+export async function ensureSingleCboBroad(
+  brand: Brand,
+  persist?: (brand: Brand) => void,
+): Promise<StructureResult> {
   const notes: string[] = [];
   const budget = brand.meta.fixedDailyBudgetCents;
   if (typeof budget !== "number" || budget <= 0) {
@@ -37,6 +42,8 @@ export async function ensureSingleCboBroad(brand: Brand): Promise<StructureResul
     });
     campaignId = res.id;
     createdCampaign = true;
+    brand.meta.campaignId = campaignId;
+    persist?.(brand);
     notes.push(`Kampagne „${name}“ angelegt (PAUSED, CBO ${budget / 100} €/Tag)`);
   } else {
     notes.push(`Kampagne existiert bereits (${campaignId}) — kein Duplikat`);
@@ -55,12 +62,16 @@ export async function ensureSingleCboBroad(brand: Brand): Promise<StructureResul
       // Without a pixel, OFFSITE_CONVERSIONS is not creatable -> fallback.
       optimizationGoal: hasPixel ? brand.meta.optimizationGoal : "LINK_CLICKS",
       billingEvent: brand.meta.billingEvent,
+      dsaBeneficiary: brand.meta.dsaBeneficiary ?? brand.name,
+      dsaPayor: brand.meta.dsaPayor,
       promotedObject: hasPixel
         ? { pixelId: brand.meta.pixelId, leadEventName: brand.meta.leadEventName }
         : undefined,
     });
     adsetId = res.id;
     createdAdSet = true;
+    brand.meta.adsetId = adsetId;
+    persist?.(brand);
     notes.push(`AdSet „${name}“ angelegt (PAUSED, geo ${brand.meta.geoCountries.join(",")})`);
     if (!hasPixel) {
       notes.push(

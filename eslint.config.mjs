@@ -18,6 +18,8 @@ const eslintConfig = [
       "out/**",
       "build/**",
       "next-env.d.ts",
+      // Worktrees are separate checkouts with their own build artifacts.
+      ".worktrees/**",
     ],
   },
 ];

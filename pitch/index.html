@@ -77,23 +77,23 @@
     .closing { font-size: clamp(32px, 3.8vw, 56px); }
   }
 
-  /* Slide 2: text + loop diagram side by side */
+  /* Slides 2 + 3: text + visual side by side */
   .split { display: grid; grid-template-columns: 1.05fr 1fr; gap: 4vw; align-items: center; }
   .split svg { width: 100%; height: auto; max-height: 78vh; }
   @media (max-width: 1000px) { .split { grid-template-columns: 1fr; } }
 
-  /* Slide 3: screenshot slots */
-  .shots { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin: 8px 0 28px; }
-  .shots figure {
+  /* Slide 3: proof screenshot slot */
+  .shot {
     background: var(--ink-800);
     border: 1px dashed var(--rule-2);
     border-radius: 14px;
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    min-height: 30vh;
+    min-height: 42vh;
+    margin: 0;
   }
-  .shots img {
+  .shot img {
     width: 100%;
     flex: 1;
     object-fit: cover;
@@ -103,26 +103,24 @@
     font-size: 18px;
     padding: 16px;
   }
-  .shots figcaption {
+  .shot figcaption {
     font-family: var(--mono);
     font-size: 18px;
     color: var(--text-soft);
     padding: 12px 16px;
     border-top: 1px solid var(--rule);
   }
-  .caption { font-family: var(--mono); font-size: 22px; color: var(--text-faint); }
+  .caption { font-family: var(--mono); font-size: 22px; color: var(--text-faint); margin-top: 36px; }
   .caption b { color: var(--mint); font-weight: 500; }
 
-  /* Slide 5 team */
-  .team { display: grid; gap: 10px; margin-bottom: 36px; max-width: 62ch; }
-  .team p { color: var(--text-soft); }
-  .team p strong { color: var(--text); }
+  /* Slide 4 closing */
   .closing {
     font-size: clamp(40px, 4.6vw, 72px);
     line-height: 1.15;
     letter-spacing: -0.015em;
     font-weight: 700;
     max-width: 24ch;
+    margin-top: 12px;
   }
 
   /* Loop diagram */
@@ -160,25 +158,25 @@
 <!-- 1 · The Problem -->
 <section class="slide" id="s1">
   <div class="kicker">01 · The Problem</div>
-  <h1>Everyone lives off paid ads.<br /><span class="dim">Nobody closes the loop.</span></h1>
+  <h1>Paid ads are a <span class="dim">blind flight</span> for small teams.</h1>
   <div class="lines">
-    <p><strong>Creators, brands, startups</strong> — testing creatives is manual or agency-priced.</p>
-    <p>AI tools generate endless assets, but none feed <strong>performance data</strong> back into the next ad.</p>
-    <p><strong>Creative fatigue</strong> eats every campaign within weeks.</p>
-    <p class="punch">We know firsthand — we're rebuilding our own company's customer acquisition from scratch.</p>
+    <p><strong>Agencies</strong> close the loop — at prices small teams can't pay.</p>
+    <p><strong>AI tools</strong> generate assets by the thousand — nobody tests them systematically.</p>
+    <p class="punch"><strong>adloop</strong> — the ad engine that runs your paid ads as experiments.</p>
   </div>
 </section>
 
-<!-- 2 · Your Solution -->
+<!-- 2 · The Loop -->
 <section class="slide" id="s2">
-  <div class="kicker">02 · Your Solution</div>
+  <div class="kicker">02 · The Loop</div>
   <div class="split">
     <div>
-      <h1>adloop</h1>
+      <h1>The machine tests.<br /><span class="mint">The human decides.</span></h1>
       <div class="lines">
-        <p><strong>The open-source agentic ads engine.</strong></p>
-        <p>Plug in any company by URL. It researches, hypothesizes, creates, publishes <strong>real Meta ads — paused</strong> — and mines the results.</p>
-        <p class="punch">Every euro of ad spend makes the next one cheaper.</p>
+        <p>Drop in a <strong>URL</strong>. Agents research the brand — website plus the outside view.</p>
+        <p><strong>Angle hypotheses</strong> &#8594; copy + critic &#8594; visuals. Testable, not random.</p>
+        <p>Real <strong>Meta campaigns, published paused</strong> — a human flips every switch.</p>
+        <p class="punch">Insights feed the next batch — <strong>cost per result falls</strong> loop by loop.</p>
       </div>
     </div>
     <svg viewBox="0 0 800 660" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="adloop pipeline: Scout, Strategist, Copywriter, Critic, Designer, Publisher, Analyst — a closed loop with three human gates">
@@ -228,58 +226,39 @@
   </div>
 </section>
 
-<!-- 3 · Sample Outputs -->
+<!-- 3 · Real, Today -->
 <section class="slide" id="s3">
-  <div class="kicker">03 · Sample Outputs</div>
-  <div class="shots">
-    <!-- data-src: drop screenshot at pitch/screenshots/board.png (mission control board with angle pipeline) -->
-    <figure>
-      <img src="screenshots/board.png" alt="[ screenshots/board.png ]" />
-      <figcaption>Mission Control — angle board</figcaption>
-    </figure>
-    <!-- data-src: drop screenshot at pitch/screenshots/studio.png (studio view: static creative + critic score) -->
-    <figure>
-      <img src="screenshots/studio.png" alt="[ screenshots/studio.png ]" />
-      <figcaption>Studio — static + critic score</figcaption>
-    </figure>
-    <!-- data-src: drop screenshot at pitch/screenshots/economics.png (economics view: CAC / spend curve) -->
-    <figure>
-      <img src="screenshots/economics.png" alt="[ screenshots/economics.png ]" />
-      <figcaption>Economics — what the loop learned</figcaption>
-    </figure>
+  <div class="kicker">03 · Real, Today</div>
+  <div class="split">
+    <div>
+      <h1>Not a mockup.<br /><span class="mint">Built today. Live now.</span></h1>
+      <div class="lines">
+        <p>A <strong>real paused campaign</strong> in a real Meta ad account — published by the engine today.</p>
+        <p><strong>Live app</strong> on Render &middot; <strong>open source</strong> (MIT) on GitHub &middot; <strong>78 tests</strong> passing.</p>
+        <p><strong>Chat-first Mission Control</strong> — every gate is one human click.</p>
+      </div>
+      <p class="caption"><b>Built with</b> Cursor &middot; fal.ai &middot; Firecrawl &middot; Render &middot; n8n &middot; ElevenLabs (roadmap)</p>
+    </div>
     <!-- data-src: drop screenshot at pitch/screenshots/ads-manager.png (Meta Ads Manager: published campaign, PAUSED) -->
-    <figure>
+    <figure class="shot">
       <img src="screenshots/ads-manager.png" alt="[ screenshots/ads-manager.png ]" />
-      <figcaption>Meta Ads Manager — published, paused</figcaption>
+      <figcaption>Meta Ads Manager — published by adloop, paused</figcaption>
     </figure>
   </div>
-  <p class="caption"><b>Real engine runs. Human approved.</b> Demo data labeled as such.</p>
 </section>
 
-<!-- 4 · Go-to-Market -->
+<!-- 4 · Why Us -->
 <section class="slide" id="s4">
-  <div class="kicker">04 · Go-to-Market</div>
-  <h1>We <span class="mint">are</span> the customer.</h1>
+  <div class="kicker">04 · Why Us</div>
+  <h1>Tools are commoditized.<br /><span class="dim">Judgment isn't.</span></h1>
   <div class="lines">
-    <p><strong>loyft GmbH goes live with adloop on Monday</strong> — our own acquisition runs on it.</p>
-    <p><strong>Open source as distribution</strong> — the engine is public, the learnings compound.</p>
-    <p><strong>Hosted version</strong> for creators and D2C brands next.</p>
-    <p class="punch">The tool layer is commoditized — Meta ships it themselves. We build the judgment layer on top.</p>
+    <p>Everyone builds <strong>generators</strong>. We build the <strong>decision layer</strong> on top.</p>
+    <p class="punch">Every small company gets a <strong>performance marketer</strong> — as an agent.</p>
   </div>
+  <p class="closing">The machine tests. The human decides. <span class="mint mono">adloop-app.onrender.com</span></p>
 </section>
 
-<!-- 5 · Why You / Why Now -->
-<section class="slide" id="s5">
-  <div class="kicker">05 · Why You / Why Now</div>
-  <div class="team">
-    <p><strong>Linus</strong> — founder, loyft GmbH. Builds agentic systems.</p>
-    <p><strong>Lenn</strong> — concept &amp; design.</p>
-    <p><strong>Why now:</strong> Meta's algorithm shift made creative diversity the only lever left — exactly what a machine produces better than manual workflows.</p>
-  </div>
-  <p class="closing">The machine tests. The human decides. <span class="mint">CAC goes down every week.</span></p>
-</section>
-
-<div id="counter"><b>1</b> / 5</div>
+<div id="counter"><b>1</b> / 4</div>
 <div id="hint">&#8593;&#8595; / &#8592;&#8594; navigate</div>
 
 <script>

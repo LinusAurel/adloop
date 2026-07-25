@@ -32,6 +32,50 @@ function Tile({ label, value, sub }: { label: string; value: string; sub?: strin
   );
 }
 
+// Audio briefing (Should scope): one button, fires POST /briefing and plays
+// the returned mp3 via a hidden HTML5 audio element. Kept minimal on purpose —
+// visual polish happens in the design stream.
+function BriefingButton() {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const play = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/brands/loyft/briefing`, { method: "POST" });
+      const json = (await res.json()) as
+        | { ok: true; url: string }
+        | { ok: false; error: string };
+      if (!json.ok) throw new Error(json.error);
+      if (audioRef.current) {
+        audioRef.current.src = json.url;
+        await audioRef.current.play();
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "unbekannter Fehler");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <span className="inline-flex items-center gap-2">
+      <Button
+        size="sm"
+        disabled={busy}
+        style={{ backgroundColor: MINT, color: "#002429" }}
+        onClick={play}
+      >
+        {busy ? "Briefing wird erstellt …" : "Audio-Briefing abspielen"}
+      </Button>
+      <audio ref={audioRef} className="hidden" />
+      {error ? <span className="text-xs text-red-400">Briefing-Fehler: {error}</span> : null}
+    </span>
+  );
+}
+
 function RowLine({ row }: { row: ClassifiedAdRow }) {
   const tone =
     row.classification === "winner"
@@ -112,10 +156,12 @@ export function EconomicsTab({ state }: { state: BrandState | null }) {
           </Badge>
         ) : null}
         {analysis?.note ? <span className="text-xs text-zinc-500">{analysis.note}</span> : null}
+        <span className="ml-auto" />
+        <BriefingButton />
         <Button
           size="sm"
           variant="outline"
-          className="ml-auto border-zinc-700 text-zinc-300"
+          className="border-zinc-700 text-zinc-300"
           disabled={loading}
           onClick={() => run("auto")}
         >

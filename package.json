@@ -9,6 +9,8 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "node --test \"tests/**/*.test.ts\"",
+    "demo:load": "node scripts/demo.mjs load",
+    "demo:clear": "node scripts/demo.mjs clear",
     "prepare": "lefthook install"
   },
   "dependencies": {

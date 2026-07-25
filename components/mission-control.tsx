@@ -20,7 +20,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EconomicsTab } from "@/components/economics-tab";
 
 const MINT = "#00FF7F";
-const BRAND_SLUG = "loyft";
+const DEFAULT_BRAND_SLUG = "loyft";
 const POLL_MS = 5000;
 
 const BOARD_COLUMNS: { status: AngleStatus; label: string }[] = [
@@ -264,20 +264,36 @@ function EmptyState({ text }: { text: string }) {
 }
 
 export function MissionControl() {
+  // Brand switcher: every brand in the store is selectable, loyft is default.
+  const [brandSlug, setBrandSlug] = useState(DEFAULT_BRAND_SLUG);
+  const [brands, setBrands] = useState<{ slug: string; name: string }[]>([]);
   const [state, setState] = useState<BrandState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
+  // Onboarding: URL in, Scout runs async (202 + runId, #7), the UI switches
+  // to the new brand and follows progress via /state polling.
+  const [onboardUrl, setOnboardUrl] = useState("");
+  const [onboarding, setOnboarding] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch(`/api/brands/${BRAND_SLUG}/state`, { cache: "no-store" });
-      if (!res.ok) throw new Error(`state ${res.status}`);
-      setState((await res.json()) as BrandState);
+      const [stateRes, brandsRes] = await Promise.all([
+        fetch(`/api/brands/${brandSlug}/state`, { cache: "no-store" }),
+        fetch(`/api/brands`, { cache: "no-store" }),
+      ]);
+      if (brandsRes.ok) {
+        const data = (await brandsRes.json()) as {
+          brands?: { slug: string; name: string }[];
+        };
+        setBrands(data.brands ?? []);
+      }
+      if (!stateRes.ok) throw new Error(`state ${stateRes.status}`);
+      setState((await stateRes.json()) as BrandState);
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "unbekannter Fehler");
     }
-  }, []);
+  }, [brandSlug]);
 
   useEffect(() => {
     load();
@@ -285,12 +301,43 @@ export function MissionControl() {
     return () => clearInterval(timer);
   }, [load]);
 
+  const switchBrand = (slug: string) => {
+    if (slug === brandSlug) return;
+    setState(null);
+    setBrandSlug(slug);
+  };
+
+  const onboard = async () => {
+    const url = onboardUrl.trim();
+    if (!url) return;
+    setOnboarding(true);
+    try {
+      const res = await fetch("/api/onboard", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
+      const data = (await res.json()) as { slug?: string; error?: string };
+      // 202 (neu) und 409 brand_exists liefern beide den Slug — hinschalten.
+      if (data.slug) {
+        setOnboardUrl("");
+        switchBrand(data.slug);
+      } else {
+        setError(data.error ?? `onboard ${res.status}`);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "unbekannter Fehler");
+    } finally {
+      setOnboarding(false);
+    }
+  };
+
   const generateAngles = async () => {
     setGenerating(true);
     try {
       // Route answers 202 immediately (#7); load() picks up the running run,
       // the 5s polling shows progress until it finishes.
-      await fetch(`/api/brands/${BRAND_SLUG}/angles/generate`, { method: "POST" });
+      await fetch(`/api/brands/${brandSlug}/angles/generate`, { method: "POST" });
       await load();
     } finally {
       setGenerating(false);
@@ -298,6 +345,7 @@ export function MissionControl() {
   };
 
   const runs = state?.runs ?? [];
+  const scoutRunning = runs.some((r) => r.stage === "scout" && isRunActive(r));
   const strategistRunning = runs.some(
     (r) => r.stage === "strategist" && isRunActive(r),
   );
@@ -341,6 +389,7 @@ export function MissionControl() {
           </h1>
           <p className="text-sm text-zinc-500">
             {state ? `Brand: ${state.brand.name}` : "lädt …"}
+            {scoutRunning ? " · Scout recherchiert …" : ""}
             {error ? ` · Fehler: ${error}` : ""}
           </p>
           {failedRun ? (
@@ -350,9 +399,56 @@ export function MissionControl() {
             </p>
           ) : null}
         </div>
-        <Badge variant="outline" className="border-zinc-700 text-zinc-400">
-          Ziel-CPA ≤ {state?.brand.targetCpa ?? "—"} €
-        </Badge>
+        <div className="flex items-center gap-3">
+          {/* Onboarding: jede Firma per URL anschließen (Scout, Stufe 1). */}
+          <form
+            className="flex items-center gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              onboard();
+            }}
+          >
+            <input
+              type="text"
+              value={onboardUrl}
+              onChange={(e) => setOnboardUrl(e.target.value)}
+              placeholder="https://neue-brand.de"
+              disabled={onboarding}
+              className="h-8 w-48 rounded-md border border-zinc-800 bg-zinc-900 px-2 text-xs text-zinc-200 placeholder:text-zinc-600"
+            />
+            <Button
+              size="sm"
+              type="submit"
+              variant="outline"
+              className="border-zinc-700 text-zinc-300"
+              disabled={onboarding || onboardUrl.trim() === ""}
+            >
+              {onboarding ? (
+                <span className="animate-pulse">Scout startet …</span>
+              ) : (
+                "Brand hinzufügen"
+              )}
+            </Button>
+          </form>
+          {/* Brand-Switcher: alle Brands im Store, Default loyft. */}
+          <select
+            value={brandSlug}
+            onChange={(e) => switchBrand(e.target.value)}
+            className="h-8 rounded-md border border-zinc-800 bg-zinc-900 px-2 text-xs text-zinc-200"
+          >
+            {(brands.some((b) => b.slug === brandSlug)
+              ? brands
+              : [...brands, { slug: brandSlug, name: brandSlug }]
+            ).map((b) => (
+              <option key={b.slug} value={b.slug}>
+                {b.name}
+              </option>
+            ))}
+          </select>
+          <Badge variant="outline" className="border-zinc-700 text-zinc-400">
+            Ziel-CPA ≤ {state?.brand.targetCpa ?? "—"} €
+          </Badge>
+        </div>
       </header>
 
       <Tabs defaultValue="board">
@@ -408,7 +504,7 @@ export function MissionControl() {
           {(state?.angles ?? []).length === 0 && (
             <p className="mt-6 text-sm text-zinc-500">
               Noch keine Angles. „Angles generieren“ startet den Strategist mit
-              dem loyft-Seed.
+              dem Brand-Kontext (Seed oder Scout-Research).
             </p>
           )}
         </TabsContent>

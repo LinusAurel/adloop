@@ -1,22 +1,26 @@
-# brands/_example — Struktur-Vorlage
+# brands/_example — structural template
 
-Fiktive Beispiel-Brand („Nordwind Kaffee“, ein erfundenes Kaffee-Abo). Sie
-zeigt die Struktur des Brand-Daten-Layers und ist die einzige Brand, die im
-öffentlichen Repo liegt — echte Brand-Daten unter `brands/<slug>/` bleiben
-lokal und werden nie committed (siehe `.gitignore`).
+Fictional example brand ("Northwind Coffee", an invented coffee subscription).
+It documents the structure of the brand data layer and is the only brand that
+lives in the public repo — real brand data under `brands/<slug>/` stays local
+and is never committed (see `.gitignore`).
 
-## Dateien
+## Files
 
-| Datei | Zweck |
+| File | Purpose |
 |---|---|
-| `brand.json` | Maschinenlesbare Brand-Config: Name, URL, Produkt, Ziel (targetCpa als Default, `meta.campaignTarget` pro Kampagne), Guardrails, `copyRules` (deterministische Verbots-Muster), `cta` (Landingpage-CTA), `fallbackCopy`, Design-Tokens, Meta-Publisher-Felder |
-| `brand.md` | Brand-Kontext in Prosa für den Strategist (Positionierung, Zielgruppe, Nutzenversprechen, Tonalität) |
-| `guardrails.md` | Sprach- und Claim-Regeln in Prosa für Copywriter und Critic |
-| `design-tokens.md` | Gestaltungs-Richtung für den Designer (Bildwelt, Farben, Typo) |
-| `zielfunktion.md` | Wirtschaftliche Zielfunktion (was darf ein Lead kosten und warum) |
+| `brand.json` | Machine-readable brand config: name, URL, product, target (targetCpa as default, `meta.campaignTarget` per campaign), guardrails, `copyRules` (deterministic forbidden patterns), `cta` (landing page CTA), `fallbackCopy`, design tokens, Meta publisher fields |
+| `brand.md` | Brand context in prose for the Strategist (positioning, audience, value proposition, tonality) |
+| `guardrails.md` | Language and claim rules in prose for Copywriter and Critic |
+| `design-tokens.md` | Visual direction for the Designer (imagery, colors, typography) |
+| `zielfunktion.md` | Economic target function (what a lead may cost and why) |
 
-## Neue Brand anlegen
+## Creating a new brand
 
-1. Ordner `brands/<slug>/` anlegen (bleibt automatisch untracked).
-2. Dateien aus diesem Ordner kopieren und mit echten Daten füllen.
-3. `meta.*` (Ad-Account, Page, Pixel, Budget) setzt ein Mensch — nie ein Agent.
+1. Create the folder `brands/<slug>/` (it stays untracked automatically).
+2. Copy the files from this folder and fill them with real data.
+3. `meta.*` (ad account, page, pixel, budget) is set by a human — never by an agent.
+
+Note: the file names (`zielfunktion.md` etc.) are part of the engine contract
+(`loadBrandDoc`) — keep them as they are. The content language should match
+the brand's market (the demo fixtures, for example, are German).

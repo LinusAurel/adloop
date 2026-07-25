@@ -27,7 +27,7 @@ export async function POST(
       {
         ok: false,
         error: "invalid_body",
-        hint: "Body muss { status: \"ACTIVE\" | \"PAUSED\" } sein",
+        hint: "body must be { status: \"ACTIVE\" | \"PAUSED\" }",
       },
       { status: 400 },
     );
@@ -43,7 +43,7 @@ export async function POST(
         {
           ok: false,
           error: "unknown_meta_id",
-          hint: "ID gehört zu keiner Kampagne und keinem publishten Ad im Store",
+          hint: "id does not match any campaign or published ad in the store",
         },
         { status: 404 },
       );

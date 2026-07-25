@@ -1,10 +1,10 @@
-# Design-Tokens — Nordwind Kaffee (fiktiv)
+# Design tokens — Northwind Coffee (fictional)
 
-Beispiel-Inhalt für den Designer (Static-Briefs).
+Example content for the Designer (static briefs).
 
-- **Bildwelt:** Warmes Tageslicht, echte Küchen- und Cafészenen, Hände und
-  Alltagsgesten statt Stock-Posen. Keine 3D-Renderings, keine Latte-Art-Klischees.
-- **Farben:** Dunkles Röstbraun `#3E2C1C`, Akzent Bernstein `#E8A13C`,
-  heller Grund `#FAF6F0`.
-- **Typografie:** Inter; Text im Bild maximal 8 Wörter, groß und ruhig gesetzt.
-- **Format:** Statics ausschließlich 4:5.
+- **Imagery:** Warm daylight, real kitchen and café scenes, hands and everyday
+  gestures instead of stock poses. No 3D renders, no latte-art clichés.
+- **Colors:** Dark roast brown `#3E2C1C`, amber accent `#E8A13C`,
+  light background `#FAF6F0`.
+- **Typography:** Inter; text in image maximum 8 words, set large and calm.
+- **Format:** Statics are 4:5 only.

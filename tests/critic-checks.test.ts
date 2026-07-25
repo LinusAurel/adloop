@@ -16,11 +16,11 @@ const brand = JSON.parse(
 const rules = brand.copyRules;
 
 const cleanVariant: CopyVariant = {
-  hook: "Dein Kaffee schmeckt nach Röstdatum, nicht nach Regal.",
+  hook: "Your coffee should taste like its roast date, not its shelf life.",
   primary:
-    "Sag uns, wie Du Deinen Kaffee trinkst. Wir stellen Dir ein Abo zusammen, das zu Dir passt. Pausieren kannst Du jederzeit.",
-  headline: "Frisch geröstet ins Abo",
-  cta: "Probierpaket ansehen",
+    "Tell us how you drink your coffee. We build a subscription that fits your taste, and you can pause it anytime.",
+  headline: "Fresh roasts on subscription",
+  cta: "Browse the sampler pack",
 };
 
 test("Beispiel-brand.json enthält copyRules mit Verbots-Mustern", () => {
@@ -55,9 +55,10 @@ test("leerer CTA wird erkannt", () => {
 
 test("verbotene Begriffe werden per Regex erkannt", () => {
   const cases: Array<[keyof CopyVariant, string, string]> = [
-    ["primary", "Garantiert besser als jeder Kaffee aus dem Regal.", "Garantie"],
-    ["primary", "Billigkaffee war gestern.", "Wettbewerber-Bashing"],
-    ["cta", "Hier klicken", "Hier klicken"],
+    ["primary", "Guaranteed better than supermarket coffee.", "guarantee claim"],
+    ["primary", "Skip the bargain-bin beans.", "competitor bashing"],
+    ["primary", "Our AI picks the beans for you.", "mechanism instead of result"],
+    ["cta", "Click here", "Click here"],
   ];
   for (const [field, text, label] of cases) {
     const violations = deterministicChecks({ ...cleanVariant, [field]: text }, rules);
@@ -67,23 +68,15 @@ test("verbotene Begriffe werden per Regex erkannt", () => {
 
 test("Gedankenstrich in kundengerichteter Copy wird erkannt", () => {
   const violations = deterministicChecks(
-    { ...cleanVariant, primary: "Kein Aufwand — wir übernehmen alles für Dich." },
+    { ...cleanVariant, primary: "No effort — we handle everything for you." },
     rules,
   );
-  assert.ok(violations.some((v) => v.includes("Gedankenstrich")));
-});
-
-test("kleingeschriebenes Du/Dein wird erkannt", () => {
-  const violations = deterministicChecks(
-    { ...cleanVariant, primary: "Wir rösten frisch, und du bestellst nie wieder Regalware." },
-    rules,
-  );
-  assert.ok(violations.some((v) => v.includes("großgeschrieben")));
+  assert.ok(violations.some((v) => v.includes("em dashes")));
 });
 
 test("ohne Regeln laufen nur die generischen Checks", () => {
   const violations = deterministicChecks(
-    { ...cleanVariant, primary: "Unsere KI hilft dir — garantiert! ".repeat(3) },
+    { ...cleanVariant, primary: "Our AI helps you — guaranteed! ".repeat(3) },
     undefined,
   );
   // Forbidden patterns require brand rules; the generic limit checks pass here.

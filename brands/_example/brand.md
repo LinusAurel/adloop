@@ -1,27 +1,27 @@
-# Nordwind Kaffee — Brand-Kontext (fiktiv)
+# Northwind Coffee — brand context (fictional)
 
-Beispiel-Inhalt: So sieht der Prosa-Kontext aus, den der Strategist als
-Brand-Wissen bekommt. Alles hier ist erfunden.
+Example content: this is the prose context the Strategist receives as brand
+knowledge. Everything here is invented.
 
-## Positionierung
+## Positioning
 
-Nordwind Kaffee ist ein Kaffee-Abo für Leute, die guten Kaffee wollen, ohne
-sich mit Röstereien, Sorten und Nachbestellungen zu beschäftigen. Das Abo
-passt sich dem Geschmack an, nicht umgekehrt.
+Northwind Coffee is a coffee subscription for people who want great coffee
+without dealing with roasters, varieties, and reordering. The subscription
+adapts to their taste, not the other way around.
 
-## Zielgruppe
+## Audience
 
-- Berufstätige zwischen 28 und 45, die zu Hause Filterkaffee oder Espresso
-  trinken und Supermarkt-Kaffee satthaben.
-- Kein Barista-Anspruch: Sie wollen Ergebnis, nicht Hobby.
+- Working professionals between 28 and 45 who drink filter coffee or espresso
+  at home and are done with supermarket coffee.
+- No barista ambitions: they want the result, not the hobby.
 
-## Nutzenversprechen
+## Value proposition
 
-- Frisch geröstet statt Regalware: Röstdatum ist Teil des Versprechens.
-- Persönliche Empfehlung statt Sortiment-Überforderung.
-- Volle Kontrolle: pausieren, wechseln, beenden — jederzeit.
+- Freshly roasted instead of shelf stock: the roast date is part of the promise.
+- A personal recommendation instead of assortment overload.
+- Full control: pause, switch, or cancel — anytime.
 
-## Tonalität
+## Tonality
 
-Warm, konkret, unaufgeregt. Keine Superlative, kein Koffein-Humor-Klischee.
-Du-Ansprache, kurze Sätze, sinnliche aber belegbare Details.
+Warm, concrete, calm. No superlatives, no caffeine-humor clichés. Direct
+address, short sentences, sensory but verifiable details.

@@ -1,11 +1,11 @@
-# Zielfunktion — Nordwind Kaffee (fiktiv)
+# Target function — Northwind Coffee (fictional)
 
-Beispiel-Inhalt: die wirtschaftliche Grenze, gegen die der Analyst misst.
+Example content: the economic limit the Analyst measures against.
 
-- Ein Neukunde bringt im Schnitt 75 € Deckungsbeitrag im ersten Jahr
-  (erfundene Zahl für die Vorlage).
-- Daraus abgeleitet: **Ziel-CPL ≤ 25 €** auf der aktuellen Kampagne
-  (`meta.campaignTarget` in `brand.json`); `targetCpa: 25` dient als
-  Brand-Default für neue Kampagnen.
-- Angles mit gemessenem CPL deutlich über der Grenze werden verworfen,
-  Winner-Richtungen mit neuen Hook-Varianten weiter getestet.
+- A new customer brings an average of 75 EUR contribution margin in the first
+  year (invented number for this template).
+- Derived from that: **target CPL ≤ 25 EUR** on the current campaign
+  (`meta.campaignTarget` in `brand.json`); `targetCpa: 25` acts as the
+  brand default for new campaigns.
+- Angles with a measured CPL clearly above the limit are killed; winner
+  directions get new hook variants to test.

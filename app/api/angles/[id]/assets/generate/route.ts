@@ -35,7 +35,7 @@ export async function POST(
         {
           ok: false,
           error: "invalid_model",
-          hint: `model muss eines der kuratierten Fal-Modelle sein: ${FAL_MODELS.map((m) => m.id).join(", ")}`,
+          hint: `model must be one of the curated Fal models: ${FAL_MODELS.map((m) => m.id).join(", ")}`,
         },
         { status: 400 },
       );

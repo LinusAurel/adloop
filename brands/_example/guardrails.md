@@ -1,13 +1,13 @@
-# Guardrails — Nordwind Kaffee (fiktiv)
+# Guardrails — Northwind Coffee (fictional)
 
-Beispiel-Inhalt: Diese Regeln bekommen Copywriter UND Critic in den Kontext.
+Example content: these rules go into the context of BOTH Copywriter and Critic.
 
-1. Keine garantierten Ergebnisse oder Geschmacksversprechen („garantiert der
-   beste Kaffee“) — erlaubt sind belegbare Fakten wie Röstdatum und Herkunft.
-2. Kein erfundener Social Proof, keine erfundenen Testimonials oder Zahlen.
-3. Keine falsche Dringlichkeit, keine erfundene Knappheit („nur noch heute“).
-4. Kein Wettbewerber-Bashing; sachlicher Vergleich ist okay.
-5. Du/Dir/Dich/Dein großgeschrieben, echte Umlaute, keine Gedankenstriche in
-   kundengerichteter Copy.
-6. CTA immer ergebnisorientiert mit Objekt („Probierpaket ansehen“), nie
-   „Hier klicken“.
+1. Never promise guaranteed results or taste ("guaranteed best coffee") —
+   verifiable facts like roast date and origin are fine.
+2. No invented social proof, no invented testimonials or numbers.
+3. No false urgency, no invented scarcity ("today only").
+4. No competitor bashing; factual comparison is fine.
+5. No em dashes in customer-facing copy; real umlauts whenever the market
+   language requires them.
+6. CTAs are always outcome-oriented with an object ("Browse the sampler
+   pack"), never "Click here".

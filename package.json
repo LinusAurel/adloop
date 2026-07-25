@@ -2,6 +2,20 @@
   "name": "adloop",
   "version": "0.1.0",
   "private": true,
+  "description": "Open-source agentic paid-ads engine: research a brand by URL, generate angle hypotheses and creatives, publish paused Meta campaigns, and mine insights so cost per result falls loop by loop.",
+  "keywords": [
+    "ads",
+    "meta-ads",
+    "marketing",
+    "ai-agents",
+    "agentic",
+    "paid-social",
+    "nextjs",
+    "anthropic",
+    "firecrawl",
+    "fal-ai"
+  ],
+  "license": "MIT",
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",

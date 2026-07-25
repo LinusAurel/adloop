@@ -31,8 +31,8 @@ export function isMockMode(): boolean {
 // a worktree without .env — the cwd pinpoints which checkout misses the key.
 export function mockModeHint(): string {
   return (
-    "MOCK-Modus aktiv: ANTHROPIC_API_KEY fehlt im Server-Prozess " +
-    `(cwd: ${process.cwd()}) — Outputs sind Beispieldaten, keine echten Ergebnisse`
+    "Mock mode active: ANTHROPIC_API_KEY missing in the server process " +
+    `(cwd: ${process.cwd()}) — outputs are sample data, not real results`
   );
 }
 
@@ -187,11 +187,11 @@ export async function completeStructured<T>(args: StructuredArgs<T>): Promise<T>
   });
 
   if (response.stop_reason === "refusal") {
-    throw new Error(`LLM-Refusal für Rolle "${args.role}" — Prompt prüfen`);
+    throw new Error(`LLM refusal for role "${args.role}" — check the prompt`);
   }
   if (response.parsed_output == null) {
     throw new Error(
-      `Strukturierter Output für "${args.schemaName}" konnte nicht geparst werden (stop_reason: ${response.stop_reason})`,
+      `Structured output for "${args.schemaName}" could not be parsed (stop_reason: ${response.stop_reason})`,
     );
   }
   return response.parsed_output;

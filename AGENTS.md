@@ -74,7 +74,8 @@ Was hier nicht steht, ist bewusst weggelassen.
 1. **Nie Secrets committen**: keine `.env`-Dateien, API-Keys oder Tokens in
    Code, Fixtures, Logs oder Docs. `.env.example` bleibt wertlos (leere Werte).
 2. **Meta-Publishes immer `status: PAUSED`** — Kampagnen, AdSets, Ads.
-   Aktivierung macht ausschließlich ein Mensch im Ads Manager.
+   Aktivierung macht ausschließlich ein Mensch: per bewusstem Klick über die
+   Status-Route/UI oder direkt im Ads Manager. Kein Agent aktiviert selbst.
 3. **Human-Gates nie automatisieren oder überspringen**: Angle-Approve,
    Asset-Approve und Ad-Aktivierung sind Menschen-Entscheidungen.
 4. **Kein Budget-/Spend-Management durch Agenten** — auch nicht „nur testweise“.

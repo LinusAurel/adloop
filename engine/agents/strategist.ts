@@ -1,0 +1,153 @@
+// Stage 2 — Strategist (SPEC §3): Brand + Evidence -> 5 diverse angles with
+// rationale and expectedCpl. Diversity violations trigger exactly one rewrite;
+// a second violation is logged as a warning but does not block the demo flow.
+
+import { completeStructured } from "../connectors/anthropic.ts";
+import { angleListSchema, checkAngleDiversity, type AngleList } from "../schemas.ts";
+import { loadBrandDoc, loadSkill } from "../skills.ts";
+import {
+  appendRunLog,
+  createRun,
+  ensureBrandSeed,
+  finishRun,
+  newId,
+  readCollection,
+  upsert,
+} from "../store.ts";
+import type { Angle, Brand, Evidence } from "../types.ts";
+
+const ANGLE_COUNT = 5;
+const AGENT = "Strategist";
+
+function buildSystem(brand: Brand): string {
+  const parts = [loadSkill("angles")];
+  parts.push("## Brand-Guardrails (harte Constraints)");
+  parts.push(brand.guardrails.map((g) => `- ${g}`).join("\n"));
+  const guardrailsDoc = loadBrandDoc(brand.slug, "guardrails.md");
+  if (guardrailsDoc) parts.push(guardrailsDoc);
+  return parts.join("\n\n");
+}
+
+function buildPrompt(brand: Brand, evidence: Evidence[], existing: Angle[]): string {
+  const parts: string[] = [];
+  parts.push(`# Brand: ${brand.name} (${brand.url})`);
+  parts.push(`Produkt: ${brand.product}`);
+  parts.push(`Ziel-CPA: ${brand.targetCpa} € (Conversion-Goal: ${brand.conversionGoal})`);
+
+  const brandDoc = loadBrandDoc(brand.slug, "brand.md");
+  if (brandDoc) parts.push("## Brand-Kontext\n" + brandDoc);
+  const zielDoc = loadBrandDoc(brand.slug, "zielfunktion.md");
+  if (zielDoc) parts.push("## Zielfunktion\n" + zielDoc);
+
+  if (evidence.length > 0) {
+    parts.push(
+      "## Evidence aus dem Store\n" +
+        evidence
+          .map((e) => `- [${e.tag}] (${e.source}) ${e.text}`)
+          .join("\n"),
+    );
+  }
+  if (existing.length > 0) {
+    parts.push(
+      "## Bereits vorhandene Angles (KEINE Duplikate dazu erzeugen)\n" +
+        existing
+          .map((a) => `- ${a.name} (${a.status}): ${a.segment} / ${a.hookDirection}`)
+          .join("\n"),
+    );
+  }
+
+  parts.push(
+    `## Auftrag\nErzeuge genau ${ANGLE_COUNT} diverse Angles nach dem Skill-Schema. ` +
+      "Beachte die Diversitäts-Pflicht (segment, pain, hookDirection paarweise unterschiedlich) " +
+      "und die CPL-Ziele der Brand für expectedCpl.",
+  );
+  return parts.join("\n\n");
+}
+
+export async function runStrategist(
+  slug: string,
+): Promise<{ runId: string; angles: Angle[] }> {
+  const brand = ensureBrandSeed(slug);
+  if (!brand) throw new Error("brand_not_found");
+
+  const run = createRun(slug, "strategist");
+  try {
+    const evidence = readCollection("evidence").filter((e) => e.brandSlug === slug);
+    const existing = readCollection("angles").filter((a) => a.brandSlug === slug);
+    appendRunLog(
+      run.id,
+      AGENT,
+      `liest Brand-Kontext (${evidence.length} Evidence-Einträge, ${existing.length} bestehende Angles)`,
+    );
+
+    const system = buildSystem(brand);
+    const prompt = buildPrompt(brand, evidence, existing);
+    appendRunLog(run.id, AGENT, `erzeugt ${ANGLE_COUNT} diverse Angles …`);
+
+    let draft: AngleList = await completeStructured({
+      role: "strategist",
+      system,
+      prompt,
+      schema: angleListSchema,
+      schemaName: "angle_list",
+    });
+
+    let violations = checkAngleDiversity(draft.angles);
+    if (violations.length > 0) {
+      appendRunLog(
+        run.id,
+        AGENT,
+        `Diversitäts-Verstöße erkannt (${violations.length}) — ein Rewrite-Zyklus`,
+        "warn",
+      );
+      draft = await completeStructured({
+        role: "strategist",
+        system,
+        prompt:
+          prompt +
+          "\n\n## Rewrite-Auftrag\nDein letzter Entwurf verletzt die Diversitäts-Pflicht:\n" +
+          violations.map((v) => `- ${v}`).join("\n") +
+          "\nErzeuge den kompletten Satz neu mit klar unterscheidbaren Konzepten.",
+        schema: angleListSchema,
+        schemaName: "angle_list",
+      });
+      violations = checkAngleDiversity(draft.angles);
+      if (violations.length > 0) {
+        appendRunLog(
+          run.id,
+          AGENT,
+          `Diversität weiterhin verletzt (${violations.length}) — Angles werden trotzdem gespeichert`,
+          "warn",
+        );
+      }
+    }
+
+    const angles: Angle[] = draft.angles.map((d) => ({
+      id: newId("ang"),
+      brandSlug: slug,
+      status: "draft" as const,
+      ...d,
+    }));
+    for (const angle of angles) {
+      upsert("angles", angle);
+      appendRunLog(
+        run.id,
+        AGENT,
+        `Angle „${angle.name}“ (${angle.segment}) angelegt — erwarteter CPL ${angle.expectedCpl} €`,
+      );
+    }
+
+    appendRunLog(run.id, AGENT, `fertig: ${angles.length} Angles im Board`);
+    finishRun(run.id);
+    return { runId: run.id, angles };
+  } catch (err) {
+    appendRunLog(
+      run.id,
+      AGENT,
+      `Fehler: ${err instanceof Error ? err.message : String(err)}`,
+      "error",
+    );
+    finishRun(run.id);
+    throw err;
+  }
+}

@@ -64,6 +64,15 @@ const MOCK_OUTPUTS: Record<LlmRole, string> = {
       competitorNotes: ["MOCK: Wettbewerber werben primär über Rabatt-Claims"],
       vocPhrases: ["MOCK: „endlich etwas, das wirklich hält, was es verspricht“"],
       objections: ["MOCK: „zu schön, um wahr zu sein“-Skepsis"],
+      // Außensicht-Sektionen aus der Web-Recherche (#19), im Schema optional:
+      competitorProfiles: [
+        {
+          name: "MOCK-Wettbewerber A",
+          positioning: "MOCK: positioniert sich über Preis und Rabatt-Aktionen",
+        },
+      ],
+      externalObjections: ["MOCK: Reviews bemängeln langsamen Support"],
+      marketContext: "MOCK: Kategorie mit hoher Ad-Blindheit, Claims weitgehend totgespielt",
     },
     null,
     2,

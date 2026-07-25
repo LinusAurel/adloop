@@ -133,8 +133,18 @@ export const awarenessDistributionSchema = z.object({
 });
 export type AwarenessDistribution = z.infer<typeof awarenessDistributionSchema>;
 
+// Außensicht (#19): Wettbewerber-Profil aus der Web-Recherche — Name plus
+// beobachtete Positionierung (Angle/Promise), nüchtern beschrieben.
+export const competitorProfileSchema = z.object({
+  name: z.string().min(2).max(120),
+  positioning: z.string().min(10).max(600),
+});
+export type CompetitorProfile = z.infer<typeof competitorProfileSchema>;
+
 // Upper bounds are deliberately generous (see file header): a verbose but
 // correct research doc must not crash the onboarding stunt.
+// Die Außensicht-Felder (#19) sind optional: bestehende Research-Docs und der
+// Mock-Pfad bleiben gültig, wenn die Web-Recherche kein Material liefert.
 export const scoutResearchSchema = z.object({
   productSummary: z.string().min(20).max(2000),
   valueProposition: z.string().min(10).max(1500),
@@ -146,5 +156,9 @@ export const scoutResearchSchema = z.object({
   competitorNotes: z.array(z.string().min(10).max(800)).max(8),
   vocPhrases: z.array(z.string().min(3).max(500)).max(12),
   objections: z.array(z.string().min(5).max(500)).max(8),
+  // Außensicht aus der Web-Recherche (#19), alle optional:
+  competitorProfiles: z.array(competitorProfileSchema).max(6).optional(),
+  externalObjections: z.array(z.string().min(5).max(500)).max(8).optional(),
+  marketContext: z.string().min(10).max(2000).optional(),
 });
 export type ScoutResearch = z.infer<typeof scoutResearchSchema>;

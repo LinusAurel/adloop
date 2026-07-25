@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { EconomicsTab } from "@/components/economics-tab";
 
 const MINT = "#00FF7F";
 const BRAND_SLUG = "loyft";
@@ -224,19 +225,6 @@ function EmptyState({ text }: { text: string }) {
   );
 }
 
-function StatTile({ label, value }: { label: string; value: string }) {
-  return (
-    <Card className="bg-zinc-900 border-zinc-800">
-      <CardContent className="pt-6">
-        <p className="text-xs uppercase tracking-widest text-zinc-500">{label}</p>
-        <p className="mt-2 text-3xl font-bold tabular-nums" style={{ color: MINT }}>
-          {value}
-        </p>
-      </CardContent>
-    </Card>
-  );
-}
-
 export function MissionControl() {
   const [state, setState] = useState<BrandState | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -386,17 +374,8 @@ export function MissionControl() {
           )}
         </TabsContent>
 
-        <TabsContent value="economics" className="mt-6 space-y-6">
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-            <StatTile label="Spend" value="—" />
-            <StatTile label="Leads" value="—" />
-            <StatTile label="CPL" value="—" />
-            <StatTile
-              label="CPA-Grenze"
-              value={state ? `${state.brand.targetCpa} €` : "—"}
-            />
-          </div>
-          <EmptyState text="Winner/Loser-Liste und Learnings-Feed erscheinen hier, sobald der Analyst Insights liest." />
+        <TabsContent value="economics" className="mt-6">
+          <EconomicsTab state={state} />
         </TabsContent>
       </Tabs>
     </main>

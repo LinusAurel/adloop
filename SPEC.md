@@ -69,6 +69,12 @@ Angle-Diversität ist Schema-Pflicht: Der Strategist muss `hookDirection`/`segme
 
 Guardrails/Sprachregeln aus `brands/<slug>/guardrails.md` werden Critic UND Copywriter in den Kontext gegeben (doppelt hält besser).
 
+## 3b. Playbooks, Naming & Attribution
+
+- **Playbook = konfigurierbarer Media-Buying-Stil.** Die Kampagnen-Struktur ist KEIN festes Engine-Verhalten, sondern ein austauschbares Modul unter `engine/playbooks/`. Heute implementiert: `single-cbo-broad` (1 CBO-Kampagne, 1 AdSet broad, Creatives gestackt — passt für kleine Budgets und maximale Signal-Konsolidierung). Post-Hackathon additiv: `abo-test-plus-cbo-scale` (Testing-ABO je Angle, Winner ab ~10 Conversions per Post-ID in Scaling-CBO), ASC u. a. Ein Playbook definiert: Kampagnen-Rollen (test/scale), Budget-Ebene (CBO/ABO), Bid-Strategie, AdSet-Logik, Kill-/Winner-Regeln, Skalierungs-Schritt. Brand wählt Playbook per Config.
+- **Naming-Konvention** (Utility mit build+parse, Underscore-Delimiter, keine Leerzeichen): Campaign `{BRAND}_{ROLE}_{OBJECTIVE}_{BUDGETLEVEL}_{BIDSTRATEGY}_{YYYYMMDD}` · AdSet `{BRAND}_{AUDIENCE}_{GEO}_{ANGLEID}` · Ad `{BRAND}_{ANGLEID}_{ASSETID}_{FORMAT}_{VERSION}`. Angle-/Asset-IDs im Namen sind Fremdschlüssel in den Store.
+- **Attribution: IDs first, Namen als Redundanz.** Create-Responses liefern campaign_id/adset_id/ad_id → sofort im Store persistieren; Insights-Zuordnung läuft NUR über ad_id → Asset → Angle (Namen kann jeder im Ads Manager umbenennen, IDs nie). Zusätzlich `url_tags` auf Creative-Ebene mit Meta-Makros (`utm_campaign={{campaign.id}}&utm_content={{ad.id}}`) für die Landingpage-/CRM-Schleife. Post-Hackathon: `adlabels` (`engine:v1`, `hyp:<id>`) als umbenennungsfeste Markierung eigener Objekte.
+
 ## 4. Skills (engine/skills/*.md — am Tag schreiben, Quellen liegen bereit)
 
 - `research.md` — die 7 klassischen Direct-Response-Research-Fragen + Awareness-Verteilung + VoC-Extraktion

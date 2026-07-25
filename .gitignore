@@ -18,8 +18,9 @@ _local/
 /out/
 *.tsbuildinfo
 
-# Run-Artefakte und JSON-Store (SPEC §0)
-data/
+# Run-Artefakte und JSON-Store (SPEC §0) — Fixtures sind versioniert
+data/*
+!data/fixtures/
 
 # Worktrees (AGENTS.md Workflow)
 .worktrees/

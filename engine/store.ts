@@ -113,24 +113,40 @@ export function getBrandState(slug: string): BrandState | undefined {
   };
 }
 
-export function createRun(brandSlug: string, stage: string): Run {
+export function createRun(brandSlug: string, stage: string, angleId?: string): Run {
   const run: Run = {
     id: newId("run"),
     brandSlug,
     stage,
+    ...(angleId ? { angleId } : {}),
     log: [],
     startedAt: new Date().toISOString(),
     finishedAt: null,
+    status: "running",
   };
   upsert("runs", run);
   return run;
 }
 
-export function finishRun(runId: string): void {
+// Idempotent: the first finish wins — the route-level backstop may fire after
+// the agent already marked the run (#7).
+export function finishRun(runId: string, error?: string): void {
+  const runs = readCollection("runs");
+  const run = runs.find((r) => r.id === runId);
+  if (!run || run.finishedAt) return;
+  run.finishedAt = new Date().toISOString();
+  run.status = error ? "failed" : "finished";
+  if (error) run.error = error;
+  writeCollection("runs", runs);
+}
+
+// Persists a stage result on the run so async callers can read it from
+// GET /state after the 202 response (used by the Analyst).
+export function setRunResult(runId: string, result: unknown): void {
   const runs = readCollection("runs");
   const run = runs.find((r) => r.id === runId);
   if (!run) return;
-  run.finishedAt = new Date().toISOString();
+  run.result = result;
   writeCollection("runs", runs);
 }
 

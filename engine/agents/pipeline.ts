@@ -16,7 +16,7 @@ import {
   readCollection,
   upsert,
 } from "../store.ts";
-import type { Angle, Asset, Brand } from "../types.ts";
+import type { Angle, Asset, Brand, Run } from "../types.ts";
 
 export const REWRITE_THRESHOLD = 7;
 
@@ -50,15 +50,18 @@ function bestIndex(results: CriticResult[]): number {
   );
 }
 
+// opts.run: pre-created by the route so it can answer 202 + runId before
+// the pipeline work happens (#7); without it the agent creates its own run.
 export async function generateAssetPair(
   angleId: string,
+  opts: { run?: Run } = {},
 ): Promise<{ runId: string; copyAsset: Asset; staticAsset: Asset }> {
   const angle = readCollection("angles").find((a) => a.id === angleId);
   if (!angle) throw new Error("angle_not_found");
   const brand = ensureBrandSeed(angle.brandSlug);
   if (!brand) throw new Error("brand_not_found");
 
-  const run = createRun(brand.slug, "assets");
+  const run = opts.run ?? createRun(brand.slug, "assets", angle.id);
   try {
     appendRunLog(
       run.id,
@@ -119,13 +122,9 @@ export async function generateAssetPair(
     finishRun(run.id);
     return { runId: run.id, copyAsset, staticAsset };
   } catch (err) {
-    appendRunLog(
-      run.id,
-      "Pipeline",
-      `Fehler: ${err instanceof Error ? err.message : String(err)}`,
-      "error",
-    );
-    finishRun(run.id);
+    const message = err instanceof Error ? err.message : String(err);
+    appendRunLog(run.id, "Pipeline", `Fehler: ${message}`, "error");
+    finishRun(run.id, message);
     throw err;
   }
 }

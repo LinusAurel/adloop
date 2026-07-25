@@ -7,9 +7,12 @@ import { after, before, test } from "node:test";
 // Point the store at a temp dir before importing it is not required —
 // the store resolves ADLOOP_DATA_DIR lazily on every call.
 import {
+  createRun,
+  finishRun,
   getBrandState,
   newId,
   readCollection,
+  setRunResult,
   upsert,
   writeCollection,
 } from "../engine/store.ts";
@@ -67,4 +70,37 @@ test("getBrandState returns undefined for unknown brand", () => {
 
 test("newId uses the prefix", () => {
   assert.match(newId("run"), /^run_[0-9a-f-]{12}$/);
+});
+
+test("createRun starts running, finishRun marks finished", () => {
+  const run = createRun("loyft", "strategist");
+  assert.equal(run.status, "running");
+  assert.equal(run.finishedAt, null);
+
+  finishRun(run.id);
+  const stored = readCollection("runs").find((r) => r.id === run.id);
+  assert.ok(stored?.finishedAt);
+  assert.equal(stored?.status, "finished");
+  assert.equal(stored?.error, undefined);
+});
+
+test("finishRun with error marks failed and is idempotent", () => {
+  const run = createRun("loyft", "assets", "ang_test");
+  assert.equal(run.angleId, "ang_test");
+
+  finishRun(run.id, "boom");
+  // Second finish (route backstop after agent) must not overwrite the first.
+  finishRun(run.id);
+
+  const stored = readCollection("runs").find((r) => r.id === run.id);
+  assert.equal(stored?.status, "failed");
+  assert.equal(stored?.error, "boom");
+});
+
+test("setRunResult persists a result readable from the collection", () => {
+  const run = createRun("loyft", "optimize");
+  setRunResult(run.id, { totals: { spend: 1 } });
+  finishRun(run.id);
+  const stored = readCollection("runs").find((r) => r.id === run.id);
+  assert.deepEqual(stored?.result, { totals: { spend: 1 } });
 });

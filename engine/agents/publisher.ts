@@ -11,7 +11,7 @@ import { createAd, createCreative, uploadImage } from "../connectors/meta.ts";
 import { buildAdName } from "../naming.ts";
 import { ensureSingleCboBroad } from "../playbooks/single-cbo-broad.ts";
 import { getBrand, readCollection, upsert } from "../store.ts";
-import type { Asset, Brand } from "../types.ts";
+import type { Asset, Brand, Run } from "../types.ts";
 import { endRun, logLine, startRun } from "./run.ts";
 
 const AGENT = "Publisher";
@@ -104,9 +104,14 @@ async function imageBytes(asset: Asset): Promise<Buffer> {
   return Buffer.from(await res.arrayBuffer());
 }
 
-export async function publishBrand(slug: string): Promise<PublishResult> {
+// opts.run: pre-created by the route so it can answer 202 + runId before
+// the Meta calls happen (#7); without it the agent creates its own run.
+export async function publishBrand(
+  slug: string,
+  opts: { run?: Run } = {},
+): Promise<PublishResult> {
   const { brand, raw } = loadBrandForPublish(slug);
-  const run = startRun(slug, "publish");
+  const run = opts.run ?? startRun(slug, "publish");
 
   try {
     logLine(run.id, AGENT, "prüft Kampagnen-Struktur (Playbook single-cbo-broad) …");
@@ -191,13 +196,9 @@ export async function publishBrand(slug: string): Promise<PublishResult> {
       notes: structure.notes,
     };
   } catch (err) {
-    logLine(
-      run.id,
-      AGENT,
-      `Fehler: ${err instanceof Error ? err.message : String(err)}`,
-      "error",
-    );
-    endRun(run.id);
+    const message = err instanceof Error ? err.message : String(err);
+    logLine(run.id, AGENT, `Fehler: ${message}`, "error");
+    endRun(run.id, message);
     throw err;
   }
 }

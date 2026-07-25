@@ -11,8 +11,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { getInsights, type MetaInsightRow } from "../connectors/meta.ts";
 import { parseAdName } from "../naming.ts";
-import { ensureBrandSeed, newId, readCollection, upsert } from "../store.ts";
-import type { Brand, Learning } from "../types.ts";
+import { ensureBrandSeed, newId, readCollection, setRunResult, upsert } from "../store.ts";
+import type { Brand, Learning, Run } from "../types.ts";
 import { endRun, logLine, startRun } from "./run.ts";
 
 const AGENT = "Analyst";
@@ -203,6 +203,9 @@ function buildRecommendation(rows: ClassifiedAdRow[], targetCpa: number): string
 export interface AnalyzeOptions {
   // auto: live read first, fall back to fixture when the account has no data.
   mode?: "auto" | "live" | "fixture";
+  // Pre-created by the route so it can answer 202 + runId before the
+  // analysis happens (#7); without it the agent creates its own run.
+  run?: Run;
 }
 
 // The store row can predate the first publish (no campaign_id yet) while the
@@ -228,7 +231,7 @@ export async function analyzeBrand(
   if (!seeded) throw new Error(`brand_not_found: ${slug}`);
   const brand = withMetaIds(seeded);
   const mode = options.mode ?? "auto";
-  const run = startRun(slug, "optimize");
+  const run = options.run ?? startRun(slug, "optimize");
 
   try {
     let source: "live" | "fixture" = "live";
@@ -281,9 +284,7 @@ export async function analyzeBrand(
       );
       logLine(run.id, AGENT, recommendation);
     }
-    endRun(run.id);
-
-    return {
+    const result: AnalysisResult = {
       runId: run.id,
       source,
       note,
@@ -293,9 +294,14 @@ export async function analyzeBrand(
       learnings,
       recommendation,
     };
-  } catch (err) {
-    logLine(run.id, AGENT, `Fehler: ${err instanceof Error ? err.message : String(err)}`, "error");
+    // Async callers (202 + runId, #7) read the result from the run via /state.
+    setRunResult(run.id, result);
     endRun(run.id);
+    return result;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    logLine(run.id, AGENT, `Fehler: ${message}`, "error");
+    endRun(run.id, message);
     throw err;
   }
 }

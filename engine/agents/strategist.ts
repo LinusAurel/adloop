@@ -14,7 +14,7 @@ import {
   readCollection,
   upsert,
 } from "../store.ts";
-import type { Angle, Brand, Evidence } from "../types.ts";
+import type { Angle, Brand, Evidence, Run } from "../types.ts";
 
 const ANGLE_COUNT = 5;
 const AGENT = "Strategist";
@@ -64,13 +64,16 @@ function buildPrompt(brand: Brand, evidence: Evidence[], existing: Angle[]): str
   return parts.join("\n\n");
 }
 
+// opts.run: pre-created by the route so it can answer 202 + runId before
+// the LLM work happens (#7); without it the agent creates its own run.
 export async function runStrategist(
   slug: string,
+  opts: { run?: Run } = {},
 ): Promise<{ runId: string; angles: Angle[] }> {
   const brand = ensureBrandSeed(slug);
   if (!brand) throw new Error("brand_not_found");
 
-  const run = createRun(slug, "strategist");
+  const run = opts.run ?? createRun(slug, "strategist");
   try {
     const evidence = readCollection("evidence").filter((e) => e.brandSlug === slug);
     const existing = readCollection("angles").filter((a) => a.brandSlug === slug);
@@ -141,13 +144,9 @@ export async function runStrategist(
     finishRun(run.id);
     return { runId: run.id, angles };
   } catch (err) {
-    appendRunLog(
-      run.id,
-      AGENT,
-      `Fehler: ${err instanceof Error ? err.message : String(err)}`,
-      "error",
-    );
-    finishRun(run.id);
+    const message = err instanceof Error ? err.message : String(err);
+    appendRunLog(run.id, AGENT, `Fehler: ${message}`, "error");
+    finishRun(run.id, message);
     throw err;
   }
 }

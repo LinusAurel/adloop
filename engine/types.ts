@@ -97,13 +97,25 @@ export interface RunLogEntry {
   level?: "info" | "warn" | "error";
 }
 
+// Long mutation routes answer 202 + runId immediately (#7); the UI derives
+// progress from these fields via /state polling.
+export type RunStatus = "running" | "finished" | "failed";
+
 export interface Run {
   id: string;
   brandSlug: string;
   stage: string;
+  // Angle the run works on (assets pipeline) — enables per-angle UI state.
+  angleId?: string;
   log: RunLogEntry[];
   startedAt: string;
   finishedAt: string | null;
+  // Missing on runs written before the async-job pattern; treat as legacy.
+  status?: RunStatus;
+  error?: string;
+  // Stage result for consumers that used to read the HTTP response body
+  // (currently only the Analyst writes one).
+  result?: unknown;
 }
 
 export type LearningSource = "meta_insights" | "human_review";

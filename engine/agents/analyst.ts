@@ -132,12 +132,18 @@ export function classifyRows(rows: MetaInsightRow[], targetCpa: number): Classif
   return rows.map((r) => classifyRow(normalizeRow(r), targetCpa));
 }
 
-function fixturePath(): string {
+// Per-brand fixture first (data/fixtures/insights-<slug>.json, e.g. the
+// creators-demo dataset from #13), shared insights-demo.json as fallback.
+function fixturePath(slug?: string): string {
+  if (slug) {
+    const perBrand = path.join(process.cwd(), "data", "fixtures", `insights-${slug}.json`);
+    if (fs.existsSync(perBrand)) return perBrand;
+  }
   return path.join(process.cwd(), "data", "fixtures", "insights-demo.json");
 }
 
-export function loadFixtureRows(): MetaInsightRow[] {
-  const file = fixturePath();
+export function loadFixtureRows(slug?: string): MetaInsightRow[] {
+  const file = fixturePath(slug);
   if (!fs.existsSync(file)) throw new Error(`Fixture fehlt: ${file}`);
   return JSON.parse(fs.readFileSync(file, "utf8")) as MetaInsightRow[];
 }
@@ -238,7 +244,15 @@ export async function analyzeBrand(
     let note = "";
     let raw: MetaInsightRow[] = [];
 
-    if (mode !== "fixture") {
+    // Demo brands carry simulated Meta IDs (demo-…, #13): never call the
+    // Graph API for them — their insights always come from the fixture.
+    const isDemoBrand = brand.meta.campaignId?.startsWith("demo-") === true;
+    if (isDemoBrand) {
+      raw = loadFixtureRows(slug);
+      source = "fixture";
+      note = `Demo-Brand (simulierte Meta-IDs) — ${raw.length} Ads aus Fixture, kein Live-Read`;
+      logLine(run.id, AGENT, `${note}; klar als Demo gelabelt`);
+    } else if (mode !== "fixture") {
       if (!brand.meta.campaignId) {
         note = "keine campaign_id in der Brand — erst publishen, dann liefert der Live-Read Daten";
         logLine(run.id, AGENT, note, "warn");
@@ -256,8 +270,8 @@ export async function analyzeBrand(
       }
     }
 
-    if (mode === "fixture" || (mode === "auto" && raw.length === 0)) {
-      raw = loadFixtureRows();
+    if (!isDemoBrand && (mode === "fixture" || (mode === "auto" && raw.length === 0))) {
+      raw = loadFixtureRows(slug);
       source = "fixture";
       note = `Demo-Daten (Fixture, ${raw.length} Ads) — kein Live-Ergebnis${
         mode === "auto" ? "; echter Insights-Read lief zuvor erfolgreich gegen das Konto" : ""

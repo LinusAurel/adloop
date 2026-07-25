@@ -18,7 +18,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "adloop — Mission Control",
+  title: "adloop",
   description: "Agentische Paid-Ads-Engine",
 };
 
@@ -30,10 +30,7 @@ export default function RootLayout({
   return (
     // The font variables must sit on <html>: base styles apply font-sans there,
     // and a custom property set lower down would never reach that declaration.
-    <html
-      lang="de"
-      className={`dark ${geistSans.variable} ${geistMono.variable}`}
-    >
+    <html lang="de" className={`${geistSans.variable} ${geistMono.variable}`}>
       <body>{children}</body>
     </html>
   );

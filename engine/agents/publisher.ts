@@ -184,7 +184,7 @@ export async function publishBrand(
     logLine(
       run.id,
       AGENT,
-      `fertig: ${published.length} Ad(s) publisht, ${skipped.length} übersprungen — Aktivierung nur durch Menschen im Ads Manager`,
+      `fertig: ${published.length} Ad(s) publisht (PAUSED), ${skipped.length} übersprungen — Aktivierung nur per bewusstem Klick durch einen Menschen`,
     );
     endRun(run.id);
     return {

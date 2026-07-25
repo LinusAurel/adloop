@@ -1,7 +1,9 @@
 // Meta Graph API connector (SPEC §5): direct fetch against v25.0, no SDK.
 // HARD RULE (AGENTS.md Hard Stop 2): every campaign, ad set, and ad is
-// created with status PAUSED — the functions do not even accept a status
-// parameter. Activation happens exclusively by a human in Ads Manager.
+// created with status PAUSED — the create functions do not even accept a
+// status parameter. Activation is a separate, deliberate human decision:
+// either via the admin-guarded status route (#17) or in Ads Manager — never
+// part of a publish, never triggered by an agent.
 // Secrets come from env and are NEVER logged.
 
 const GRAPH = "https://graph.facebook.com/v25.0";
@@ -164,6 +166,17 @@ export async function createAd(args: {
     creative: JSON.stringify({ creative_id: args.creativeId }),
     status: "PAUSED",
   });
+}
+
+// Delivery-status toggle for an existing object (campaign, ad set, or ad).
+// This is the Human-Gate (#17): publishes always create PAUSED objects, and
+// activation happens only through the admin-guarded status route — one
+// deliberate human click. Called exclusively with IDs our own store knows.
+export async function updateEntityStatus(
+  id: string,
+  status: "ACTIVE" | "PAUSED",
+): Promise<{ success?: boolean }> {
+  return graphRequest("POST", id, { status });
 }
 
 // Raw Graph insights row: numbers arrive as strings, actions as a list of

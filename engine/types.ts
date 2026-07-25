@@ -12,6 +12,10 @@ export interface CampaignTarget {
   value: number;
 }
 
+// Meta delivery status for campaigns and ads (#17). Objects are always
+// created PAUSED; ACTIVE requires a deliberate human click (status route).
+export type DeliveryStatus = "ACTIVE" | "PAUSED";
+
 // Deterministic copy rules per brand (Critic stage). Patterns are plain
 // RegExp sources so they can live in brand.json (data, not code).
 export interface ForbiddenPattern {
@@ -44,6 +48,9 @@ export interface BrandMeta {
   // Campaign-level target (#17); resolveCampaignTarget falls back to
   // brand.targetCpa (metric CPA) when unset.
   campaignTarget?: CampaignTarget;
+  // Last delivery status set via the status route (#17). Publishes always
+  // create PAUSED; activation is a deliberate human click.
+  campaignStatus?: DeliveryStatus;
 }
 
 export interface Brand {
@@ -101,6 +108,8 @@ export interface Asset {
   criticNotes?: string;
   status: AssetStatus;
   metaIds?: { creativeId?: string; adId?: string };
+  // Delivery status of the published ad (#17), set via the status route.
+  deliveryStatus?: DeliveryStatus;
 }
 
 export interface RunLogEntry {

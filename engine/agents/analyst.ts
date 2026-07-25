@@ -199,7 +199,7 @@ function buildRecommendation(rows: ClassifiedAdRow[], targetCpa: number): string
   const winners = rows.filter((r) => r.classification === "winner");
   const losers = rows.filter((r) => r.classification === "loser");
   if (rows.length === 0) {
-    return "Noch keine Daten — pausierte frische Ads liefern physikalisch keine Insights. Nächster Schritt: Aktivierung durch einen Menschen im Ads Manager.";
+    return "Noch keine Daten — pausierte frische Ads liefern physikalisch keine Insights. Nächster Schritt: bewusste Aktivierung durch einen Menschen (Status-Toggle oder Ads Manager).";
   }
   const parts: string[] = [];
   if (winners.length > 0) {

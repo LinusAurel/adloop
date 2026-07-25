@@ -309,7 +309,7 @@ export function Sidebar({
                 <button
                   type="submit"
                   disabled={onboarding || url.trim() === ""}
-                  className="inline-flex h-10 items-center rounded-xl bg-mint px-5 text-[0.875rem] font-semibold text-[#04120a] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-45"
+                  className="inline-flex h-10 items-center rounded-xl bg-emerald-600 px-5 text-[0.875rem] font-semibold text-white transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-45"
                 >
                   {onboarding ? (
                     <span className="animate-pulse">Scout starting…</span>

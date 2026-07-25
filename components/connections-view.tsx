@@ -19,7 +19,7 @@ const SERVICES: ServiceCard[] = [
   { id: "meta", name: "Meta", role: "Publishes campaigns as paused ads" },
   { id: "fal", name: "Fal", role: "Generates the ad visuals" },
   { id: "firecrawl", name: "Firecrawl", role: "Researches brand websites for the Scout" },
-  { id: "elevenlabs", name: "ElevenLabs", role: "Speaks the daily briefing" },
+  { id: "elevenlabs", name: "ElevenLabs", role: "Audio briefings (on the roadmap)" },
   { id: "anthropic", name: "Anthropic", role: "Powers the strategist, copywriter and critic" },
 ];
 

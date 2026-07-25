@@ -160,7 +160,7 @@ function Composer({
         type="submit"
         disabled={busy || value.trim() === ""}
         aria-label="Send"
-        className="grid size-9 shrink-0 place-items-center rounded-full bg-foreground text-background transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-35"
+        className="grid size-9 shrink-0 place-items-center rounded-full bg-emerald-600 text-white transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-35"
       >
         <ArrowUp className="size-4" strokeWidth={2} />
       </button>

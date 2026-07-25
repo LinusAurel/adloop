@@ -1,0 +1,72 @@
+{
+  "slug": "_example",
+  "name": "Nordwind Kaffee",
+  "url": "https://example.com",
+  "whatsappUrl": "https://example.com/kontakt",
+  "product": "Fiktive Beispiel-Brand: frisch geröstete Bohnen im Monatsabo, flexible Pausen, persönliche Röstempfehlungen. Dient ausschließlich als Struktur-Vorlage für echte Brands unter brands/<slug>/.",
+  "conversionGoal": "website_lead",
+  "targetCpa": 25,
+  "guardrails": [
+    "Keine garantierten Ergebnisse versprechen",
+    "Kein erfundener Social Proof, keine erfundenen Testimonials",
+    "Keine falsche Dringlichkeit oder erfundene Knappheit",
+    "Kein Wettbewerber-Bashing; sachlicher Vergleich okay",
+    "Du/Dir/Dich/Dein groß in kundengerichteter Copy; echte Umlaute; keine Gedankenstriche"
+  ],
+  "copyRules": {
+    "forbiddenPatterns": [
+      {
+        "pattern": "\\bgarantiert\\w*",
+        "flags": "i",
+        "reason": "Keine garantierten Ergebnisse versprechen"
+      },
+      {
+        "pattern": "[—–]",
+        "reason": "Keine Gedankenstriche in kundengerichteter Copy (Komma, Doppelpunkt oder neuer Satz)"
+      },
+      {
+        "pattern": "\\b(du|dich|dir|dein|deine|deinem|deinen|deiner|deins)\\b",
+        "reason": "Du, Dir, Dich, Dein werden in kundengerichteter Copy großgeschrieben"
+      },
+      {
+        "pattern": "Hier klicken",
+        "flags": "i",
+        "reason": "CTA immer ergebnisorientiert mit Objekt (z. B. Probierpaket ansehen)"
+      },
+      {
+        "pattern": "Billigkaffee|Kapselmüll",
+        "flags": "i",
+        "reason": "Kein Wettbewerber-Bashing über Kampfbegriffe"
+      }
+    ]
+  },
+  "cta": {
+    "label": "Jetzt Probierpaket sichern",
+    "subline": "Unverbindlich testen. Das Abo pausiert oder endet, wann Du willst."
+  },
+  "fallbackCopy": {
+    "message": "Frisch gerösteter Kaffee im Abo: Nordwind Kaffee liefert Dir monatlich Bohnen nach Deinem Geschmack. Pausieren oder beenden jederzeit möglich.",
+    "headline": "Dein Kaffee-Abo nach Geschmack"
+  },
+  "designTokens": {
+    "primary": "#3E2C1C",
+    "accent": "#E8A13C",
+    "background": "#FAF6F0",
+    "font": "Inter, sans-serif",
+    "imagery": "Warmes Tageslicht, echte Küchen- und Cafészenen, keine Stock-Posen"
+  },
+  "meta": {
+    "adAccountId": "",
+    "pageId": "",
+    "pixelId": "",
+    "leadEventName": "Lead",
+    "geoCountries": ["DE"],
+    "optimizationGoal": "OFFSITE_CONVERSIONS",
+    "billingEvent": "IMPRESSIONS",
+    "specialAdCategories": [],
+    "dsaBeneficiary": "Nordwind Kaffee (Beispiel)",
+    "dsaPayor": "Nordwind Kaffee (Beispiel)",
+    "fixedDailyBudgetCents": null,
+    "campaignTarget": { "metric": "CPL", "value": 25 }
+  }
+}

@@ -22,5 +22,10 @@ _local/
 data/*
 !data/fixtures/
 
+# Brand-Daten bleiben lokal und privat (Repo ist öffentlich) — nur die
+# fiktive Beispiel-Brand ist versioniert
+brands/*
+!brands/_example/
+
 # Worktrees (AGENTS.md Workflow)
 .worktrees/

@@ -1,0 +1,102 @@
+[
+  {
+    "id": "ang_demo01",
+    "brandSlug": "creators-demo",
+    "name": "Community statt Alleingang",
+    "segment": "KI-Professionals in und um Stuttgart, die abends allein an Side-Projects bauen und im Job die einzigen mit KI-Tiefe sind",
+    "pain": "Wissen versandet ohne Sparringspartner: niemand reviewt die Architektur, niemand teilt Fehlschläge, jedes Problem wird zum Alleingang",
+    "mechanism": "Membership mit wöchentlichen Builder-Sessions: feste Kleingruppe, echte Projekte auf dem Tisch, direktes Feedback von Leuten mit gleichem Niveau",
+    "hookDirection": "Zugehörigkeit vor Programm: KI baut man nicht allein",
+    "status": "validated",
+    "expectedCpl": 45,
+    "measuredCpl": 23,
+    "rationale": "Stärkster Schmerz im Scout-Research: Vereinzelung der KI-Leute außerhalb der großen Hubs. Community-Versprechen schlägt Feature-Liste, weil das Problem sozial ist, nicht fachlich."
+  },
+  {
+    "id": "ang_demo02",
+    "brandSlug": "creators-demo",
+    "name": "Hands-on statt Hype",
+    "segment": "Entwicklerinnen und Data Scientists, die von KI-Buzzword-Feeds und Panel-Talks ohne Substanz genervt sind",
+    "pain": "Überall Meinungen zu KI, nirgends Praxis: nach dem dritten Vortrag ohne Code fühlt sich jede Veranstaltung wie verlorene Zeit an",
+    "mechanism": "Workshops mit echten Use-Cases: Laptop auf, Repo geklont, am Ende steht ein lauffähiges Ergebnis statt einer Folien-Sammlung",
+    "hookDirection": "Anti-Hype: Weniger Bühne, mehr Terminal",
+    "status": "testing",
+    "expectedCpl": 40,
+    "measuredCpl": 39,
+    "rationale": "Abgrenzungs-Angle: positioniert CREATORS gegen die Konferenz-Müdigkeit der Zielgruppe. Riskanter als der Community-Angle, weil er ein Negativ-Gefühl als Einstieg nutzt."
+  },
+  {
+    "id": "ang_demo03",
+    "brandSlug": "creators-demo",
+    "name": "Netzwerk für KI-Gründer",
+    "segment": "Gründer in der Pre-Seed- und Seed-Phase mit KI-Produkt, die in Stuttgart Mitgründer, erste Kunden oder Pilotpartner suchen",
+    "pain": "Ohne Netzwerk dauert alles doppelt so lang: kein warmer Intro zu Corporates, kein Feedback von anderen Gründern, keine Sichtbarkeit im Ökosystem",
+    "mechanism": "Kuratierte Gründer-Runden plus Zugang zu Corporate-Innovation-Teams im selben Ökosystem: kurze Wege statt Kaltakquise",
+    "hookDirection": "Beschleunigung: Dein nächster Pilotkunde sitzt schon im Raum",
+    "status": "testing",
+    "expectedCpl": 42,
+    "measuredCpl": 25,
+    "rationale": "Gründer sind die aktivste Teilzielgruppe im Research. Der Angle verkauft Zeitgewinn und Zugang, beides belegbar über das Format, ohne Erfolgsversprechen."
+  },
+  {
+    "id": "ang_demo04",
+    "brandSlug": "creators-demo",
+    "name": "Corporate-KI-Pilot",
+    "segment": "Innovation-Manager im Mittelstand der Region Stuttgart, die intern KI-Projekte rechtfertigen müssen",
+    "pain": "Zwischen Vorstandserwartung und leerem Backlog: es fehlt der Zugang zu Leuten, die so etwas schon gebaut haben",
+    "mechanism": "Corporate-Membership mit direktem Draht zu Buildern und Gründern: Pilotprojekte entstehen aus echten Kontakten statt aus Beratungs-Slides",
+    "hookDirection": "Machbarkeit: Vom Buzzword zum ersten Piloten",
+    "status": "draft",
+    "expectedCpl": 55,
+    "rationale": "Höherer erwarteter CPL, aber strategisch wichtig: Corporate-Mitglieder finanzieren das Ökosystem quer. Erst testen, wenn die Community-Angles stabil laufen."
+  },
+  {
+    "id": "ang_demo05",
+    "brandSlug": "creators-demo",
+    "name": "Vom Prompt zum Produkt",
+    "segment": "Ambitionierte Einsteiger mit erstem eigenen KI-Projekt, die den Sprung von Tutorials zu etwas Echtem suchen",
+    "pain": "Tutorial-Schleife ohne Ausweg: zehn Kurse abgeschlossen, aber noch nie etwas gebaut, das jemand benutzt",
+    "mechanism": "Projektbasierte Formate mit Mentoren aus der Community: ein konkretes Vorhaben, feste Meilensteine, Leute die weiterhelfen wenn es klemmt",
+    "hookDirection": "Fortschritt: Bau das erste Ding, das jemand wirklich nutzt",
+    "status": "draft",
+    "expectedCpl": 38,
+    "rationale": "Breiteste Zielgruppe, aber unklarste Zahlungsbereitschaft. Günstiger erwarteter CPL macht den Test billig, Membership-Conversion bleibt die offene Frage."
+  },
+  {
+    "id": "ang_demo06",
+    "brandSlug": "creators-demo",
+    "name": "KI made in Stuttgart",
+    "segment": "Tech-Talente aus der Region, die für KI-Jobs und -Szene nach München oder Berlin schielen",
+    "pain": "Das Gefühl, am falschen Ort zu sein: die spannenden KI-Leute scheinen immer woanders zu sitzen",
+    "mechanism": "Sichtbarmachen der lokalen Szene: feste Orte, feste Formate, echte Gesichter aus Stuttgarter Teams statt anonymer Meetup-Kalender",
+    "hookDirection": "Standort-Stolz: Die KI-Szene, die du suchst, ist schon hier",
+    "status": "approved",
+    "expectedCpl": 44,
+    "rationale": "Emotionaler Identitäts-Angle mit klarem Stuttgart-Bezug (Guardrail: konkret bleiben). Freigegeben, wartet auf freien Slot in der Asset-Pipeline."
+  },
+  {
+    "id": "ang_demo07",
+    "brandSlug": "creators-demo",
+    "name": "Event-Kalender als Produkt",
+    "segment": "Alle KI-Interessierten in Stuttgart, die Veranstaltungen suchen",
+    "pain": "Unübersichtliche Event-Landschaft: Termine verteilt über zehn Plattformen und Newsletter",
+    "mechanism": "CREATORS als zentrale Anlaufstelle für alle KI-Events der Region",
+    "hookDirection": "Übersicht: Alle KI-Termine an einem Ort",
+    "status": "killed",
+    "expectedCpl": 35,
+    "measuredCpl": 87,
+    "rationale": "Getestet und verworfen: Termin-Übersicht ist kein Schmerz, für den jemand Kontaktdaten hinterlässt. CPL lag mehr als doppelt über Ziel, eine Variante blieb komplett ohne Lead."
+  },
+  {
+    "id": "ang_demo08",
+    "brandSlug": "creators-demo",
+    "name": "Corporate trifft Startup",
+    "segment": "Corporate-Innovation-Teams, die Kontakt zu KI-Startups suchen, ohne Accelerator-Programme aufzusetzen",
+    "pain": "Startup-Kontakt nur über Konferenz-Smalltalk: kein belastbarer Kanal zu Teams, die wirklich bauen",
+    "mechanism": "Gemeinsame Formate von Corporate-Mitgliedern und Gründern im selben Raum: Matching über Arbeit an echten Problemen statt Visitenkarten",
+    "hookDirection": "Zugang: Die Startups, die ihr sucht, arbeiten hier",
+    "status": "approved",
+    "expectedCpl": 48,
+    "rationale": "Spiegel-Angle zu ang_demo03 aus Corporate-Sicht. Freigegeben nach Human-Review, Assets noch nicht generiert."
+  }
+]

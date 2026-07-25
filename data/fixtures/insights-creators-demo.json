@@ -1,0 +1,90 @@
+[
+  {
+    "ad_id": "demo-ad-cd01",
+    "ad_name": "ADLOOP-CREATORS-DEMO_ANG-DEMO01_AST-DEMO01S_4X5_V1",
+    "campaign_id": "demo-camp-creators-001",
+    "spend": "342.20",
+    "impressions": "48210",
+    "clicks": "1103",
+    "actions": [
+      { "action_type": "link_click", "value": "1041" },
+      { "action_type": "landing_page_view", "value": "744" },
+      { "action_type": "lead", "value": "15" },
+      { "action_type": "offsite_conversion.fb_pixel_lead", "value": "15" }
+    ],
+    "cost_per_action_type": [{ "action_type": "lead", "value": "22.813333" }]
+  },
+  {
+    "ad_id": "demo-ad-cd03",
+    "ad_name": "ADLOOP-CREATORS-DEMO_ANG-DEMO03_AST-DEMO03S_4X5_V1",
+    "campaign_id": "demo-camp-creators-001",
+    "spend": "305.00",
+    "impressions": "41577",
+    "clicks": "934",
+    "actions": [
+      { "action_type": "link_click", "value": "881" },
+      { "action_type": "landing_page_view", "value": "617" },
+      { "action_type": "lead", "value": "12" },
+      { "action_type": "offsite_conversion.fb_pixel_lead", "value": "12" }
+    ],
+    "cost_per_action_type": [{ "action_type": "lead", "value": "25.416667" }]
+  },
+  {
+    "ad_id": "demo-ad-cd02",
+    "ad_name": "ADLOOP-CREATORS-DEMO_ANG-DEMO02_AST-DEMO02S_4X5_V1",
+    "campaign_id": "demo-camp-creators-001",
+    "spend": "231.10",
+    "impressions": "35904",
+    "clicks": "671",
+    "actions": [
+      { "action_type": "link_click", "value": "628" },
+      { "action_type": "landing_page_view", "value": "441" },
+      { "action_type": "lead", "value": "6" },
+      { "action_type": "offsite_conversion.fb_pixel_lead", "value": "6" }
+    ],
+    "cost_per_action_type": [{ "action_type": "lead", "value": "38.516667" }]
+  },
+  {
+    "ad_id": "demo-ad-cd07",
+    "ad_name": "ADLOOP-CREATORS-DEMO_ANG-DEMO07_AST-DEMO07S_4X5_V1",
+    "campaign_id": "demo-camp-creators-001",
+    "spend": "219.50",
+    "impressions": "39882",
+    "clicks": "512",
+    "actions": [
+      { "action_type": "link_click", "value": "487" },
+      { "action_type": "landing_page_view", "value": "301" },
+      { "action_type": "lead", "value": "3" },
+      { "action_type": "offsite_conversion.fb_pixel_lead", "value": "3" }
+    ],
+    "cost_per_action_type": [{ "action_type": "lead", "value": "73.166667" }]
+  },
+  {
+    "ad_id": "demo-ad-cd07b",
+    "ad_name": "ADLOOP-CREATORS-DEMO_ANG-DEMO07_AST-DEMO07T_4X5_V2",
+    "campaign_id": "demo-camp-creators-001",
+    "spend": "121.90",
+    "impressions": "24560",
+    "clicks": "238",
+    "actions": [
+      { "action_type": "link_click", "value": "221" },
+      { "action_type": "landing_page_view", "value": "129" }
+    ],
+    "cost_per_action_type": []
+  },
+  {
+    "ad_id": "demo-ad-cd03b",
+    "ad_name": "ADLOOP-CREATORS-DEMO_ANG-DEMO03_AST-DEMO03T_4X5_V2",
+    "campaign_id": "demo-camp-creators-001",
+    "spend": "18.60",
+    "impressions": "3105",
+    "clicks": "88",
+    "actions": [
+      { "action_type": "link_click", "value": "83" },
+      { "action_type": "landing_page_view", "value": "61" },
+      { "action_type": "lead", "value": "2" },
+      { "action_type": "offsite_conversion.fb_pixel_lead", "value": "2" }
+    ],
+    "cost_per_action_type": [{ "action_type": "lead", "value": "9.30" }]
+  }
+]

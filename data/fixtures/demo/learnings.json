@@ -1,0 +1,30 @@
+[
+  {
+    "id": "lrn_demo01",
+    "brandSlug": "creators-demo",
+    "source": "meta_insights",
+    "pattern": "[Demo-Daten] Community-Angles schlagen Event-Angles um 32 % beim CPL: Zugehörigkeit („KI baut man nicht allein“) zieht Leads, reine Termin-Übersicht nicht.",
+    "evidenceRefs": ["demo-ad-cd01", "demo-ad-cd07"]
+  },
+  {
+    "id": "lrn_demo02",
+    "brandSlug": "creators-demo",
+    "source": "meta_insights",
+    "pattern": "[Demo-Daten] Hooks mit konkretem Praxis-Beleg (Code sichtbar, „Hands-on“) liegen nahe am Ziel-CPL; abstrakte Anti-Hype-Aussagen allein reichen nicht.",
+    "evidenceRefs": ["demo-ad-cd02"]
+  },
+  {
+    "id": "lrn_demo03",
+    "brandSlug": "creators-demo",
+    "source": "meta_insights",
+    "pattern": "[Demo-Daten] CPL-Trend über drei Analyse-Läufe sinkend: 45,84 → 35,89 → 32,59 € bei Ziel ≤ 40 € — Budget-Konzentration auf Community- und Gründer-Angles trägt.",
+    "evidenceRefs": ["run_demo07", "run_demo08", "run_demo09"]
+  },
+  {
+    "id": "lrn_demo04",
+    "brandSlug": "creators-demo",
+    "source": "human_review",
+    "pattern": "Corporate-Zielgruppe reagiert im Erstkontakt auf „Pilotprojekt“ statt „Membership“ — Corporate-Angles vor dem Test entsprechend framen.",
+    "evidenceRefs": ["ang_demo04", "ang_demo08"]
+  }
+]

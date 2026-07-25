@@ -1,0 +1,53 @@
+[
+  {
+    "slug": "creators-demo",
+    "name": "CREATORS",
+    "url": "https://creators-ecosystem.de",
+    "product": "KI-Ökosystem in Stuttgart: Community-Membership mit wöchentlichen Builder-Sessions, Hands-on-Workshops und Events, die KI-Professionals, Gründer und Corporate-Innovation-Teams zusammenbringen.",
+    "conversionGoal": "website_lead",
+    "targetCpa": 40,
+    "guardrails": [
+      "Kein erfundener Social Proof, keine erfundenen Mitglieder-Testimonials",
+      "Keine Heilsversprechen zu Karriere oder Umsatz; erlaubt: konkrete Programm-Inhalte",
+      "Keine falsche Dringlichkeit oder erfundene Knappheit bei Memberships und Events",
+      "Kein Wettbewerber-Bashing gegenüber anderen Communities oder Hubs",
+      "Du/Dir/Dich/Dein groß in kundengerichteter Copy; echte Umlaute; keine Gedankenstriche",
+      "Stuttgart-Bezug konkret halten (Orte, Formate), nicht als leere Standort-Floskel"
+    ],
+    "copyRules": {
+      "forbiddenPatterns": [
+        {
+          "pattern": "\\bgarantiert\\w*",
+          "flags": "i",
+          "reason": "Keine garantierten Karriere- oder Lern-Ergebnisse versprechen"
+        },
+        {
+          "pattern": "[—–]",
+          "reason": "Keine Gedankenstriche in kundengerichteter Copy (Komma, Doppelpunkt oder neuer Satz)"
+        }
+      ]
+    },
+    "designTokens": {
+      "primary": "#0F766E",
+      "accent": "#00FF7F",
+      "background": "#0B1220",
+      "font": "Inter, sans-serif",
+      "imagery": "Dokumentarisch, echte Arbeitssituationen, warmes Licht, keine Stock-Posen"
+    },
+    "meta": {
+      "adAccountId": "demo-act-creators-000",
+      "pageId": "demo-page-creators-000",
+      "pixelId": "demo-pixel-creators-000",
+      "leadEventName": "Lead",
+      "geoCountries": ["DE"],
+      "optimizationGoal": "OFFSITE_CONVERSIONS",
+      "billingEvent": "IMPRESSIONS",
+      "specialAdCategories": [],
+      "dsaBeneficiary": "CREATORS (Demo)",
+      "dsaPayor": "CREATORS (Demo)",
+      "fixedDailyBudgetCents": null,
+      "campaignId": "demo-camp-creators-001",
+      "adsetId": "demo-adset-creators-001"
+    }
+  }
+]

@@ -1,5 +1,7 @@
 # adloop
 
+🏆 **Winner — Cursor Social Media Hackathon Stuttgart 2026** (1st place, built in one day)
+
 **Open-source agentic paid-ads engine.** Point it at a brand URL: it researches the brand — including the outside view from the open web — formulates testable angle hypotheses, writes and critiques ad copy, generates static creatives, and publishes real Meta campaigns, always paused. A human reviews, approves, and deliberately flips the switch. The Analyst then mines ad-level insights so the next batch is built "more like the winners" — cost per result falls loop by loop.
 
 > **The machine tests. The human decides.**

@@ -4,13 +4,19 @@
 
 **Open-source agentic paid-ads engine.** Point it at a brand URL: it researches the brand — including the outside view from the open web — formulates testable angle hypotheses, writes and critiques ad copy, generates static creatives, and publishes real Meta campaigns, always paused. A human reviews, approves, and deliberately flips the switch. The Analyst then mines ad-level insights so the next batch is built "more like the winners" — cost per result falls loop by loop.
 
-> **The machine tests. The human decides.**
+> **You build the product. adloop builds the audience.**
 
-Live demo: **[adloop-app.onrender.com](https://adloop-app.onrender.com)**
+Live demo: **[adloop-app.onrender.com](https://adloop-app.onrender.com)** · Pitch deck: **[/pitch](https://adloop-app.onrender.com/pitch)**
 
-Built at **Cursor Hackathon Stuttgart 2026** — in one day.
+## Screenshots
 
-<!-- Screenshots: Mission Control board · Asset Studio · Economics — coming soon -->
+| Chat — mission control | Board — angle hypotheses |
+| --- | --- |
+| ![Chat](public/pitch-screenshots/chat.png) | ![Board](public/pitch-screenshots/board.png) |
+
+| Studio — creative + critic | Economics — the loop closes |
+| --- | --- |
+| ![Studio](public/pitch-screenshots/studio.png) | ![Economics](public/pitch-screenshots/economics.png) |
 
 ## How it works
 

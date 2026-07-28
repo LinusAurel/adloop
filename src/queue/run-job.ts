@@ -1,11 +1,17 @@
 import type { Pool } from "pg";
 import { getFamily } from "./registry";
 import { writeProgress } from "./sql/progress";
-import { heartbeat } from "./sql/heartbeat";
 import { finalizeJob } from "./sql/finalize";
 import { scheduleRetry } from "./sql/retry";
+import { startHeartbeatLoop } from "./heartbeat-loop";
 import { JobCancelledError, normalizeError } from "./errors";
-import { JobProgressSchema, type JobContext, type JobProgress, type JobRow } from "./types";
+import {
+  JobProgressSchema,
+  LEASE_EXPIRED_ERROR,
+  type JobContext,
+  type JobProgress,
+  type JobRow,
+} from "./types";
 
 export interface RunJobDeps {
   pool: Pool;
@@ -62,6 +68,22 @@ export async function runJob(deps: RunJobDeps): Promise<void> {
     return;
   }
 
+  // P1-6 (second review): defense in depth alongside the reaper's own
+  // maxAttempts check (sql/reap.ts) — if a job somehow reaches 'queued' or
+  // 'retry_scheduled' with attempts already at the limit (it shouldn't,
+  // under the current code paths, but claim itself doesn't know about
+  // per-family maxAttempts), refuse to run the handler at all rather than
+  // let a crash-prone job exceed its bound by one more attempt.
+  if (job.attempts > family.maxAttempts) {
+    await finalizeJob(pool, {
+      jobId: job.id,
+      leaseToken,
+      fromStatus: "claimed",
+      outcome: { toStatus: "failed", error: LEASE_EXPIRED_ERROR },
+    });
+    return;
+  }
+
   const parsedInput = family.inputSchema.safeParse(job.input);
   if (!parsedInput.success) {
     await finalizeJob(pool, {
@@ -80,29 +102,39 @@ export async function runJob(deps: RunJobDeps): Promise<void> {
     return;
   }
 
-  const heartbeatTimer: ReturnType<typeof setInterval> = setInterval(() => {
-    void heartbeat(pool, { jobId: job.id, leaseToken, leaseMs }).then((row) => {
-      if (!row || row.status === "cancel_requested") {
-        controller.abort();
-      }
-    });
-  }, heartbeatIntervalMs);
-
   const ctx: JobContext<unknown> = {
     input: parsedInput.data,
     signal: controller.signal,
     isCancelled: () => controller.signal.aborted,
     progress: async (p: JobProgress) => {
+      // P1-7 (second review): check locally before issuing the SQL write.
+      // Without this, a progress call already in flight (or one the
+      // handler makes just after being aborted) could still land and — via
+      // writeProgress's lease_expires_at bump — resurrect a lease that
+      // should be dying right now.
+      if (controller.signal.aborted) return;
       const validated = JobProgressSchema.parse(p);
       const row = await writeProgress(pool, { jobId: job.id, leaseToken, leaseMs, progress: validated });
       if (!row) controller.abort();
     },
   };
 
-  const handlerPromise: Promise<HandlerSettlement> = family.handler(ctx).then(
-    (value): HandlerSettlement => ({ kind: "result", value }),
-    (value): HandlerSettlement => ({ kind: "error", value }),
-  );
+  // P1-2 (second review): timers are created before the handler is ever
+  // invoked, and the handler call itself is wrapped in
+  // `Promise.resolve().then(...)` so a handler that throws SYNCHRONOUSLY
+  // (e.g. a non-async function validating its input before returning a
+  // promise) still produces a rejected promise instead of unwinding this
+  // function and skipping the cleanup below — which used to leave the
+  // heartbeat loop running forever, holding the job on 'claimed' and
+  // blocking the reaper indefinitely.
+  const heartbeatLoop = startHeartbeatLoop({
+    pool,
+    jobId: job.id,
+    leaseToken,
+    leaseMs,
+    intervalMs: heartbeatIntervalMs,
+    controller,
+  });
 
   let timeoutTimer: ReturnType<typeof setTimeout> | undefined;
   const timeoutPromise = new Promise<{ kind: "timeout" }>((resolve) => {
@@ -112,12 +144,20 @@ export async function runJob(deps: RunJobDeps): Promise<void> {
     }, family.timeoutMs);
   });
 
-  const first: HandlerSettlement | { kind: "timeout" } = await Promise.race([
-    handlerPromise,
-    timeoutPromise,
-  ]);
-  clearInterval(heartbeatTimer);
-  if (timeoutTimer) clearTimeout(timeoutTimer);
+  const handlerPromise: Promise<HandlerSettlement> = Promise.resolve()
+    .then(() => family.handler(ctx))
+    .then(
+      (value): HandlerSettlement => ({ kind: "result", value }),
+      (value): HandlerSettlement => ({ kind: "error", value }),
+    );
+
+  let first: HandlerSettlement | { kind: "timeout" };
+  try {
+    first = await Promise.race([handlerPromise, timeoutPromise]);
+  } finally {
+    heartbeatLoop.stop();
+    if (timeoutTimer) clearTimeout(timeoutTimer);
+  }
 
   if (first.kind === "timeout") {
     await finalizeJob(pool, {
@@ -172,17 +212,12 @@ export async function runJob(deps: RunJobDeps): Promise<void> {
     // 'claimed' (raced ahead of the API's cancel_requested write and lost —
     // fine, this call is then fenced out and a no-op) or, the expected
     // case, from 'cancel_requested' after the API already flipped it.
-    const viaCancelRequested = await finalizeJob(pool, {
+    await finalizeJob(pool, {
       jobId: job.id,
       leaseToken,
       fromStatus: "cancel_requested",
       outcome: { toStatus: "cancelled" },
     });
-    if (!viaCancelRequested) {
-      // No cancel_requested row (e.g. a handler that self-aborts without an
-      // API cancel) — nothing to do; this is not a real path today since
-      // only requestCancel triggers abort, but keeps the function honest.
-    }
     return;
   }
 

@@ -109,3 +109,17 @@ export const DEFAULT_CANCEL_ERROR: JobError = {
   message: "run was cancelled",
   retryable: false,
 };
+
+/**
+ * P1-6 (second review): used when a job's `attempts` has reached
+ * `maxAttempts` purely through crashed/orphaned attempts (the reaper
+ * reclaiming it, or a defensive check right after claim) rather than
+ * through a handler actually returning a retryable error. Distinct from a
+ * normal exhausted-retries failure so the dead-letter entry is honest about
+ * why the job stopped: nobody knows whether the external effect happened.
+ */
+export const LEASE_EXPIRED_ERROR: JobError = {
+  code: "LEASE_EXPIRED",
+  message: "attempts exhausted after repeated lease expiry (worker crash or connectivity loss)",
+  retryable: false,
+};

@@ -185,6 +185,7 @@ function normalizedActions(row: MetaInsightRow): NormalizedAction[] {
 
 export type LeaseWriter = <T>(
   write: (client: PoolClient) => Promise<T>,
+  options?: { allowAfterCancellation?: boolean },
 ) => Promise<LeaseWriteResult<T>>;
 
 export interface ExecuteInsightSyncOptions {
@@ -235,6 +236,26 @@ function readyReadiness() {
   return ReadinessSchema.parse(base);
 }
 
+function failedReadiness(messageCode: string) {
+  const base = initialReadiness();
+  base.base_facts = {
+    status: "error",
+    blocks: ["strategist", "insights"],
+    messageCode,
+  };
+  return ReadinessSchema.parse(base);
+}
+
+function cancelledReadiness() {
+  const base = initialReadiness();
+  base.base_facts = {
+    status: "optional_pending",
+    blocks: ["strategist", "insights"],
+    messageCode: "base_facts_sync_cancelled",
+  };
+  return ReadinessSchema.parse(base);
+}
+
 function insightPath(externalAdAccountId: string, window: SyncWindow): string {
   const params = new URLSearchParams({
     fields: INSIGHT_FIELDS.join(","),
@@ -247,24 +268,17 @@ function insightPath(externalAdAccountId: string, window: SyncWindow): string {
   return `/${externalAdAccountId}/insights?${params.toString()}`;
 }
 
-async function writeInsightPage(
+async function writeInsightRow(
   client: PoolClient,
   options: ExecuteInsightSyncOptions,
-  page: {
-    data: MetaInsightRow[];
-    pageNumber: number;
-    requestCursor: string | null;
-    nextCursor: string | null;
-    raw: unknown;
-  },
-): Promise<number> {
+  row: MetaInsightRow,
+): Promise<void> {
   const observed = await client.query<{ observed_at: string }>(
     "SELECT clock_timestamp()::text AS observed_at",
   );
   const observedAt = observed.rows[0]!.observed_at;
 
-  for (const row of page.data) {
-    const actions = normalizedActions(row);
+  const actions = normalizedActions(row);
     await client.query(
       `INSERT INTO insight_daily (
          tenant_id, meta_ad_id, date, spend, impressions, clicks,
@@ -355,7 +369,7 @@ async function writeInsightPage(
       }
     }
 
-    for (const action of current.values()) {
+  for (const action of current.values()) {
       await client.query(
         `INSERT INTO insight_action_daily (
            tenant_id, meta_ad_id, date, action_type, attribution_spec,
@@ -381,9 +395,23 @@ async function writeInsightPage(
           observedAt,
         ],
       );
-    }
   }
+}
 
+async function checkpointInsightPage(
+  client: PoolClient,
+  options: ExecuteInsightSyncOptions,
+  page: {
+    pageNumber: number;
+    requestCursor: string | null;
+    nextCursor: string | null;
+    raw: unknown;
+  },
+): Promise<number> {
+  const observed = await client.query<{ observed_at: string }>(
+    "SELECT clock_timestamp()::text AS observed_at",
+  );
+  const observedAt = observed.rows[0]!.observed_at;
   await client.query(
     `INSERT INTO insight_sync_page (
        sync_run_id, page_number, request_cursor, next_cursor,
@@ -523,20 +551,28 @@ export async function executeInsightSync(
         onPage: async (page) => {
           if (options.signal.aborted) throw new JobCancelledError();
           const absolutePage = offset + page.pageNumber;
-          const written = await options.withLease((client) =>
-            writeInsightPage(client, options, {
-              ...page,
+          for (const row of page.data) {
+            const rowWritten = await options.withLease((client) =>
+              writeInsightRow(client, options, row),
+            );
+            if (!rowWritten.acquired) throw new JobCancelledError();
+          }
+          const checkpointed = await options.withLease((client) =>
+            checkpointInsightPage(client, options, {
               pageNumber: absolutePage,
+              requestCursor: page.requestCursor,
+              nextCursor: page.nextCursor,
+              raw: page.raw,
             }),
           );
-          if (!written.acquired) throw new JobCancelledError();
+          if (!checkpointed.acquired) throw new JobCancelledError();
           pagesFetched = absolutePage;
           await options.progress({
             state: "fetching_insights",
             message: "insight_page_fetched",
             percent: Math.min(
               99,
-              Math.round((written.value / Math.max(reportDays, 1)) * 100),
+              Math.round((checkpointed.value / Math.max(reportDays, 1)) * 100),
             ),
           });
         },
@@ -587,14 +623,31 @@ export async function executeInsightSync(
     });
     return { syncRunId: options.syncRunId, pagesFetched, rawResponseKey };
   } catch (error) {
-    await options.withLease(async (client) => {
-      await client.query(
-        `UPDATE insight_sync_run
-         SET status = 'partial'
-         WHERE id = $1 AND tenant_id = $2 AND status <> 'succeeded'`,
-        [options.syncRunId, options.tenantId],
-      );
-    });
+    await options.withLease(
+      async (client) => {
+        await client.query(
+          `UPDATE insight_sync_run
+           SET status = 'partial'
+           WHERE id = $1 AND tenant_id = $2 AND status <> 'succeeded'`,
+          [options.syncRunId, options.tenantId],
+        );
+        await client.query(
+          `UPDATE meta_ad_account
+           SET readiness = $1::jsonb, updated_at = now()
+           WHERE id = $2 AND tenant_id = $3`,
+          [
+            JSON.stringify(
+              error instanceof JobCancelledError || options.signal.aborted
+                ? cancelledReadiness()
+                : failedReadiness("base_facts_sync_failed"),
+            ),
+            options.internalAdAccountId,
+            options.tenantId,
+          ],
+        );
+      },
+      { allowAfterCancellation: true },
+    );
     throw error;
   }
 }

@@ -1,6 +1,7 @@
 import type { Pool } from "pg";
 import { getFamily } from "./registry";
 import { writeProgress } from "./sql/progress";
+import { heartbeat } from "./sql/heartbeat";
 import { finalizeJob } from "./sql/finalize";
 import { scheduleRetry } from "./sql/retry";
 import { startHeartbeatLoop } from "./heartbeat-loop";
@@ -119,20 +120,20 @@ export async function runJob(deps: RunJobDeps): Promise<void> {
       const row = await writeProgress(pool, { jobId: job.id, leaseToken, leaseMs, progress: validated });
       if (!row) controller.abort();
     },
-    withLease: async (write) =>
+    withLease: async (write, options) =>
       withTransaction(pool, async (client) => {
-        if (controller.signal.aborted) return { acquired: false } as const;
-        const ownership = await client.query(
-          `SELECT 1
-           FROM job
-           WHERE id = $1
-             AND lease_token = $2
-             AND status = 'claimed'
-             AND lease_expires_at >= now()
-           FOR UPDATE`,
-          [job.id, leaseToken],
-        );
-        if (ownership.rowCount !== 1) {
+        if (controller.signal.aborted && !options?.allowAfterCancellation) {
+          return { acquired: false } as const;
+        }
+        const renewed = await heartbeat(client, {
+          jobId: job.id,
+          leaseToken,
+          leaseMs,
+        });
+        if (
+          !renewed ||
+          (renewed.status === "cancel_requested" && !options?.allowAfterCancellation)
+        ) {
           controller.abort();
           return { acquired: false } as const;
         }

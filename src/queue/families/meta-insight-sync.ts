@@ -10,6 +10,7 @@ import {
   MetaGraphError,
   MetaResponseValidationError,
 } from "@/meta/graph-client";
+import { initialReadiness, ReadinessSchema } from "@/meta/oauth";
 import { decryptToken } from "@/meta/token-crypto";
 import { getObjectStore } from "@/storage/object-store";
 import { HandlerError, JobCancelledError } from "../errors";
@@ -46,12 +47,19 @@ function graphFailure(error: MetaGraphError) {
     params: {
       code: error.code,
       ...(error.errorSubcode === undefined ? {} : { errorSubcode: error.errorSubcode }),
-      ...(error.errorUserMessage === undefined
-        ? {}
-        : { errorUserMessage: error.errorUserMessage }),
       ...(error.fbtraceId === undefined ? {} : { fbtraceId: error.fbtraceId }),
     },
   };
+}
+
+function errorReadiness(messageCode: string) {
+  const readiness = initialReadiness();
+  readiness.base_facts = {
+    status: "error",
+    blocks: ["strategist", "insights"],
+    messageCode,
+  };
+  return ReadinessSchema.parse(readiness);
 }
 
 export const metaInsightSyncFamily: JobFamilyDefinition<Input, Result> = {
@@ -81,6 +89,23 @@ export const metaInsightSyncFamily: JobFamilyDefinition<Input, Result> = {
     );
     const account = accountResult.rows[0];
     if (!account) throw new HandlerError("META_ACCOUNT_NOT_FOUND", "meta_account_not_found", false);
+    const markAccountError = async (messageCode: string): Promise<void> => {
+      await ctx.withLease(
+        async (client) => {
+          await client.query(
+            `UPDATE meta_ad_account
+             SET readiness = $1::jsonb, updated_at = now()
+             WHERE id = $2 AND tenant_id = $3`,
+            [
+              JSON.stringify(errorReadiness(messageCode)),
+              ctx.input.metaAdAccountId,
+              account.tenant_id,
+            ],
+          );
+        },
+        { allowAfterCancellation: true },
+      );
+    };
     if (account.token_expires_at.getTime() <= Date.now()) {
       await ctx.withLease(async (client) => {
         await client.query(
@@ -91,10 +116,21 @@ export const metaInsightSyncFamily: JobFamilyDefinition<Input, Result> = {
            WHERE id = $1 AND tenant_id = $2`,
           [account.connection_id, account.tenant_id],
         );
+        await client.query(
+          `UPDATE meta_ad_account
+           SET readiness = $1::jsonb, updated_at = now()
+           WHERE id = $2 AND tenant_id = $3`,
+          [
+            JSON.stringify(errorReadiness("token_expired")),
+            ctx.input.metaAdAccountId,
+            account.tenant_id,
+          ],
+        );
       });
       throw new HandlerError("TOKEN_EXPIRED", "token_expired", false);
     }
     if (!env.ENCRYPTION_KEY) {
+      await markAccountError("meta_not_configured");
       throw new HandlerError("META_NOT_CONFIGURED", "meta_not_configured", false);
     }
 
@@ -142,11 +178,14 @@ export const metaInsightSyncFamily: JobFamilyDefinition<Input, Result> = {
             ],
           );
         });
+        await markAccountError("meta_graph_error");
         throw new HandlerError("META_GRAPH_ERROR", "meta_graph_error", error.retryable);
       }
       if (error instanceof MetaResponseValidationError) {
+        await markAccountError("meta_response_invalid");
         throw new HandlerError("META_RESPONSE_INVALID", "meta_response_invalid", false);
       }
+      await markAccountError("meta_sync_failed");
       throw new HandlerError("META_SYNC_FAILED", "meta_sync_failed", true);
     }
   },

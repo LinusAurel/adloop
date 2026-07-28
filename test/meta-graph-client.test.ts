@@ -30,11 +30,23 @@ function jsonResponse(body: unknown, status = 200, headers?: HeadersInit): Respo
 
 describe("MetaGraphClient", () => {
   it("follows all paging.next links and exposes a token-free resume cursor", async () => {
-    const responses = [page1, page2, page3];
+    const secret = "synthetic-access-token";
+    const responses = [
+      {
+        ...page1,
+        paging: {
+          ...page1.paging,
+          next: `${page1.paging.next}&access_token=${secret}`,
+        },
+      },
+      page2,
+      page3,
+    ];
     const requested: string[] = [];
     const cursors: Array<string | null> = [];
+    const persistedRaw: unknown[] = [];
     const client = new MetaGraphClient({
-      accessToken: "synthetic-access-token",
+      accessToken: secret,
       apiVersion: "v25.0",
       fetchImpl: async (input) => {
         requested.push(String(input));
@@ -49,6 +61,7 @@ describe("MetaGraphClient", () => {
       onPage: async (page) => {
         ids.push(...page.data.map((item) => item.id));
         cursors.push(page.nextCursor);
+        persistedRaw.push(page.raw);
       },
     });
 
@@ -60,7 +73,9 @@ describe("MetaGraphClient", () => {
     ]);
     expect(requested).toHaveLength(3);
     expect(cursors[0]).toBe("/v25.0/me/adaccounts?after=cursor-1");
-    expect(cursors.join("")).not.toContain("synthetic-access-token");
+    expect(cursors.join("")).not.toContain(secret);
+    expect(JSON.stringify(persistedRaw)).not.toContain(secret);
+    expect(JSON.stringify(persistedRaw)).toContain("REDACTED");
   });
 
   it("waits and retries code 17 instead of aborting", async () => {

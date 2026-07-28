@@ -1,4 +1,4 @@
-import type { Pool } from "pg";
+import type { Queryable } from "../../db/queryable";
 import type { JobRow } from "../types";
 
 /**
@@ -15,7 +15,7 @@ import type { JobRow } from "../types";
  * a claim nobody else can safely contest anymore.
  */
 export async function heartbeat(
-  db: Pool,
+  db: Queryable,
   params: { jobId: string; leaseToken: string; leaseMs: number },
 ): Promise<JobRow | null> {
   const result = await db.query<JobRow>(

@@ -23,6 +23,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   if (!parsed.success) {
     return errorResponse(400, "validation_error");
   }
+  if (parsed.data.family === "meta_insight_sync") {
+    return errorResponse(400, "family_requires_dedicated_endpoint", {
+      endpoint: "/api/meta/sync/refresh",
+    });
+  }
 
   const result = await createRun(getPool(), {
     ...parsed.data,

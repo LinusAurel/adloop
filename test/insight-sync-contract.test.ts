@@ -132,6 +132,7 @@ describe("insight observation read contract", () => {
   function options(
     syncRunId: string,
     graph: MetaGraphClient,
+    progress: ExecuteInsightSyncOptions["progress"] = async () => {},
   ): ExecuteInsightSyncOptions {
     return {
       pool: db.pool,
@@ -145,16 +146,30 @@ describe("insight observation read contract", () => {
       graph,
       objectStore: store,
       signal: new AbortController().signal,
-      progress: async () => {},
+      progress,
       withLease: leaseWriter(),
     };
   }
 
-  it("keeps new observations while current returns one corrected row and zeroes missing actions", async () => {
+  it("moves readiness from syncing to ready, keeps corrected current data, and zeroes missing actions", async () => {
+    const readinessStatuses: string[] = [];
+    const recordReadiness = async () => {
+      const result = await db.pool.query<{
+        readiness: { base_facts: { status: string } };
+      }>("SELECT readiness FROM meta_ad_account WHERE id = $1", [accountId]);
+      readinessStatuses.push(
+        result.rows[0]?.readiness.base_facts.status ?? "missing",
+      );
+    };
     const firstSyncRun = uuidv7();
-    await executeInsightSync(options(firstSyncRun, graphFrom([firstPageOnly])));
+    await executeInsightSync(
+      options(firstSyncRun, graphFrom([firstPageOnly]), recordReadiness),
+    );
     const secondSyncRun = uuidv7();
     await executeInsightSync(options(secondSyncRun, graphFrom([correction])));
+
+    expect(readinessStatuses).toContain("syncing");
+    expect(readinessStatuses.at(-1)).toBe("ready");
 
     const raw = await db.pool.query<{
       spend: string;
@@ -208,6 +223,16 @@ describe("insight observation read contract", () => {
       [incomplete],
     );
     expect(status.rows[0]?.status).toBe("partial");
+    const readiness = await db.pool.query<{
+      readiness: { base_facts: { status: string; messageCode: string } };
+    }>(
+      "SELECT readiness FROM meta_ad_account WHERE id = $1",
+      [accountId],
+    );
+    expect(readiness.rows[0]?.readiness.base_facts).toMatchObject({
+      status: "error",
+      messageCode: "base_facts_sync_failed",
+    });
     const current = await db.pool.query<{ spend: string }>(
       `SELECT spend::text
        FROM insight_daily_current

@@ -59,7 +59,10 @@ export interface JobContext<TInput> {
   readonly tenantId: string;
   readonly signal: AbortSignal;
   progress(p: JobProgress): Promise<void>;
-  withLease<T>(write: (client: PoolClient) => Promise<T>): Promise<LeaseWriteResult<T>>;
+  withLease<T>(
+    write: (client: PoolClient) => Promise<T>,
+    options?: { allowAfterCancellation?: boolean },
+  ): Promise<LeaseWriteResult<T>>;
   isCancelled(): boolean;
 }
 

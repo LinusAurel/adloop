@@ -143,6 +143,30 @@ function rateLimitDelay(response: Response, attempt: number): number {
   return Math.min(1_000 * 2 ** attempt, 60_000);
 }
 
+function redactRawSecrets(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(redactRawSecrets);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, nested]) => [
+        key,
+        key.toLowerCase() === "access_token" ? "[REDACTED]" : redactRawSecrets(nested),
+      ]),
+    );
+  }
+  if (typeof value === "string" && value.includes("access_token=")) {
+    try {
+      const url = new URL(value);
+      if (url.searchParams.has("access_token")) {
+        url.searchParams.set("access_token", "[REDACTED]");
+        return url.toString();
+      }
+    } catch {
+      return value.replace(/([?&]access_token=)[^&\s]+/gi, "$1[REDACTED]");
+    }
+  }
+  return value;
+}
+
 export class MetaGraphClient {
   private readonly accessToken: string;
   private readonly apiVersion: string;
@@ -201,7 +225,7 @@ export class MetaGraphClient {
 
       const parsed = schema.safeParse(raw);
       if (!parsed.success) throw new MetaResponseValidationError(parsed.error.issues);
-      return { data: parsed.data, raw };
+      return { data: parsed.data, raw: redactRawSecrets(raw) };
     }
   }
 

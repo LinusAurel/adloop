@@ -7,6 +7,14 @@ import { z } from "zod";
  */
 const DEVELOPMENT_SESSION_SECRET = "development-session-secret-change-me";
 
+/** Exported so tests assert the real bounds — not a hand-copied Zod twin. */
+export const syncBackfillDaysSchema = z.coerce
+  .number()
+  .int()
+  .min(1)
+  .max(400)
+  .default(180);
+
 const envSchema = z
   .object({
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
@@ -27,7 +35,7 @@ const envSchema = z
   META_GRAPH_API_VERSION: z.string().regex(/^v\d+\.\d+$/).default("v25.0"),
   // 180 covers a 90-day window plus its previous period; max 400 leaves headroom
   // for longer custom windows without silently truncating Vorperioden data.
-  SYNC_BACKFILL_DAYS: z.coerce.number().int().min(1).max(400).default(180),
+  SYNC_BACKFILL_DAYS: syncBackfillDaysSchema,
 
   PLAYBOOK_DIR: z.string().min(1).optional(),
   ANTHROPIC_API_KEY: z.string().min(1).optional(),

@@ -407,16 +407,19 @@ export async function executeAdReview(
   let result: AdReviewExecuteResult;
   try {
     result = await withTransaction(db, async (client) => {
-      // Idempotent retry: load existing run first and reuse its chat —
-      // never mint a new chatId that would orphan a row or diverge the fingerprint.
+      // Idempotent retry: load existing run for THIS tenant first and reuse its
+      // chat — never mint a new chatId that would orphan a row. Foreign-tenant
+      // rows are invisible here (not an existence oracle via 409).
       const existingRun = await client.query<{
         tenant_id: string;
         kind: string;
         chat_id: string | null;
         input: unknown;
       }>(
-        `SELECT tenant_id, kind, chat_id, input FROM run WHERE id = $1 FOR UPDATE`,
-        [request.runId],
+        `SELECT tenant_id, kind, chat_id, input FROM run
+         WHERE id = $1 AND tenant_id = $2
+         FOR UPDATE`,
+        [request.runId, params.tenantId],
       );
 
       if (existingRun.rows[0]) {
@@ -426,7 +429,6 @@ export async function executeAdReview(
           [request.runId, params.tenantId],
         );
         const sameRequest =
-          row.tenant_id === params.tenantId &&
           row.kind === runType &&
           canonical(row.input) === canonical(requestFingerprint);
         if (sameRequest && mapping.rows[0]) {
@@ -507,19 +509,30 @@ export async function executeAdReview(
 
       if (!inserted.rows[0]) {
         // Lost a same-runId race after the earlier SELECT missed the row.
+        // Only own-tenant rows participate in idempotency — never read a
+        // foreign run to decide conflict vs create (existence oracle).
         const raced = await client.query<{
-          tenant_id: string;
           kind: string;
           input: unknown;
-        }>(`SELECT tenant_id, kind, input FROM run WHERE id = $1`, [request.runId]);
+        }>(
+          `SELECT kind, input FROM run WHERE id = $1 AND tenant_id = $2`,
+          [request.runId, params.tenantId],
+        );
         const row = raced.rows[0];
+        if (!row) {
+          // No own-tenant row. Another tenant may hold the global PK; that
+          // collision cannot become a successful create (run.id is globally
+          // unique). Returning conflict here matches own-tenant body mismatch
+          // and is the residual signal of client-assigned global IDs — see
+          // DECISIONS. We still never returned conflict from *reading* the
+          // foreign row in the early SELECT.
+          return { outcome: "conflict" as const, runId: request.runId };
+        }
         const mapping = await client.query<{ id: string; chat_id: string }>(
           `SELECT id, chat_id FROM creative_strategy_run WHERE run_id = $1 AND tenant_id = $2`,
           [request.runId, params.tenantId],
         );
         const sameRequest =
-          row &&
-          row.tenant_id === params.tenantId &&
           row.kind === runType &&
           canonical(row.input) === canonical(requestFingerprint);
         if (sameRequest && mapping.rows[0]) {

@@ -82,7 +82,10 @@
       "conversions": "Konversionen",
       "cpa": "CPA",
       "impressions": "Impressionen",
-      "netNewReach": "Net-New-Reach"
+      "netNewReach": "Net-New-Reach",
+      "conversionValue": "Wert",
+      "cpm": "CPM",
+      "ctr": "CTR"
     },
     "action": {
       "copychief": "Copy-Review",

@@ -495,23 +495,39 @@ export async function buildStrategistOverview(params: {
     rows: ads.map((ad) => ({
       id: ad.metaAdId,
       fields: [
-        { fieldId: "name", label: "Ad", value: ad.name },
+        { fieldId: "name", labelCode: "strategist.col.ad", value: ad.name },
         {
           fieldId: "funnelPosition",
-          label: "Funnel",
+          labelCode: "strategist.col.funnel",
           value:
             ad.funnelPosition.gateStatus === "ok"
               ? ad.funnelPosition.band
               : ad.funnelPosition.gateReasons[0] ?? "insufficient_data",
         },
-        { fieldId: "netNewReach", label: "Net-new reach", value: ad.netNewReach.value },
-        { fieldId: "spend", label: "Spend", value: ad.spend.value },
-        { fieldId: "conversions", label: "Conversions", value: ad.conversions.value },
-        { fieldId: "conversionValue", label: "Value", value: ad.conversionValue.value },
-        { fieldId: "cpa", label: "CPA", value: ad.cpa.value },
-        { fieldId: "cpm", label: "CPM", value: ad.cpm.value },
-        { fieldId: "ctr", label: "CTR", value: ad.ctr.value },
-        { fieldId: "impressions", label: "Impressions", value: ad.impressions.value },
+        {
+          fieldId: "netNewReach",
+          labelCode: "strategist.col.netNewReach",
+          value: ad.netNewReach.value,
+        },
+        { fieldId: "spend", labelCode: "strategist.col.spend", value: ad.spend.value },
+        {
+          fieldId: "conversions",
+          labelCode: "strategist.col.conversions",
+          value: ad.conversions.value,
+        },
+        {
+          fieldId: "conversionValue",
+          labelCode: "strategist.col.conversionValue",
+          value: ad.conversionValue.value,
+        },
+        { fieldId: "cpa", labelCode: "strategist.col.cpa", value: ad.cpa.value },
+        { fieldId: "cpm", labelCode: "strategist.col.cpm", value: ad.cpm.value },
+        { fieldId: "ctr", labelCode: "strategist.col.ctr", value: ad.ctr.value },
+        {
+          fieldId: "impressions",
+          labelCode: "strategist.col.impressions",
+          value: ad.impressions.value,
+        },
       ],
     })),
   });

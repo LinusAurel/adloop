@@ -14,7 +14,6 @@ import {
   previewAdReview,
   type AdReviewRequest,
 } from "@/strategist/ad-review";
-import { adTableArtifact } from "@/strategist/artifacts";
 import {
   acquireTwoDistinctClients,
   createBarrier,
@@ -502,6 +501,13 @@ describe("etappe 5 — creative strategist", () => {
       [db.tenantId],
     );
 
+    const beforeJobs = await db.pool.query<{ c: string }>(
+      `SELECT count(*)::text AS c FROM job j
+       JOIN run r ON r.id = j.run_id
+       WHERE r.tenant_id = $1`,
+      [db.tenantId],
+    );
+
     const adId = "100000000000000";
     const snapshots = await computeAndPersistSnapshots({
       pool: db.pool,
@@ -550,7 +556,7 @@ describe("etappe 5 — creative strategist", () => {
     expect(after.rows[0]!.c).toBe(before.rows[0]!.c);
     expect(afterChats.rows[0]!.c).toBe(beforeChats.rows[0]!.c);
     expect(afterMaps.rows[0]!.c).toBe(beforeMaps.rows[0]!.c);
-    expect(Number(afterJobs.rows[0]!.c)).toBeGreaterThanOrEqual(0);
+    expect(afterJobs.rows[0]!.c).toBe(beforeJobs.rows[0]!.c);
   });
 
   it("fall 1 + 2 — execute creates chat/messages for the requested ad with exact window and metric version in context_packet", async () => {
@@ -767,6 +773,87 @@ describe("etappe 5 — creative strategist", () => {
     expect(afterMaps.rows[0]!.c).toBe(beforeMaps.rows[0]!.c);
     expect(afterForeignMessages.rows[0]!.c).toBe(beforeForeignMessages.rows[0]!.c);
     expect(crossTenantRuns.rows[0]!.c).toBe("0");
+  });
+
+  it("P0 — foreign runId is not an owned idempotency conflict", async () => {
+    const otherTenantId = uuidv7();
+    await db.pool.query(`INSERT INTO tenant (id, name) VALUES ($1, 'run-oracle-tenant')`, [
+      otherTenantId,
+    ]);
+    const foreignRunId = uuidv7();
+    const foreignChatId = uuidv7();
+    await db.pool.query(
+      `INSERT INTO chat (id, tenant_id, name) VALUES ($1, $2, 'foreign-run-chat')`,
+      [foreignChatId, otherTenantId],
+    );
+    await db.pool.query(
+      `INSERT INTO run (id, tenant_id, kind, status, chat_id, input, created_at, updated_at)
+       VALUES ($1, $2, 'cro_review', 'queued', $3, '{}'::jsonb, now(), now())`,
+      [foreignRunId, otherTenantId, foreignChatId],
+    );
+
+    const beforeRuns = await db.pool.query<{ c: string }>(
+      `SELECT count(*)::text AS c FROM run WHERE tenant_id = $1`,
+      [db.tenantId],
+    );
+    const beforeMaps = await db.pool.query<{ c: string }>(
+      `SELECT count(*)::text AS c FROM creative_strategy_run WHERE tenant_id = $1`,
+      [db.tenantId],
+    );
+
+    const result = await executeAdReview(db.pool, {
+      tenantId: db.tenantId,
+      userId,
+      request: baseRequest({
+        adId: "100000000000004",
+        mode: "variations",
+        runId: foreignRunId,
+      }),
+    });
+
+    // Must not treat the foreign row as an owned replay or owned body mismatch
+    // discovered by unscoped read. Global PK may still block insert (conflict);
+    // idempotent_replay would mean we accepted another tenant's run.
+    expect(result.outcome).not.toBe("idempotent_replay");
+    if (result.outcome === "created") {
+      expect(result.runId).toBe(foreignRunId);
+    } else {
+      expect(result.outcome).toBe("conflict");
+    }
+
+    const afterMaps = await db.pool.query<{ c: string }>(
+      `SELECT count(*)::text AS c FROM creative_strategy_run WHERE tenant_id = $1`,
+      [db.tenantId],
+    );
+    const leaked = await db.pool.query<{ c: string }>(
+      `SELECT count(*)::text AS c FROM run
+       WHERE id = $1 AND tenant_id = $2`,
+      [foreignRunId, db.tenantId],
+    );
+    expect(leaked.rows[0]!.c).toBe("0");
+    if (result.outcome !== "created") {
+      expect(afterMaps.rows[0]!.c).toBe(beforeMaps.rows[0]!.c);
+      const afterRuns = await db.pool.query<{ c: string }>(
+        `SELECT count(*)::text AS c FROM run WHERE tenant_id = $1`,
+        [db.tenantId],
+      );
+      expect(afterRuns.rows[0]!.c).toBe(beforeRuns.rows[0]!.c);
+    }
+
+    // Guardrail: every run-by-id lookup in ad-review must bind tenant_id.
+    const { readFileSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    const src = readFileSync(
+      join(__dirname, "..", "src", "strategist", "ad-review.ts"),
+      "utf8",
+    );
+    const runByIdLookups = [
+      ...src.matchAll(/FROM run\s*\n?\s*WHERE id = \$1[^\n`]*/g),
+    ];
+    expect(runByIdLookups.length).toBeGreaterThanOrEqual(2);
+    for (const match of runByIdLookups) {
+      expect(match[0]).toMatch(/tenant_id/);
+    }
   });
 
   it("P1 — retry without chatId replays the existing run (no orphan chat)", async () => {
@@ -1008,21 +1095,23 @@ describe("etappe 5 — creative strategist", () => {
     expect(result.outcome).toBe("snapshot_mismatch");
   });
 
-  it("render_artifacts ad_table follows the generic field schema", () => {
-    const artifact = adTableArtifact({
-      runId: uuidv7(),
-      rows: [
-        {
-          id: "100000000000000",
-          fields: [
-            { fieldId: "name", label: "Ad", value: "Fixture Ad 00" },
-            { fieldId: "spend", label: "Spend", value: 80 },
-          ],
-        },
-      ],
+  it("render_artifacts ad_table uses labelCode, not English prose labels", async () => {
+    const overview = await buildStrategistOverview({
+      pool: db.pool,
+      tenantId: db.tenantId,
+      metaAdAccountId: account.accountId,
+      windowStart,
+      windowEnd,
+      dataAsOf,
     });
+    const artifact = overview.adTableArtifact;
     expect(artifact.kind).toBe("ad_table");
-    expect(artifact.rows[0]!.fields[0]!.fieldId).toBe("name");
+    expect(artifact.rows.length).toBeGreaterThan(0);
+    const labels = artifact.rows[0]!.fields.map((f) => f.labelCode);
+    expect(labels).toContain("strategist.col.ad");
+    expect(labels).toContain("strategist.col.spend");
+    expect(labels.every((code) => code.startsWith("strategist."))).toBe(true);
+    expect(JSON.stringify(artifact)).not.toMatch(/"label"\s*:/);
   });
 
   it("spend efficiency uses median CPA over gated ads", async () => {
@@ -1053,15 +1142,10 @@ describe("etappe 5 — creative strategist", () => {
   });
 
   it("SYNC_BACKFILL_DAYS accepts 180 and caps at 400", async () => {
-    const prev = process.env.SYNC_BACKFILL_DAYS;
-    process.env.SYNC_BACKFILL_DAYS = "180";
-    // Re-import env is cached — assert schema bounds via zod parse of the constant path.
-    const { z } = await import("zod");
-    const schema = z.coerce.number().int().min(1).max(400).default(180);
-    expect(schema.parse("180")).toBe(180);
-    expect(schema.parse("400")).toBe(400);
-    expect(schema.safeParse("401").success).toBe(false);
-    if (prev === undefined) delete process.env.SYNC_BACKFILL_DAYS;
-    else process.env.SYNC_BACKFILL_DAYS = prev;
+    const { syncBackfillDaysSchema } = await import("@/lib/env");
+    expect(syncBackfillDaysSchema.parse("180")).toBe(180);
+    expect(syncBackfillDaysSchema.parse("400")).toBe(400);
+    expect(syncBackfillDaysSchema.safeParse("401").success).toBe(false);
+    expect(syncBackfillDaysSchema.parse(undefined)).toBe(180);
   });
 });

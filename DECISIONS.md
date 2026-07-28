@@ -474,5 +474,24 @@ costs a build run that the current budget does not justify.
 - **Job families `copychief_review` / `cro_review` / `variations`** share the agent-turn
   handler with distinct timeouts and a concurrency limit of one active job per ad+type.
   Not startable via `POST /api/runs` — dedicated `/api/creative-strategies/ad-review`.
-- **`ad_table` render artifact** uses the generic field-list schema from Etappe 4; the
-  frontend does not interpret field semantics.
+- **`ad_table` render artifact** uses the generic field-list schema from Etappe 4 with
+  `labelCode` (not prose `label`); the frontend translates codes and does not interpret
+  field semantics (§8.2).
+- **Request-ID tenant binding on ad-review (Review-10 post-fix).** Every client-supplied
+  identifier that participates in a lookup is scoped to the session tenant before any
+  write:
+  - `chatId` — `SELECT … FROM chat WHERE id AND tenant_id`; miss → `not_found` (same for
+    foreign and unknown, no existence oracle).
+  - `runId` — `SELECT … FROM run WHERE id AND tenant_id FOR UPDATE`; foreign rows are
+    invisible. Own-tenant fingerprint mismatch → `conflict`. Global `run.id` PK means a
+    foreign-owned UUID still cannot be inserted; that residual collision surfaces as
+    `conflict` after the insert attempt and is inherent to client-assigned global IDs —
+    we never return `conflict` merely from *reading* another tenant's run.
+  - `metaAdAccountId` — `meta_ad_account.id AND tenant_id`; miss → `not_found`.
+  - `metaAdId` — `meta_ad_as_of(tenant, dataAsOf)` filtered by `meta_ad_account_id`; miss
+    → `not_found`.
+  - `snapshotId` — `metric_snapshot.id AND tenant_id`, then ad/account/window/`data_as_of`
+    match; miss or mismatch → `snapshot_mismatch`.
+  - `userMessageId` / `assistantMessageId` — inserted with `tenant_id`; they are global
+    PKs like `run.id`. Collisions abort the transaction; they are never looked up
+    unscoped to decide success vs conflict.

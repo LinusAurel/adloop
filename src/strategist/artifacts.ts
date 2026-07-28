@@ -3,10 +3,11 @@ import { z } from "zod";
 /**
  * Generic field list — the frontend renders fields without knowing semantics
  * (SPEC §4.6 / Etappe 5 acceptance for the ad table artifact).
+ * Visible labels are i18n codes (§8.2); the UI translates `labelCode`.
  */
 export const RenderFieldSchema = z.object({
   fieldId: z.string().min(1),
-  label: z.string().min(1),
+  labelCode: z.string().min(1),
   value: z.union([z.string(), z.number(), z.null()]),
 });
 

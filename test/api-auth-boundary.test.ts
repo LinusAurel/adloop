@@ -21,6 +21,8 @@ describe("API authentication boundary", () => {
       "auth/email/request/route.ts",
       "auth/email/verify/route.ts",
       "health/route.ts",
+      // Provider callback — authenticated by HMAC signature, not session.
+      "webhooks/fal/[correlationId]/route.ts",
     ]);
     const missing: string[] = [];
 

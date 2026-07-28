@@ -39,6 +39,23 @@ class MemoryObjectStore implements ObjectStore {
     if (this.fail) throw new Error("synthetic_object_store_failure");
     this.values.set(key, value);
   }
+
+  async putBytes(key: string, body: Buffer | Uint8Array, contentType: string): Promise<void> {
+    if (this.fail) throw new Error("synthetic_object_store_failure");
+    this.values.set(key, { body: Buffer.from(body), contentType });
+  }
+
+  async getObject(key: string): Promise<{ body: Buffer; contentType: string }> {
+    const found = this.values.get(key);
+    if (!found || typeof found !== "object" || found === null || !("body" in found)) {
+      throw new Error(`missing:${key}`);
+    }
+    return found as { body: Buffer; contentType: string };
+  }
+
+  async getSignedUrl(key: string, expiresInSeconds: number): Promise<string> {
+    return `memory://signed/${key}?e=${expiresInSeconds}`;
+  }
 }
 
 describe("insight observation read contract", () => {

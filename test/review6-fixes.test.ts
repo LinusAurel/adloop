@@ -49,6 +49,22 @@ class MemoryObjectStore implements ObjectStore {
   async putJson(key: string, value: unknown): Promise<void> {
     this.values.set(key, value);
   }
+
+  async putBytes(key: string, body: Buffer | Uint8Array, contentType: string): Promise<void> {
+    this.values.set(key, { body: Buffer.from(body), contentType });
+  }
+
+  async getObject(key: string): Promise<{ body: Buffer; contentType: string }> {
+    const found = this.values.get(key);
+    if (!found || typeof found !== "object" || found === null || !("body" in found)) {
+      throw new Error(`missing:${key}`);
+    }
+    return found as { body: Buffer; contentType: string };
+  }
+
+  async getSignedUrl(key: string, expiresInSeconds: number): Promise<string> {
+    return `memory://signed/${key}?e=${expiresInSeconds}`;
+  }
 }
 
 function jsonResponse(body: unknown): Response {
@@ -739,6 +755,7 @@ describe("review-6 adversarial fixes", () => {
         windowEnd: "2026-07-19",
       },
       tenantId: db.tenantId,
+      runId: syncA,
       signal: new AbortController().signal,
       progress: async () => {},
       withLease: async () => ({ acquired: false }),

@@ -20,6 +20,7 @@ export const RUN_STATUSES = [
   "failed",
   "timed_out",
   "cancelled",
+  "needs_human_check",
 ] as const;
 export type RunStatus = (typeof RUN_STATUSES)[number];
 
@@ -64,6 +65,8 @@ export type LeaseWriteResult<T> =
 export interface JobContext<TInput> {
   readonly input: TInput;
   readonly tenantId: string;
+  /** The run this job belongs to (Etappe 6+ handlers need it for FKs). */
+  readonly runId: string;
   readonly signal: AbortSignal;
   progress(p: JobProgress): Promise<void>;
   withLease<T>(

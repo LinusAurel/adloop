@@ -42,6 +42,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       endpoint: "/api/creative-strategies/ad-review",
     });
   }
+  if (parsed.data.family === "image_generation") {
+    return errorResponse(400, "family_requires_dedicated_endpoint", {
+      endpoint: "/api/workshop/generate",
+    });
+  }
 
   const result = await createRun(getPool(), {
     ...parsed.data,

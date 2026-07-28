@@ -8,6 +8,7 @@ import {
   croReviewFamily,
   variationsFamily,
 } from "./families/strategist-review";
+import { imageGenerationFamily } from "./families/image-generation";
 import { ensureToolsBootstrapped } from "@/agent/tools/bootstrap";
 
 /**
@@ -44,5 +45,8 @@ export function ensureQueueBootstrapped(): void {
   }
   if (!isFamilyRegistered(variationsFamily.name)) {
     registerFamily(variationsFamily);
+  }
+  if (!isFamilyRegistered(imageGenerationFamily.name)) {
+    registerFamily(imageGenerationFamily);
   }
 }

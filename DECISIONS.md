@@ -495,3 +495,45 @@ costs a build run that the current budget does not justify.
   - `userMessageId` / `assistantMessageId` — inserted with `tenant_id`; they are global
     PKs like `run.id`. Collisions abort the transaction; they are never looked up
     unscoped to decide success vs conflict.
+
+## Etappe 6 — Bild-Werkstatt
+
+- **Provider recovery is classified per adapter, not assumed.** The interface carries
+  `recovery: native_key | correlated_callback | lookup_by_correlation | unprotected`
+  instead of a boolean “has idempotency”. Spec §3.5’s “no provider without guarantee”
+  is satisfied by behaviour: unprotected adapters never auto-retry after a crash;
+  the run becomes `needs_human_check` with code `provider_unprotected_crash`. Prefer a
+  hung job over a second charge.
+- **Fal = `correlated_callback`.** Evidence: Fal Queue accepts `webhookUrl` /
+  `fal_webhook` on submit and posts the result; no client-set idempotency key in the
+  documented async flow ([Queue](https://fal.ai/docs/documentation/model-apis/inference/queue),
+  [Webhooks](https://fal.ai/docs/documentation/model-apis/inference/webhooks), Stand
+  28.07.2026). We embed our `correlationId` in
+  `https://<host>/api/webhooks/fal/<correlationId>` so a crash before persisting
+  `request_id` still correlates. The webhook handler is itself idempotent (Fal retries
+  ~10× / 2h).
+- **ElevenLabs = `unprotected`.** Evidence: as of 28.07.2026 no public Image & Video
+  API contract with submit + client idempotency key or result lookup could be verified
+  ([Image & Video overview](https://elevenlabs.io/docs/overview/capabilities/image-video)).
+  Adapter is still built and fixture-tested; classification flips once a real contract
+  exists. Reason string: `API-Vertrag nicht belegt, Stand 28.07.2026`.
+- **Stub adapter covers all four recovery kinds** so the layer is proven without API
+  keys. Fal / ElevenLabs use recorded fixtures under `test/fixtures/providers/`.
+- **Crash window closes with a pre-submit marker.** Before the network call we write
+  `provider_job = { externalId: "pending", correlationId }`. A retry that sees
+  `in_flight` with a job (pending or real) goes to recover — never a blind second
+  submit. `native_key` with a real external id uses `fetchResult`; with `pending` it
+  resubmits the same correlation.
+- **`generate_images` tool** (`costClass: expensive`, `sideEffect: external`) is the
+  only generation entry. Workshop UI and chat share it — no side door past Freigabe.
+  Cost estimate is `{ image, copy, currency: "USD" }` on the approval and in
+  `creative_generation.cost_estimate`.
+- **Copy in `advertiser.content_locale`** via Anthropic (`COPY_MODEL`, default
+  `claude-sonnet-5`), not `agent_locale`. Stub copy generator for tests / missing key.
+- **Object store** gained `putBytes`, `getObject`, `getSignedUrl`. Bucket stays private;
+  media is served only via signed URLs with expiry.
+- **`run.status` includes `needs_human_check`.** Job still finalizes `completed`;
+  `finalizeJob` accepts `runStatus: "needs_human_check"` so the run surfaces the
+  escalation without inventing a new job terminal state.
+- **Default `IMAGE_PROVIDER=elevenlabs`** per auftrag; local `.env.example` uses `stub`
+  until keys exist. `PUBLIC_BASE_URL` required for fal webhooks in live mode.

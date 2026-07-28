@@ -27,6 +27,10 @@ const ALLOWED_FILES = new Set([
   // Etappe 5: ad-review creates chat+run+job+mapping in one transaction,
   // same pattern as create-chat-run.
   "src/strategist/ad-review.ts",
+  // Etappe 6: workshop creates a shell run to hang the Freigabe on
+  // (tool_approval.run_id FK); the job itself is created via createRun.
+  "src/app/api/workshop/generate/route.ts",
+  "src/app/api/creatives/variants/route.ts",
 ]);
 const ALLOWED_DIR_PREFIX = "src/queue/sql/";
 

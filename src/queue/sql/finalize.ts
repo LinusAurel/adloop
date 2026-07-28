@@ -4,7 +4,12 @@ import { assertJobTransitionAllowed } from "../transitions";
 import { DEFAULT_CANCEL_ERROR, type JobError, type JobRow } from "../types";
 
 export type FinalizeOutcome =
-  | { toStatus: "completed"; result: unknown }
+  | {
+      toStatus: "completed";
+      result: unknown;
+      /** When set, run.status becomes this instead of 'completed'. */
+      runStatus?: "completed" | "needs_human_check";
+    }
   | { toStatus: "failed"; error: JobError }
   | { toStatus: "timed_out"; error: JobError }
   | { toStatus: "cancelled"; error?: JobError };
@@ -77,6 +82,11 @@ export async function finalizeJob(
 
     const runResult = params.outcome.toStatus === "completed" ? JSON.stringify(params.outcome.result) : null;
     const runError = params.outcome.toStatus === "completed" ? null : JSON.stringify(error);
+    const runStatus =
+      params.outcome.toStatus === "completed" &&
+      params.outcome.runStatus === "needs_human_check"
+        ? "needs_human_check"
+        : params.outcome.toStatus;
 
     await client.query(
       `UPDATE run SET
@@ -85,7 +95,7 @@ export async function finalizeJob(
          error = $3::jsonb,
          updated_at = now()
        WHERE id = $4`,
-      [params.outcome.toStatus, runResult, runError, job.run_id],
+      [runStatus, runResult, runError, job.run_id],
     );
 
     if (params.outcome.toStatus === "failed") {

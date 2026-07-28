@@ -6,6 +6,7 @@
     "connectors": "Anbindungen",
     "metrics": "Metriken",
     "strategist": "Strategist",
+    "workshop": "Werkstatt",
     "playbooks": "Playbooks",
     "queueSmoke": "Warteschlange",
     "newChat": "Neuer Chat",
@@ -99,6 +100,23 @@
     "copychief_review_request": "Copy-Review für Anzeige {adName} vom {since} bis {until} starten.",
     "cro_review_request": "Funnel-Review für Anzeige {adName} vom {since} bis {until} starten.",
     "variations_request": "Varianten für Anzeige {adName} auf Basis von {since} bis {until} vorschlagen."
+  },
+  "workshop": {
+    "title": "Bild-Werkstatt",
+    "subtitle": "Static Ads mit Bild und Copy erzeugen.",
+    "advertiser": "Werbetreibender",
+    "noAdvertiser": "Kein Werbetreibender",
+    "prompt": "Prompt",
+    "aspectRatio": "Seitenverhältnis",
+    "count": "Anzahl",
+    "generate": "Erzeugen",
+    "library": "Bibliothek",
+    "allFormats": "Alle Formate",
+    "selected": "Ausgewählt",
+    "status": "Status",
+    "needsHumanCheck": "Menschliche Prüfung nötig",
+    "costImage": "Bild",
+    "costCopy": "Copy"
   },
   "progress": {
     "echo_step": "Schritt {step} von {total}",

@@ -5,6 +5,7 @@
     "projects": "Projekte",
     "connectors": "Anbindungen",
     "metrics": "Metriken",
+    "strategist": "Strategist",
     "playbooks": "Playbooks",
     "queueSmoke": "Warteschlange",
     "newChat": "Neuer Chat",
@@ -30,6 +31,66 @@
     "resolvedValues": "Aufgelöste Werte",
     "waitingApproval": "Warte auf Freigabe…"
   },
+  "strategist": {
+    "adAccount": "Werbekonto",
+    "timeWindow": "Zeitfenster",
+    "window30": "Letzte 30 Tage",
+    "window90": "Letzte 90 Tage",
+    "refreshSync": "Sync auffrischen",
+    "pulse": "Pulse",
+    "overview": "Überblick",
+    "ads": "Anzeigen",
+    "detail": "Detail",
+    "selectAd": "Anzeige auswählen",
+    "loadFailed": "Übersicht konnte nicht geladen werden",
+    "actionFailed": "Aktion fehlgeschlagen",
+    "pulseIndex": {
+      "overall": "Gesamt",
+      "creativeStrain": "Creative Strain",
+      "spendEfficiency": "Spend Efficiency",
+      "accountHealth": "Account Health"
+    },
+    "pulseBand": {
+      "healthy": "Gesund",
+      "attention_required": "Braucht Aufmerksamkeit",
+      "critical": "Kritisch"
+    },
+    "pulseReason": {
+      "no_ads_in_gate": "Keine Anzeigen im Gate",
+      "no_conversion_metric": "Keine Konversionsmetrik",
+      "previous_period_incomplete": "Vorperiode unvollständig",
+      "window_incomplete": "Fenster unvollständig",
+      "no_spend": "Keine Ausgaben",
+      "insufficient_data": "Zu wenig Daten"
+    },
+    "metric": {
+      "spend": "Ausgaben",
+      "impressions": "Impressionen",
+      "clicks": "Klicks",
+      "reach": "Reichweite",
+      "frequency": "Frequenz",
+      "conversions": "Konversionen",
+      "cpa": "CPA",
+      "cpm": "CPM",
+      "ctr": "CTR",
+      "roas": "ROAS"
+    },
+    "col": {
+      "ad": "Anzeige",
+      "funnel": "Funnel",
+      "spend": "Ausgaben",
+      "conversions": "Konversionen",
+      "cpa": "CPA",
+      "impressions": "Impressionen",
+      "netNewReach": "Net-New-Reach"
+    },
+    "action": {
+      "copychief": "Copy-Review",
+      "croPreview": "Funnel-Review (Vorschau)",
+      "cro": "Funnel-Review",
+      "variations": "Varianten"
+    }
+  },
   "progress": {
     "echo_step": "Schritt {step} von {total}",
     "metric_snapshot_window": "Snapshot-Fenster {index}/{total}",
@@ -43,6 +104,12 @@
   "errors": {
     "insufficient_data": "Zu wenig Daten für diese Bewertung",
     "below_minimum_spend": "Unter der Mindestausgabe",
+    "population_too_small": "Population zu klein",
+    "previous_period_incomplete": "Vorperiode unvollständig",
+    "snapshot_mismatch": "Snapshot passt nicht zur Anzeige",
+    "review_already_running": "Für diese Anzeige läuft bereits ein Review",
+    "no_ads_in_gate": "Keine Anzeigen im Gate",
+    "no_conversion_metric": "Keine Konversionsmetrik",
     "token_expired": "Meta-Token abgelaufen",
     "unauthenticated": "Bitte erneut anmelden",
     "not_found": "Nicht gefunden",

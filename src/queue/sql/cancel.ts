@@ -1,4 +1,4 @@
-import type { Pool } from "pg";
+import { withTransaction, type Queryable } from "../../db/queryable";
 import { DEFAULT_CANCEL_ERROR } from "../types";
 
 export type CancelOutcome =
@@ -24,13 +24,10 @@ export type CancelOutcome =
  * "already_terminal" for it.
  */
 export async function requestCancel(
-  pool: Pool,
+  db: Queryable,
   params: { jobId: string; tenantId: string },
 ): Promise<CancelOutcome> {
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
-
+  const outcome = await withTransaction(db, async (client) => {
     const direct = await client.query(
       `UPDATE job SET status = 'cancelled', updated_at = now()
        WHERE id = $1 AND tenant_id = $2 AND status IN ('queued', 'retry_scheduled')
@@ -43,8 +40,7 @@ export async function requestCancel(
         `UPDATE run SET status = 'cancelled', error = $1::jsonb, updated_at = now() WHERE id = $2`,
         [JSON.stringify(DEFAULT_CANCEL_ERROR), directJob.run_id],
       );
-      await client.query("COMMIT");
-      return { outcome: "cancelled_immediately" };
+      return { outcome: "cancelled_immediately" } as const;
     }
 
     const requested = await client.query(
@@ -54,20 +50,19 @@ export async function requestCancel(
       [params.jobId, params.tenantId],
     );
     if (requested.rows[0]) {
-      await client.query("COMMIT");
-      // Wake the owning worker immediately instead of waiting on its heartbeat
-      // interval — see queue/poll-loop.ts. Best-effort: the heartbeat loop is
-      // the fallback if this notification is ever missed.
-      await pool.query(`SELECT pg_notify('job_cancelled', $1)`, [params.jobId]);
-      return { outcome: "cancel_requested" };
+      return { outcome: "cancel_requested" } as const;
     }
 
-    await client.query("ROLLBACK");
-    return { outcome: "already_terminal" };
-  } catch (err) {
-    await client.query("ROLLBACK");
-    throw err;
-  } finally {
-    client.release();
+    return { outcome: "already_terminal" } as const;
+  });
+
+  if (outcome.outcome === "cancel_requested") {
+    // Wake the owning worker immediately instead of waiting on its heartbeat
+    // interval — see queue/poll-loop.ts. Best-effort: the heartbeat loop is
+    // the fallback if this notification is ever missed. Sent after the
+    // transaction committed, on whatever connection we were given.
+    await db.query(`SELECT pg_notify('job_cancelled', $1)`, [params.jobId]);
   }
+
+  return outcome;
 }

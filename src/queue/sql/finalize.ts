@@ -1,5 +1,6 @@
-import type { Pool } from "pg";
 import { uuidv7 } from "uuidv7";
+import { withTransaction, type Queryable } from "../../db/queryable";
+import { assertJobTransitionAllowed } from "../transitions";
 import { DEFAULT_CANCEL_ERROR, type JobError, type JobRow } from "../types";
 
 export type FinalizeOutcome =
@@ -36,7 +37,7 @@ export type FinalizeOutcome =
  * and there is no legitimate owner left to fence against.
  */
 export async function finalizeJob(
-  pool: Pool,
+  db: Queryable,
   params: {
     jobId: string;
     leaseToken: string;
@@ -44,15 +45,18 @@ export async function finalizeJob(
     outcome: FinalizeOutcome;
   },
 ): Promise<JobRow | null> {
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
+  assertJobTransitionAllowed(params.fromStatus, params.outcome.toStatus);
 
+  return withTransaction(db, async (client) => {
     const error =
       params.outcome.toStatus === "completed"
         ? null
         : (params.outcome.error ?? (params.outcome.toStatus === "cancelled" ? DEFAULT_CANCEL_ERROR : null));
 
+    // P1-1 (second review): `lease_expires_at >= now()` — a lease that has
+    // already expired but hasn't been reaped yet must not still be
+    // writable, or a worker that stalled past its own lease can resurrect
+    // it and race the worker that legitimately reclaimed the job.
     const jobResult = await client.query<JobRow>(
       `UPDATE job SET
          status = $1,
@@ -61,13 +65,13 @@ export async function finalizeJob(
          lease_expires_at = NULL,
          updated_at = now()
        WHERE id = $3 AND lease_token = $4 AND status = $5
+         AND lease_expires_at >= now()
        RETURNING *`,
       [params.outcome.toStatus, error ? JSON.stringify(error) : null, params.jobId, params.leaseToken, params.fromStatus],
     );
 
     const job = jobResult.rows[0];
     if (!job) {
-      await client.query("ROLLBACK");
       return null; // fenced out — lease lost, or another terminal write already won
     }
 
@@ -92,12 +96,6 @@ export async function finalizeJob(
       );
     }
 
-    await client.query("COMMIT");
     return job;
-  } catch (err) {
-    await client.query("ROLLBACK");
-    throw err;
-  } finally {
-    client.release();
-  }
+  });
 }

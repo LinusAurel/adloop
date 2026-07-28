@@ -1,6 +1,6 @@
-import type { Pool } from "pg";
 import { uuidv7 } from "uuidv7";
 import { z } from "zod";
+import { withTransaction, type Queryable } from "../db/queryable";
 import { getFamily } from "./registry";
 
 export const CreateRunInputSchema = z.object({
@@ -40,8 +40,12 @@ function canonical(value: unknown): string {
  * carries a UNIQUE constraint — see migrations), so creating the run and
  * its job is one transaction and "the run already existed" is the only
  * fork in the logic.
+ *
+ * Accepts a `Queryable` (see db/queryable.ts) so a concurrency test can pin
+ * two competing submissions to two distinct, pid-identified Postgres
+ * backend connections instead of racing two calls over the same `Pool`.
  */
-export async function createRun(pool: Pool, params: CreateRunInput): Promise<CreateRunResult> {
+export async function createRun(db: Queryable, params: CreateRunInput): Promise<CreateRunResult> {
   const family = getFamily(params.family);
   if (!family) {
     return { outcome: "unknown_family" };
@@ -52,10 +56,7 @@ export async function createRun(pool: Pool, params: CreateRunInput): Promise<Cre
     return { outcome: "invalid_input", message: parsedInput.error.message };
   }
 
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
-
+  const result = await withTransaction(db, async (client) => {
     const inserted = await client.query(
       `INSERT INTO run (id, tenant_id, kind, status, input, created_at, updated_at)
        VALUES ($1, $2, $3, 'queued', $4::jsonb, now(), now())
@@ -70,22 +71,16 @@ export async function createRun(pool: Pool, params: CreateRunInput): Promise<Cre
          VALUES ($1, $2, $3, $4, 'queued', $5::jsonb, now(), now())`,
         [uuidv7(), params.tenantId, params.runId, params.family, JSON.stringify(parsedInput.data)],
       );
-      await client.query("COMMIT");
-      await pool.query(`SELECT pg_notify('job_available', $1)`, [params.runId]);
-      return { outcome: "created", runId: params.runId };
+      return { outcome: "created", runId: params.runId } as const;
     }
 
     // Run already existed (either a genuine retry, or we lost a race to
     // insert it — ON CONFLICT DO NOTHING blocks on the other transaction's
     // commit, so by the time we get here the row is final either way).
     const existing = await client.query(`SELECT * FROM run WHERE id = $1`, [params.runId]);
-    await client.query("COMMIT");
-
-    const existingRun = existing.rows[0] as
-      | { tenant_id: string; kind: string; input: unknown }
-      | undefined;
+    const existingRun = existing.rows[0] as { tenant_id: string; kind: string; input: unknown } | undefined;
     if (!existingRun) {
-      return { outcome: "conflict", runId: params.runId };
+      return { outcome: "conflict", runId: params.runId } as const;
     }
 
     const sameRequest =
@@ -94,12 +89,13 @@ export async function createRun(pool: Pool, params: CreateRunInput): Promise<Cre
       canonical(existingRun.input) === canonical(params.input);
 
     return sameRequest
-      ? { outcome: "idempotent_replay", runId: params.runId }
-      : { outcome: "conflict", runId: params.runId };
-  } catch (err) {
-    await client.query("ROLLBACK");
-    throw err;
-  } finally {
-    client.release();
+      ? ({ outcome: "idempotent_replay", runId: params.runId } as const)
+      : ({ outcome: "conflict", runId: params.runId } as const);
+  });
+
+  if (result.outcome === "created") {
+    await db.query(`SELECT pg_notify('job_available', $1)`, [params.runId]);
   }
+
+  return result;
 }

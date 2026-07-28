@@ -38,6 +38,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       );
     case "conflict":
       return errorResponse(409, "idempotency_conflict");
+    case "concurrency_conflict":
+      return errorResponse(409, "sync_in_progress");
     case "unknown_family":
       return errorResponse(400, "unknown_family", { family: parsed.data.family });
     case "invalid_input":

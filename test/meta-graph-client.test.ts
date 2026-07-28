@@ -110,4 +110,45 @@ describe("MetaGraphClient", () => {
     });
     expect(String(error)).not.toContain("synthetic-access-token");
   });
+
+  it("starts and polls asynchronous insight reports", async () => {
+    const calls: Array<{ url: string; method: string }> = [];
+    const responses = [
+      { report_run_id: "000000000000000099" },
+      {
+        id: "000000000000000099",
+        async_status: "Job Running",
+        async_percent_completion: 40,
+      },
+      {
+        id: "000000000000000099",
+        async_status: "Job Completed",
+        async_percent_completion: 100,
+      },
+    ];
+    const progress: number[] = [];
+    const client = new MetaGraphClient({
+      accessToken: "synthetic-access-token",
+      apiVersion: "v25.0",
+      fetchImpl: async (input, init) => {
+        calls.push({ url: String(input), method: init?.method ?? "GET" });
+        return jsonResponse(responses.shift());
+      },
+      sleep: async () => {},
+    });
+
+    const jobId = await client.startAsyncInsights(
+      "/act_000000000000000/insights",
+      { time_increment: "1" },
+    );
+    await client.waitForAsyncReport(jobId, {
+      onProgress: async (percent) => {
+        progress.push(percent);
+      },
+    });
+
+    expect(calls[0]?.method).toBe("POST");
+    expect(calls.slice(1).every((call) => call.method === "GET")).toBe(true);
+    expect(progress).toEqual([40, 100]);
+  });
 });

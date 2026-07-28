@@ -1,0 +1,19 @@
+{
+  "data": [
+    {
+      "ad_id": "000000000000000001",
+      "date_start": "2026-07-20",
+      "date_stop": "2026-07-20",
+      "spend": "12.50",
+      "impressions": "1050",
+      "clicks": "52",
+      "inline_link_clicks": "42",
+      "reach": "820",
+      "net_new_reach": "310",
+      "frequency": "1.28",
+      "actions": [
+        { "action_type": "landing_page_view", "value": "31" }
+      ]
+    }
+  ]
+}

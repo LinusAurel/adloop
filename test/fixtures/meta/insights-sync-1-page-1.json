@@ -1,0 +1,27 @@
+{
+  "data": [
+    {
+      "ad_id": "000000000000000001",
+      "date_start": "2026-07-20",
+      "date_stop": "2026-07-20",
+      "spend": "10.00",
+      "impressions": "1000",
+      "clicks": "50",
+      "inline_link_clicks": "40",
+      "reach": "800",
+      "net_new_reach": "300",
+      "frequency": "1.25",
+      "actions": [
+        { "action_type": "landing_page_view", "value": "30" },
+        { "action_type": "offsite_conversion.fb_pixel_lead", "value": "3" }
+      ],
+      "action_values": [
+        { "action_type": "offsite_conversion.fb_pixel_lead", "value": "150.00" }
+      ]
+    }
+  ],
+  "paging": {
+    "next": "https://graph.facebook.com/v25.0/act_000000000000000/insights?after=insights-cursor-1",
+    "cursors": { "after": "insights-cursor-1" }
+  }
+}

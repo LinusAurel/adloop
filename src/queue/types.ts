@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { PoolClient } from "pg";
 
 export const JOB_STATUSES = [
   "queued",
@@ -45,14 +46,20 @@ export const JobProgressSchema = z.object({
 });
 export type JobProgress = z.infer<typeof JobProgressSchema>;
 
+export type LeaseWriteResult<T> =
+  | { acquired: true; value: T }
+  | { acquired: false };
+
 /**
  * What a handler receives. It never touches the database directly — every
  * effect goes through ctx so the fencing rule (§4.4) can't be bypassed.
  */
 export interface JobContext<TInput> {
   readonly input: TInput;
+  readonly tenantId: string;
   readonly signal: AbortSignal;
   progress(p: JobProgress): Promise<void>;
+  withLease<T>(write: (client: PoolClient) => Promise<T>): Promise<LeaseWriteResult<T>>;
   isCancelled(): boolean;
 }
 

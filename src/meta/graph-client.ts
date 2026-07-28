@@ -81,7 +81,7 @@ export interface PageResult<T> {
 
 export interface PaginateOptions<T> {
   path: string;
-  pageSchema: z.ZodType<PageResult<T>>;
+  pageSchema: z.ZodType<PageResult<T>, z.ZodTypeDef, unknown>;
   resumeCursor?: string | null;
   signal?: AbortSignal;
   onPage(page: {
@@ -181,7 +181,7 @@ export class MetaGraphClient {
 
   async request<T>(
     path: string,
-    schema: z.ZodType<T>,
+    schema: z.ZodType<T, z.ZodTypeDef, unknown>,
     init: RequestInit = {},
   ): Promise<{ data: T; raw: unknown }> {
     for (let attempt = 0; ; attempt += 1) {

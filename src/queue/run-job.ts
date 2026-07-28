@@ -5,6 +5,7 @@ import { finalizeJob } from "./sql/finalize";
 import { scheduleRetry } from "./sql/retry";
 import { startHeartbeatLoop } from "./heartbeat-loop";
 import { JobCancelledError, normalizeError } from "./errors";
+import { withTransaction } from "../db/queryable";
 import {
   JobProgressSchema,
   LEASE_EXPIRED_ERROR,
@@ -104,6 +105,7 @@ export async function runJob(deps: RunJobDeps): Promise<void> {
 
   const ctx: JobContext<unknown> = {
     input: parsedInput.data,
+    tenantId: job.tenant_id,
     signal: controller.signal,
     isCancelled: () => controller.signal.aborted,
     progress: async (p: JobProgress) => {
@@ -117,6 +119,25 @@ export async function runJob(deps: RunJobDeps): Promise<void> {
       const row = await writeProgress(pool, { jobId: job.id, leaseToken, leaseMs, progress: validated });
       if (!row) controller.abort();
     },
+    withLease: async (write) =>
+      withTransaction(pool, async (client) => {
+        if (controller.signal.aborted) return { acquired: false } as const;
+        const ownership = await client.query(
+          `SELECT 1
+           FROM job
+           WHERE id = $1
+             AND lease_token = $2
+             AND status = 'claimed'
+             AND lease_expires_at >= now()
+           FOR UPDATE`,
+          [job.id, leaseToken],
+        );
+        if (ownership.rowCount !== 1) {
+          controller.abort();
+          return { acquired: false } as const;
+        }
+        return { acquired: true, value: await write(client) } as const;
+      }),
   };
 
   // P1-2 (second review): timers are created before the handler is ever

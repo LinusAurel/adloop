@@ -1,7 +1,13 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { uuidv7 } from "uuidv7";
 import { createRun } from "@/queue/create-run";
-import { createBarrier, registerTestFamilies, startTestDb, type TestDb } from "./db-harness";
+import {
+  acquireTwoDistinctClients,
+  createBarrier,
+  registerTestFamilies,
+  startTestDb,
+  type TestDb,
+} from "./db-harness";
 
 describe("run idempotency", () => {
   let db: TestDb;
@@ -58,21 +64,34 @@ describe("run idempotency", () => {
     expect(rows[0].input).toEqual({ text: "a" });
   });
 
+  // Tightened per the second review's test audit: two calls sharing one
+  // `Pool` don't prove real concurrency (see db-harness.ts's
+  // acquireTwoDistinctClients doc comment for why). Pinned to two distinct,
+  // pid-proven Postgres backend connections instead.
   it("truly concurrent duplicate submissions still create exactly one run and one job", async () => {
     const runId = uuidv7();
     const params = { runId, tenantId: db.tenantId, family: "echo", input: { text: "concurrent" } };
 
-    const barrier = createBarrier(2);
-    const [a, b] = await Promise.all([
-      (async () => {
-        await barrier.arrive();
-        return createRun(db.pool, params);
-      })(),
-      (async () => {
-        await barrier.arrive();
-        return createRun(db.pool, params);
-      })(),
-    ]);
+    const { clientA, pidA, clientB, pidB, release } = await acquireTwoDistinctClients(db.pool);
+    expect(pidA).not.toBe(pidB);
+
+    let a: Awaited<ReturnType<typeof createRun>>;
+    let b: Awaited<ReturnType<typeof createRun>>;
+    try {
+      const barrier = createBarrier(2);
+      [a, b] = await Promise.all([
+        (async () => {
+          await barrier.arrive();
+          return createRun(clientA, params);
+        })(),
+        (async () => {
+          await barrier.arrive();
+          return createRun(clientB, params);
+        })(),
+      ]);
+    } finally {
+      release();
+    }
 
     expect([a.outcome, b.outcome].sort()).toEqual(["created", "idempotent_replay"]);
 

@@ -2,7 +2,14 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { claimNextJob } from "@/queue/sql/claim";
 import { finalizeJob } from "@/queue/sql/finalize";
 import { requestCancel } from "@/queue/sql/cancel";
-import { createBarrier, insertQueuedRun, registerTestFamilies, startTestDb, type TestDb } from "./db-harness";
+import {
+  acquireTwoDistinctClients,
+  createBarrier,
+  insertQueuedRun,
+  registerTestFamilies,
+  startTestDb,
+  type TestDb,
+} from "./db-harness";
 
 describe("queue terminal race", () => {
   let db: TestDb;
@@ -16,12 +23,15 @@ describe("queue terminal race", () => {
     await db.stop();
   });
 
-  // Test case 7 (§8), load-bearing: completion and a cancel request racing
-  // on the same claimed job. Per sql/finalize.ts, the decision point is a
-  // compare-and-set on status = 'claimed' shared by both writers (the
-  // worker's completion write and the cancel API's claimed -> cancel_requested
-  // write) — synchronized with a real barrier, not two sequential calls.
-  // Exactly one lands; the other affects zero rows / is reported as already
+  // Test case 7 (§8), load-bearing, tightened per the second review's test
+  // audit: completion and a cancel request racing on the same claimed job,
+  // pinned to two distinct, pid-proven Postgres backend connections (see
+  // db-harness.ts's acquireTwoDistinctClients) — a barrier over one shared
+  // Pool would not prove the two writers genuinely contend for the row.
+  // Per sql/finalize.ts, the decision point is a compare-and-set on
+  // status = 'claimed' shared by both writers (the worker's completion
+  // write and the cancel API's claimed -> cancel_requested write). Exactly
+  // one lands; the other affects zero rows / is reported as already
   // terminal, and that answer is stable (repeated cancel-finalize attempts
   // never succeed twice).
   it("completing and cancel-requesting a claimed job concurrently: exactly one wins", async () => {
@@ -34,22 +44,31 @@ describe("queue terminal race", () => {
     const job = await claimNextJob(db.pool, { leaseMs: 30000, workerId: "worker-a" });
     const leaseToken = job!.lease_token as string;
 
-    const barrier = createBarrier(2);
-    const [completeResult, cancelResult] = await Promise.all([
-      (async () => {
-        await barrier.arrive();
-        return finalizeJob(db.pool, {
-          jobId,
-          leaseToken,
-          fromStatus: "claimed",
-          outcome: { toStatus: "completed", result: { text: "done" } },
-        });
-      })(),
-      (async () => {
-        await barrier.arrive();
-        return requestCancel(db.pool, { jobId, tenantId: db.tenantId });
-      })(),
-    ]);
+    const { clientA, pidA, clientB, pidB, release } = await acquireTwoDistinctClients(db.pool);
+    expect(pidA).not.toBe(pidB);
+
+    let completeResult: Awaited<ReturnType<typeof finalizeJob>>;
+    let cancelResult: Awaited<ReturnType<typeof requestCancel>>;
+    try {
+      const barrier = createBarrier(2);
+      [completeResult, cancelResult] = await Promise.all([
+        (async () => {
+          await barrier.arrive();
+          return finalizeJob(clientA, {
+            jobId,
+            leaseToken,
+            fromStatus: "claimed",
+            outcome: { toStatus: "completed", result: { text: "done" } },
+          });
+        })(),
+        (async () => {
+          await barrier.arrive();
+          return requestCancel(clientB, { jobId, tenantId: db.tenantId });
+        })(),
+      ]);
+    } finally {
+      release();
+    }
 
     const { rows } = await db.pool.query(`SELECT status FROM job WHERE id = $1`, [jobId]);
     const finalStatus = rows[0].status as string;

@@ -1,12 +1,14 @@
 import { join } from "node:path";
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
-import { Pool } from "pg";
+import { Pool, type PoolClient } from "pg";
 import runMigrations from "node-pg-migrate";
 import { uuidv7 } from "uuidv7";
 import { clearRegistry, registerFamily } from "@/queue/registry";
 import { echoFamily } from "@/queue/families/echo";
 import { alwaysFailsFamily } from "@/queue/families/always-fails";
 import { sleepsForeverFamily } from "@/queue/families/sleeps-forever";
+import { timeoutThenLateWriteFamily } from "@/queue/families/timeout-then-late-write";
+import { syncThrowsFamily } from "@/queue/families/sync-throws";
 
 /**
  * §8: "gegen eine echte Postgres-Instanz (Testcontainers oder ein zweiter
@@ -17,6 +19,7 @@ import { sleepsForeverFamily } from "@/queue/families/sleeps-forever";
  */
 export interface TestDb {
   pool: Pool;
+  databaseUrl: string;
   tenantId: string;
   stop(): Promise<void>;
 }
@@ -42,6 +45,7 @@ export async function startTestDb(): Promise<TestDb> {
 
   return {
     pool,
+    databaseUrl,
     tenantId,
     async stop() {
       await pool.end();
@@ -50,12 +54,61 @@ export async function startTestDb(): Promise<TestDb> {
   };
 }
 
-/** Registers all three job families — the two test-only ones are never registered in worker/index.ts. */
+/**
+ * Second review, the most important test-rigor point: a barrier around two
+ * calls that both go through the SAME `Pool` proves nothing about real
+ * concurrency — `pg.Pool` may (and often does, for two calls issued back to
+ * back) serialize them onto one physical connection, in which case the
+ * "race" was never a race at all and the test would pass even if the code
+ * under test had no concurrency handling whatsoever.
+ *
+ * This acquires two connections explicitly, identifies each one's backend
+ * process via `pg_backend_pid()`, and asserts they differ — so a caller can
+ * use `clientA`/`clientB` for the two sides of a barrier and know, not
+ * assume, that it is exercising two distinct Postgres backends.
+ */
+export interface DistinctClients {
+  clientA: PoolClient;
+  pidA: number;
+  clientB: PoolClient;
+  pidB: number;
+  release(): void;
+}
+
+export async function acquireTwoDistinctClients(pool: Pool): Promise<DistinctClients> {
+  const clientA = await pool.connect();
+  const clientB = await pool.connect();
+  const pidResultA = await clientA.query<{ pid: number }>("SELECT pg_backend_pid() AS pid");
+  const pidResultB = await clientB.query<{ pid: number }>("SELECT pg_backend_pid() AS pid");
+  const pidA = pidResultA.rows[0]!.pid;
+  const pidB = pidResultB.rows[0]!.pid;
+  if (pidA === pidB) {
+    clientA.release();
+    clientB.release();
+    throw new Error(
+      "acquireTwoDistinctClients got the same Postgres backend pid twice — cannot prove a real concurrency race",
+    );
+  }
+  return {
+    clientA,
+    pidA,
+    clientB,
+    pidB,
+    release() {
+      clientA.release();
+      clientB.release();
+    },
+  };
+}
+
+/** Registers echo plus every test-only family — none of the latter are ever registered in worker/index.ts. */
 export function registerTestFamilies(): void {
   clearRegistry();
   registerFamily(echoFamily);
   registerFamily(alwaysFailsFamily);
   registerFamily(sleepsForeverFamily);
+  registerFamily(timeoutThenLateWriteFamily);
+  registerFamily(syncThrowsFamily);
 }
 
 export async function insertQueuedRun(

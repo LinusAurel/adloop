@@ -71,7 +71,7 @@ export async function requestLoginCode(
     );
   });
 
-  if (env.NODE_ENV === "development") {
+  if (env.AUTH_CODE_DELIVERY === "log") {
     // Development delivery adapter. Never log a Meta token here.
     // eslint-disable-next-line no-console
     console.info(`[auth] code for ${email}: ${code}`);

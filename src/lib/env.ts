@@ -19,6 +19,7 @@ const envSchema = z
   MINIO_ROOT_PASSWORD: z.string().min(1).optional(),
 
   SESSION_SECRET: z.string().min(32).default(DEVELOPMENT_SESSION_SECRET),
+  AUTH_CODE_DELIVERY: z.enum(["log", "disabled"]).default("disabled"),
   ENCRYPTION_KEY: z.string().min(1).optional(),
   META_APP_ID: z.string().min(1).optional(),
   META_APP_SECRET: z.string().min(1).optional(),

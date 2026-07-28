@@ -30,6 +30,7 @@ PROMPT-etappe-1.md §0).
 | `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` | Local S3-compatible storage credentials |
 | `S3_ENDPOINT` / `S3_BUCKET` / `S3_REGION` | Raw Meta response object storage |
 | `SESSION_SECRET` | At least 32 random characters; signs HTTP-only sessions and login-code hashes |
+| `AUTH_CODE_DELIVERY` | `log` for local development, `disabled` before deployment; mail delivery is outside Etappe 2 |
 | `META_APP_ID` / `META_APP_SECRET` | Meta app credentials; configure together with the next two values |
 | `META_REDIRECT_URI` | Exact registered callback URI, normally `http://localhost:3000/api/auth/meta/callback` |
 | `ENCRYPTION_KEY` | Base64-encoded 32-byte key (or 64 hex characters) for Meta tokens |

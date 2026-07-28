@@ -16,6 +16,7 @@
     "migrate": "node dist/migrate.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:meta-contract": "vitest run --config vitest.meta-contract.config.ts",
     "test:watch": "vitest",
     "prepare": "lefthook install"
   },

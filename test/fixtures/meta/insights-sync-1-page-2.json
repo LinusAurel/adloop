@@ -9,7 +9,6 @@
       "clicks": "80",
       "inline_link_clicks": "70",
       "reach": "1500",
-      "net_new_reach": "500",
       "frequency": "1.33",
       "actions": [
         { "action_type": "landing_page_view", "value": "55" },

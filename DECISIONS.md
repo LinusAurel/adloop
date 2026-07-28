@@ -306,9 +306,7 @@ What changed, and why:
   overridden.** The Marketing API ad-account object has no content-language
   field, so deriving it "from the language of the ad account" would require
   an undocumented guess from currency or timezone; no such guess is made.
-- **`net_new_reach` is a required provider response field and is never
-  derived from `reach`.** Meta's documented Ads Insights field list has no
-  `net_new_reach`; recorded fixtures can prove the storage contract, but a
-  live sync will fail loudly with `META_RESPONSE_INVALID` until Meta
-  provides an agreed source field. Claiming live support by substituting
-  `reach` would make the Etappe 3 funnel input false.
+- **Every Insights field in the sync is checked by
+  `pnpm test:meta-contract` against the real account.** The acceptance
+  correction removed the invalid `net_new_reach` provider field; the metric
+  is derived later from separately queried cumulative reach windows.

@@ -122,7 +122,6 @@ CREATE TABLE insight_daily (
   link_clicks bigint NOT NULL,
   landing_page_views bigint NOT NULL,
   reach bigint NOT NULL,
-  net_new_reach bigint NOT NULL,
   frequency numeric NOT NULL,
   video_plays bigint NOT NULL,
   video_p25 bigint NOT NULL,

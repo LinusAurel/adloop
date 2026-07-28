@@ -42,7 +42,6 @@ export const MetaInsightRowSchema = z.object({
   clicks: NumericString,
   inline_link_clicks: NumericString,
   reach: NumericString,
-  net_new_reach: NumericString,
   frequency: NumericString,
   actions: z.array(ActionValueSchema).optional(),
   action_values: z.array(ActionValueSchema).optional(),
@@ -73,7 +72,7 @@ export const MetaInsightPageSchema: z.ZodType<
 });
 
 const ATTRIBUTION_SPEC = ["1d_view", "7d_click"] as const;
-const INSIGHT_FIELDS = [
+export const META_INSIGHT_FIELDS = [
   "ad_id",
   "date_start",
   "date_stop",
@@ -82,7 +81,6 @@ const INSIGHT_FIELDS = [
   "clicks",
   "inline_link_clicks",
   "reach",
-  "net_new_reach",
   "frequency",
   "actions",
   "action_values",
@@ -99,7 +97,7 @@ const INSIGHT_FIELDS = [
 const QUERY_CONTRACT = {
   level: "ad",
   timeIncrement: 1,
-  fields: INSIGHT_FIELDS,
+  fields: META_INSIGHT_FIELDS,
   attributionSpec: ATTRIBUTION_SPEC,
 };
 
@@ -258,7 +256,7 @@ function cancelledReadiness() {
 
 function insightPath(externalAdAccountId: string, window: SyncWindow): string {
   const params = new URLSearchParams({
-    fields: INSIGHT_FIELDS.join(","),
+    fields: META_INSIGHT_FIELDS.join(","),
     level: "ad",
     time_increment: "1",
     action_attribution_windows: JSON.stringify(ATTRIBUTION_SPEC),
@@ -282,12 +280,12 @@ async function writeInsightRow(
     await client.query(
       `INSERT INTO insight_daily (
          tenant_id, meta_ad_id, date, spend, impressions, clicks,
-         link_clicks, landing_page_views, reach, net_new_reach, frequency,
+         link_clicks, landing_page_views, reach, frequency,
          video_plays, video_p25, video_p50, video_p75, video_p95, video_p100,
          thruplays, avg_seconds_watched, sync_run_id, observed_at
        ) VALUES (
-         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
-         $12, $13, $14, $15, $16, $17, $18, $19, $20, $21
+         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+         $11, $12, $13, $14, $15, $16, $17, $18, $19, $20
        )
        ON CONFLICT (tenant_id, meta_ad_id, date, sync_run_id) DO UPDATE SET
          spend = EXCLUDED.spend,
@@ -296,7 +294,6 @@ async function writeInsightRow(
          link_clicks = EXCLUDED.link_clicks,
          landing_page_views = EXCLUDED.landing_page_views,
          reach = EXCLUDED.reach,
-         net_new_reach = EXCLUDED.net_new_reach,
          frequency = EXCLUDED.frequency,
          video_plays = EXCLUDED.video_plays,
          video_p25 = EXCLUDED.video_p25,
@@ -317,7 +314,6 @@ async function writeInsightRow(
         row.inline_link_clicks,
         actionValue(row.actions, "landing_page_view"),
         row.reach,
-        row.net_new_reach,
         row.frequency,
         videoValue(row.video_play_actions),
         videoValue(row.video_p25_watched_actions),

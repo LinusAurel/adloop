@@ -70,10 +70,10 @@ observations, vanished actions, incomplete-run exclusion, pagination,
 rate-limit retry, cursor resume, tenant isolation, and per-account sync
 concurrency. No live Meta credentials are needed.
 
-`net_new_reach` is deliberately required by the stored response contract,
-but Meta's documented v25 Insights fields do not currently expose a field
-with that name. Fixture verification is complete; live sync will fail
-loudly rather than substitute `reach` and create a false funnel input.
+`pnpm test:meta-contract` is the credentialed exception. After loading
+`_local/adloop-v2/.env.meta`, it sends the sync's exported field list to the
+real Insights API and names any rejected field. It is intentionally excluded
+from `pnpm test`.
 
 ## Everything else
 

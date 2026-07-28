@@ -395,3 +395,33 @@ The fix, when it is needed, is to label each row with the setting Meta actually
 reports rather than rejecting it — the `attribution_spec` column already carries
 that information per row. Not done now because it is out of scope for stage 2 and
 costs a build run that the current budget does not justify.
+
+## Etappe 4
+
+- **`tool_approval` stores `resolved_payload` plus hash, not hash alone.** Time-dependent
+  resolve (e.g. `trigger_meta_sync` window bounds) must not be re-run between consent and
+  execute — the worker runs the persisted payload. Canonical JSON for hashing: sorted keys,
+  no whitespace, nulls omitted from objects (see `src/lib/canonical-json.ts`).
+- **`reserved_operation` is keyed by `operation_id`.** Consume-approval and reserve happen
+  in one transaction. Retries reference `operation_id`, not the approval row (Fall 7).
+- **`run.turn_phase` is separate from `run.status`.** Queue primitives stay Etappe-1;
+  turn phases live beside them so agent turns do not widen the job state machine.
+- **`run_event (run_id, seq)` is the resume log.** `job.progress` is overwrite-only and
+  cannot replay a stream. SSE `?after=<seq>` is strict; clients dedupe by seq.
+- **Playbook resolution order is DB → PLAYBOOK_DIR → fixtures(test only).**
+  `ALLOW_SYNTHETIC_PLAYBOOKS` is removed. Fail-closed in production: no fixture fallback.
+  Overrides store `files jsonb` (whole directory), hash over sorted path+content.
+- **`JobProgressSchema.message` → `code` + `params`.** Same rule as activity events and
+  SPEC §8.2. Only model output may be prose (`agent_locale`).
+- **`ui_locale` / `agent_locale` on `app_user`.** `content_locale` enters the context
+  packet from this stage (fact only; no ad-copy generation yet).
+- **`list_ads` / `get_ad_detail` are metrics-only from local insight tables.** Etappe 2–3
+  store no ad master data (name/status). A Graph enrichment would be a new sync surface;
+  deferred so the tool framework proof does not invent a second Meta contract mid-stage.
+- **`setPoolForTests`** lets worker-driven handlers that call `getPool()` see the
+  Testcontainers pool. Production still uses the process singleton.
+- **`listRunEventsAfter` must `ORDER BY run_event.seq`**, not the `seq::text`
+  select alias — Postgres would otherwise sort `"10"` before `"2"` and break
+  resume/phase assertions.
+- **Screenshots for both theme modes** are a manual verification step (auftrag §0.9b);
+  automated coverage is the no-hex-outside-theme test plus `.data` / `--font-data` usage.

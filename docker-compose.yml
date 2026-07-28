@@ -72,6 +72,10 @@ services:
     env_file: .env
     environment:
       WORKER_HEALTH_PORT: "3100"
+    # Longer than WORKER_SHUTDOWN_GRACE_MS (8s): Docker's own stop timeout
+    # must not race the worker's own graceful-shutdown window and SIGKILL it
+    # mid-cleanup. See DECISIONS.md (the §9.3 lease/heartbeat timing note).
+    stop_grace_period: 15s
     # Only starts once web has finished migrating and is healthy — otherwise
     # it would run against an empty schema (§2).
     depends_on:

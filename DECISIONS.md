@@ -579,3 +579,55 @@ costs a build run that the current budget does not justify.
   webhook and the polling adapter. Chunk size is checked before append;
   `Content-Length` over the cap never opens a reader. `Allow`+`NotAction`
   without excluding reads is treated as public.
+
+## Etappe 7 — Launch
+
+- **Write paths live in `MetaWriteClient`**, on top of the read-only Graph client.
+  Every create sets `status=PAUSED` explicitly. There is no status field on the
+  request schema (agent or human) and no ACTIVE assignment in the publish path
+  (source scan + sealed-payload gate + mutation test).
+- **`is_adset_budget_sharing_enabled` is required** when creating a campaign
+  (Meta `error_subcode 4834011` without it — verified 29.07.2026 on the sandbox
+  account). True = CBO, false = ABO.
+- **Budget provenance:** the agent tool schema has no budget field at all. Human
+  budget enters only via `POST /api/meta/publish` and is sealed as
+  `budget_source: { kind: human_input, decidedBy, decidedAt, amount, level }`.
+  Missing required budget → `budget_required`. Wrong level → `budget_wrong_level`.
+  CBO matrix as in the Auftrag §0.2.
+- **Step lease + correlation fencing.** `publication_step` carries
+  `lease_expires_at`, `attempt`, `reconcile_state`, `external_correlation`.
+  Meta object names embed `[adloop:<correlation>]`. Expired `in_flight` goes to
+  reconcile (search by correlation), never a blind retry. No object found after
+  lease expiry → `needs_human_review` (prefer hung publish over a duplicate).
+- **Crash-after-persist must not mark the step failed.** The Meta object exists
+  and the id is stored; resume continues at the next step. Tests inject the crash
+  via `setCrashAfterPersistForTests`.
+- **`metric_optimization_binding`** pins `(conversion_metric_id, version)` plus
+  `optimization_goal`, `promoted_object`, `attribution_spec`. Missing active
+  binding → `metric_binding_missing`. Goal mismatch requires
+  `deviation_reason` on the publication.
+- **Publish always goes through Freigabe** (`costClass: expensive`,
+  `sideEffect: external`). POST creates the approval only; the worker executes
+  the sealed payload.
+- **Sandbox limits (29.07.2026, `act_861604393480918`):**
+  - Campaign + Ad Set create/delete work; status confirms `PAUSED`.
+  - No usable page identity (`can_post: false`), no pixel, no Instagram actor →
+    Creative and Ad are **not** acceptably testable live. Covered by the mock
+    Graph client in `pnpm test` (all 11 cases). `pnpm test:meta-publish` covers
+    campaign+adset only.
+  - EU targeting (DE) requires `dsa_beneficiary` / `dsa_payor` on ad sets
+    (`error_subcode 3858081`). Defaults carry optional `beneficiaryName` /
+    `payerName`; sandbox test uses US to avoid that gate.
+  - `OUTCOME_TRAFFIC` + `LINK_CLICKS` only accepts 1-day click attribution
+    (`error_subcode 1885423` for 7d).
+- **Not acceptably verifiable without page/pixel:** Creative upload, Ad
+  Creative, Ad create, end-to-end Ads Manager visual for Creative/Ad on the
+  sandbox. Real-account acceptance is a single PAUSED publish after mock tests
+  are green — not done in this worktree run.
+- **Mutation proofs** (see `test/etappe7-launch.test.ts`):
+  - Sealed payload with `status: ACTIVE` → `createPublication` refuses.
+  - Agent schema silently drops a smuggled `budget` field; resolve still
+    requires human budget via `budget_required`.
+  - Resetting a succeeded campaign step to `pending` and re-running creates a
+    second campaign — documenting the failure mode the lease/persist path
+    prevents.

@@ -1,0 +1,775 @@
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { readFileSync, readdirSync, statSync } from "node:fs";
+import { join } from "node:path";
+import { uuidv7 } from "uuidv7";
+import { setPoolForTests } from "@/db/pool";
+import { type TestDb, startTestDb } from "./db-harness";
+import {
+  MemoryObjectStore,
+  setObjectStoreForTests,
+} from "@/storage/object-store";
+import { seedMetaAccount } from "./metrics-fixtures";
+import { saveDefaults } from "@/publish/resolve";
+import { resolvePublishPayload } from "@/publish/resolve";
+import {
+  createPublication,
+  runPublication,
+} from "@/publish/chain";
+import { MockMetaWriteClient } from "@/publish/mock-client";
+import {
+  setCrashAfterPersistForTests,
+  setPublishClockForTests,
+} from "@/publish/fault";
+import {
+  META_PUBLISH_STATUS,
+  PublishAgentInputSchema,
+  PublishError,
+  PublishHumanInputSchema,
+} from "@/publish/schemas";
+import { applyUtmParams } from "@/publish/utm";
+import { resolveBudgetPlacement, requireBudgetSource } from "@/publish/budget";
+import type { AdvertiserDefaults } from "@/publish/settings";
+import { AdvertiserDefaultsSchema } from "@/publish/settings";
+
+const PNG_1X1 = Buffer.from([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49,
+  0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06,
+  0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4, 0x89, 0x00, 0x00, 0x00, 0x0a, 0x49, 0x44,
+  0x41, 0x54, 0x78, 0x9c, 0x63, 0x00, 0x01, 0x00, 0x00, 0x05, 0x00, 0x01, 0x0d,
+  0x0a, 0x2d, 0xb4, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42,
+  0x60, 0x82,
+]);
+
+function defaultSettings(pageId = "page_test"): AdvertiserDefaults {
+  return AdvertiserDefaultsSchema.parse({
+    identity: { pageId },
+    adSet: {
+      optimizationGoal: "LINK_CLICKS",
+      targeting: { countries: ["DE"] },
+      budgetMode: "ABO",
+    },
+    website: {
+      url: "https://example.com/land",
+      utmParams: "utm_source=meta&utm_campaign={{campaign.name}}",
+    },
+    autoNaming: {
+      creativeTemplate: "{advertiser} / {creative}",
+      adSetTemplate: "{advertiser} / {optimization}",
+      adTemplate: "{creative} / ad",
+    },
+    campaignObjective: "OUTCOME_TRAFFIC",
+  });
+}
+
+describe("etappe 7 — launch", () => {
+  let db: TestDb;
+  let store: MemoryObjectStore;
+  let mock: MockMetaWriteClient;
+  let advertiserId: string;
+  let accountId: string;
+  let creativeId: string;
+  let userId: string;
+  let metricId: string;
+
+  async function seedFixture(options?: {
+    optimizationGoal?: AdvertiserDefaults["adSet"]["optimizationGoal"];
+    bindingGoal?: string;
+  }) {
+    const seeded = await seedMetaAccount(db.pool, db.tenantId);
+    advertiserId = seeded.advertiserId;
+    accountId = seeded.accountId;
+    userId = uuidv7();
+
+    const settings = defaultSettings();
+    if (options?.optimizationGoal) {
+      settings.adSet.optimizationGoal = options.optimizationGoal;
+    }
+    await saveDefaults(db.pool, {
+      tenantId: db.tenantId,
+      advertiserId,
+      settings,
+      createdBy: userId,
+    });
+
+    metricId = uuidv7();
+    await db.pool.query(
+      `INSERT INTO conversion_metric (
+         id, tenant_id, label, version,
+         numerator_action_types, numerator_aggregation, attribution_spec,
+         denominator, value_source, effective_from
+       ) VALUES (
+         $1, $2, 'Lead', 1,
+         ARRAY['lead'], 'sum_disjoint', ARRAY['1d_view','7d_click'],
+         NULL, 'none', now() - interval '1 day'
+       )`,
+      [metricId, db.tenantId],
+    );
+    await db.pool.query(
+      `INSERT INTO ad_account_metric_assignment (
+         id, tenant_id, meta_ad_account_id, conversion_metric_id, effective_from
+       ) VALUES ($1, $2, $3, $4, now() - interval '1 day')`,
+      [uuidv7(), db.tenantId, accountId, metricId],
+    );
+    await db.pool.query(
+      `INSERT INTO metric_optimization_binding (
+         id, tenant_id, conversion_metric_id, conversion_metric_version,
+         optimization_goal, promoted_object, attribution_spec,
+         version, active
+       ) VALUES (
+         $1, $2, $3, 1,
+         $4, $5::jsonb, ARRAY['1d_view','7d_click'],
+         1, true
+       )`,
+      [
+        uuidv7(),
+        db.tenantId,
+        metricId,
+        options?.bindingGoal ?? "LINK_CLICKS",
+        JSON.stringify({ page_id: "page_test" }),
+      ],
+    );
+
+    const assetId = uuidv7();
+    const storageKey = `creatives/${assetId}.png`;
+    await store.putBytes(storageKey, PNG_1X1, "image/png");
+    await db.pool.query(
+      `INSERT INTO asset (
+         id, tenant_id, kind, storage_key, width, height, mime, checksum
+       ) VALUES ($1, $2, 'image', $3, 1, 1, 'image/png', 'abc')`,
+      [assetId, db.tenantId, storageKey],
+    );
+    creativeId = uuidv7();
+    await db.pool.query(
+      `INSERT INTO creative (
+         id, tenant_id, advertiser_id, name, primary_text, headline,
+         description, call_to_action, asset_id, aspect_ratio, status
+       ) VALUES (
+         $1, $2, $3, 'Hero', 'Buy now', 'Headline',
+         'Desc', 'LEARN_MORE', $4, '1:1', 'ready'
+       )`,
+      [creativeId, db.tenantId, advertiserId, assetId],
+    );
+  }
+
+  async function resolveAndPublish(input: {
+    budget?: { amount: number; currency: string };
+    campaign?:
+      | { mode: "new"; budgetMode?: "ABO" | "CBO"; name?: string }
+      | { mode: "existing"; existingCampaignId: string };
+    adSet?:
+      | { mode: "new"; name?: string }
+      | { mode: "existing"; existingAdSetId: string };
+    deviationReason?: string;
+  }) {
+    const human = PublishHumanInputSchema.parse({
+      advertiserId,
+      metaAdAccountId: accountId,
+      creativeIds: [creativeId],
+      campaign: input.campaign ?? { mode: "new", budgetMode: "ABO" },
+      adSet: input.adSet ?? { mode: "new" },
+      idempotencyKey: uuidv7(),
+      budget: input.budget,
+      deviationReason: input.deviationReason,
+    });
+    const resolved = await resolvePublishPayload(db.pool, {
+      tenantId: db.tenantId,
+      userId,
+      input: human,
+      allowHumanBudget: true,
+    });
+    const runId = uuidv7();
+    await db.pool.query(
+      `INSERT INTO run (id, tenant_id, kind, status, input, created_at, updated_at)
+       VALUES ($1, $2, 'publish_request', 'queued', '{}'::jsonb, now(), now())`,
+      [runId, db.tenantId],
+    );
+    const { publicationId } = await createPublication(db.pool, {
+      tenantId: db.tenantId,
+      runId,
+      payload: resolved,
+    });
+    const outcome = await runPublication(db.pool, {
+      publicationId,
+      tenantId: db.tenantId,
+      client: mock,
+      store,
+      leaseMs: 60_000,
+    });
+    return { resolved, publicationId, outcome, runId };
+  }
+
+  beforeAll(async () => {
+    db = await startTestDb();
+    setPoolForTests(db.pool);
+  }, 60_000);
+
+  afterAll(async () => {
+    setCrashAfterPersistForTests(null);
+    setPublishClockForTests(null);
+    setObjectStoreForTests(null);
+    setPoolForTests(null);
+    await db.stop();
+  });
+
+  beforeEach(async () => {
+    setCrashAfterPersistForTests(null);
+    setPublishClockForTests(null);
+    store = new MemoryObjectStore();
+    setObjectStoreForTests(store);
+    mock = new MockMetaWriteClient();
+
+    await db.pool.query(`DELETE FROM publication_step`);
+    await db.pool.query(`DELETE FROM publication`);
+    await db.pool.query(`DELETE FROM metric_optimization_binding`);
+    await db.pool.query(`DELETE FROM ad_account_metric_assignment`);
+    await db.pool.query(`DELETE FROM conversion_metric`);
+    await db.pool.query(`DELETE FROM advertiser_defaults`);
+    await db.pool.query(`DELETE FROM creative_variant`);
+    await db.pool.query(`DELETE FROM creative`);
+    await db.pool.query(`DELETE FROM asset`);
+    await db.pool.query(`DELETE FROM meta_ad_account`);
+    await db.pool.query(`DELETE FROM meta_connection`);
+    await db.pool.query(`DELETE FROM advertiser WHERE tenant_id = $1`, [
+      db.tenantId,
+    ]);
+    await db.pool.query(`DELETE FROM run WHERE tenant_id = $1`, [db.tenantId]);
+
+    await seedFixture();
+  });
+
+  it("1 — full publish: every step has external_id and ad is PAUSED", async () => {
+    const { publicationId, outcome } = await resolveAndPublish({
+      budget: { amount: 1000, currency: "EUR" },
+    });
+    expect(outcome.status).toBe("succeeded");
+
+    const steps = await db.pool.query<{
+      operation: string;
+      status: string;
+      external_id: string | null;
+    }>(
+      `SELECT operation, status, external_id FROM publication_step
+       WHERE publication_id = $1 ORDER BY step_index`,
+      [publicationId],
+    );
+    expect(steps.rows).toHaveLength(4);
+    for (const step of steps.rows) {
+      expect(step.status).toBe("succeeded");
+      expect(step.external_id).toBeTruthy();
+    }
+    const ad = steps.rows.find((s) => s.operation === "create_ad")!;
+    const status = await mock.getObjectStatus(ad.external_id!);
+    expect(status.status).toBe(META_PUBLISH_STATUS);
+    expect(mock.countByKind("campaign")).toBe(1);
+  });
+
+  it("2 — fail after create_campaign: resume does not create a second campaign", async () => {
+    setCrashAfterPersistForTests(async (op) => {
+      if (op === "create_campaign") throw new Error("injected_crash_after_campaign");
+    });
+    const first = await resolveAndPublish({
+      budget: { amount: 1000, currency: "EUR" },
+    });
+    expect(first.outcome.status).toBe("failed");
+    expect(mock.countByKind("campaign")).toBe(1);
+
+    setCrashAfterPersistForTests(null);
+    const resumed = await runPublication(db.pool, {
+      publicationId: first.publicationId,
+      tenantId: db.tenantId,
+      client: mock,
+      store,
+    });
+    expect(resumed.status).toBe("succeeded");
+    expect(mock.countByKind("campaign")).toBe(1);
+    expect(mock.countByKind("adset")).toBe(1);
+    expect(mock.countByKind("ad")).toBe(1);
+  });
+
+  it("3 — fail after create_adset: resume continues at create_creative", async () => {
+    setCrashAfterPersistForTests(async (op) => {
+      if (op === "create_adset") throw new Error("injected_crash_after_adset");
+    });
+    const first = await resolveAndPublish({
+      budget: { amount: 1000, currency: "EUR" },
+    });
+    expect(first.outcome.status).toBe("failed");
+    expect(mock.countByKind("adset")).toBe(1);
+
+    setCrashAfterPersistForTests(null);
+    const resumed = await runPublication(db.pool, {
+      publicationId: first.publicationId,
+      tenantId: db.tenantId,
+      client: mock,
+      store,
+    });
+    expect(resumed.status).toBe("succeeded");
+    expect(mock.countByKind("campaign")).toBe(1);
+    expect(mock.countByKind("adset")).toBe(1);
+  });
+
+  it("4 — fail after create_creative: resume continues at create_ad", async () => {
+    setCrashAfterPersistForTests(async (op) => {
+      if (op === "create_creative") throw new Error("injected_crash_after_creative");
+    });
+    const first = await resolveAndPublish({
+      budget: { amount: 1000, currency: "EUR" },
+    });
+    expect(first.outcome.status).toBe("failed");
+    expect(mock.countByKind("creative")).toBe(1);
+
+    setCrashAfterPersistForTests(null);
+    const resumed = await runPublication(db.pool, {
+      publicationId: first.publicationId,
+      tenantId: db.tenantId,
+      client: mock,
+      store,
+    });
+    expect(resumed.status).toBe("succeeded");
+    expect(mock.countByKind("creative")).toBe(1);
+    expect(mock.countByKind("ad")).toBe(1);
+  });
+
+  it("5 — fail after create_ad: reconcile finds existing, no second ad", async () => {
+    setCrashAfterPersistForTests(async (op) => {
+      if (op === "create_ad") throw new Error("injected_crash_after_ad");
+    });
+    const first = await resolveAndPublish({
+      budget: { amount: 1000, currency: "EUR" },
+    });
+    expect(first.outcome.status).toBe("failed");
+    expect(mock.countByKind("ad")).toBe(1);
+
+    // Simulate lease expiry on the succeeded-but-crashed step: the step was
+    // persisted as succeeded before crash, so resume just finishes.
+    // For the case where Meta succeeded but DB did not persist: inject fail
+    // BEFORE persist by failing the Meta call after object exists — covered
+    // by expire+reconcile below using crashAfterSuccess on the mock.
+    setCrashAfterPersistForTests(null);
+    const resumed = await runPublication(db.pool, {
+      publicationId: first.publicationId,
+      tenantId: db.tenantId,
+      client: mock,
+      store,
+    });
+    // create_ad was persisted before crash → already succeeded → publication completes
+    expect(resumed.status).toBe("succeeded");
+    expect(mock.countByKind("ad")).toBe(1);
+  });
+
+  it("5b — Meta succeeded but step left in_flight: reconcile finds ad, no duplicate", async () => {
+    mock.crashAfterSuccess("create_ad");
+    // crashAfterSuccess throws after object is in mock store but before we
+    // return — executeStep fails, markStepFailed. That is not in_flight.
+    // Explicitly: run until ad step, manually set in_flight with past lease,
+    // seed the object, then resume → reconcile.
+    const human = PublishHumanInputSchema.parse({
+      advertiserId,
+      metaAdAccountId: accountId,
+      creativeIds: [creativeId],
+      campaign: { mode: "new", budgetMode: "ABO" },
+      adSet: { mode: "new" },
+      idempotencyKey: uuidv7(),
+      budget: { amount: 1000, currency: "EUR" },
+    });
+    const resolved = await resolvePublishPayload(db.pool, {
+      tenantId: db.tenantId,
+      userId,
+      input: human,
+      allowHumanBudget: true,
+    });
+    const runId = uuidv7();
+    await db.pool.query(
+      `INSERT INTO run (id, tenant_id, kind, status, input, created_at, updated_at)
+       VALUES ($1, $2, 'publish_request', 'queued', '{}'::jsonb, now(), now())`,
+      [runId, db.tenantId],
+    );
+    const { publicationId } = await createPublication(db.pool, {
+      tenantId: db.tenantId,
+      runId,
+      payload: resolved,
+    });
+
+    // Run through creative successfully, then stop before ad by crashing after creative.
+    setCrashAfterPersistForTests(async (op) => {
+      if (op === "create_creative") throw new Error("stop_before_ad");
+    });
+    await runPublication(db.pool, {
+      publicationId,
+      tenantId: db.tenantId,
+      client: mock,
+      store,
+    });
+    setCrashAfterPersistForTests(null);
+
+    const adStep = await db.pool.query<{
+      id: string;
+      external_correlation: string;
+      object_name: string;
+    }>(
+      `SELECT id, external_correlation, object_name FROM publication_step
+       WHERE publication_id = $1 AND operation = 'create_ad'`,
+      [publicationId],
+    );
+    const step = adStep.rows[0]!;
+    // Pretend Meta create succeeded under our correlation name, then lease expired.
+    mock.seed("ad_orphaned", "ad", step.object_name, "PAUSED");
+    await db.pool.query(
+      `UPDATE publication_step
+       SET status = 'in_flight',
+           attempt = 1,
+           lease_expires_at = now() - interval '1 minute',
+           updated_at = now()
+       WHERE id = $1`,
+      [step.id],
+    );
+    await db.pool.query(
+      `UPDATE publication SET status = 'in_progress' WHERE id = $1`,
+      [publicationId],
+    );
+
+    const resumed = await runPublication(db.pool, {
+      publicationId,
+      tenantId: db.tenantId,
+      client: mock,
+      store,
+    });
+    expect(resumed.status).toBe("succeeded");
+    expect(mock.countByKind("ad")).toBe(1);
+
+    const final = await db.pool.query<{
+      status: string;
+      external_id: string | null;
+      reconcile_state: string;
+    }>(
+      `SELECT status, external_id, reconcile_state FROM publication_step WHERE id = $1`,
+      [step.id],
+    );
+    expect(final.rows[0]?.status).toBe("succeeded");
+    expect(final.rows[0]?.external_id).toBe("ad_orphaned");
+    expect(final.rows[0]?.reconcile_state).toBe("resolved");
+  });
+
+  it("6 — expired in_flight with no object → needs_human_review, not retry", async () => {
+    const { publicationId } = await resolveAndPublish({
+      budget: { amount: 1000, currency: "EUR" },
+    });
+    // Reset to simulate mid-flight expiry with nothing at Meta.
+    await db.pool.query(`DELETE FROM publication_step WHERE publication_id = $1`, [
+      publicationId,
+    ]);
+    // Recreate a single pending campaign step as expired in_flight.
+    const human = PublishHumanInputSchema.parse({
+      advertiserId,
+      metaAdAccountId: accountId,
+      creativeIds: [creativeId],
+      campaign: { mode: "new", budgetMode: "ABO" },
+      adSet: { mode: "new" },
+      idempotencyKey: uuidv7(),
+      budget: { amount: 1000, currency: "EUR" },
+    });
+    const resolved = await resolvePublishPayload(db.pool, {
+      tenantId: db.tenantId,
+      userId,
+      input: human,
+      allowHumanBudget: true,
+    });
+    const runId = uuidv7();
+    await db.pool.query(
+      `INSERT INTO run (id, tenant_id, kind, status, input, created_at, updated_at)
+       VALUES ($1, $2, 'publish_request', 'queued', '{}'::jsonb, now(), now())`,
+      [runId, db.tenantId],
+    );
+    const created = await createPublication(db.pool, {
+      tenantId: db.tenantId,
+      runId,
+      payload: resolved,
+    });
+    mock.clearFaults();
+    // Clear mock objects so search finds nothing.
+    for (const id of [...mock.objects.keys()]) mock.objects.delete(id);
+
+    await db.pool.query(
+      `UPDATE publication_step
+       SET status = 'in_flight',
+           attempt = 1,
+           lease_expires_at = now() - interval '2 minutes'
+       WHERE publication_id = $1 AND operation = 'create_campaign'`,
+      [created.publicationId],
+    );
+    await db.pool.query(
+      `UPDATE publication SET status = 'in_progress' WHERE id = $1`,
+      [created.publicationId],
+    );
+
+    const campaignsBefore = mock.countByKind("campaign");
+    const outcome = await runPublication(db.pool, {
+      publicationId: created.publicationId,
+      tenantId: db.tenantId,
+      client: mock,
+      store,
+    });
+    expect(outcome.status).toBe("needs_human_review");
+    expect(mock.countByKind("campaign")).toBe(campaignsBefore);
+
+    const step = await db.pool.query<{ reconcile_state: string }>(
+      `SELECT reconcile_state FROM publication_step
+       WHERE publication_id = $1 AND operation = 'create_campaign'`,
+      [created.publicationId],
+    );
+    expect(step.rows[0]?.reconcile_state).toBe("needs_human_review");
+  });
+
+  it("7 — binding mismatch is rejected without reason; accepted with reason stored", async () => {
+    // Remount fixture with mismatched goals.
+    await db.pool.query(`DELETE FROM publication_step`);
+    await db.pool.query(`DELETE FROM publication`);
+    await db.pool.query(`DELETE FROM metric_optimization_binding`);
+    await db.pool.query(`DELETE FROM ad_account_metric_assignment`);
+    await db.pool.query(`DELETE FROM conversion_metric`);
+    await db.pool.query(`DELETE FROM advertiser_defaults`);
+    await db.pool.query(`DELETE FROM creative`);
+    await db.pool.query(`DELETE FROM asset`);
+    await db.pool.query(`DELETE FROM meta_ad_account`);
+    await db.pool.query(`DELETE FROM meta_connection`);
+    await db.pool.query(`DELETE FROM advertiser WHERE tenant_id = $1`, [
+      db.tenantId,
+    ]);
+    await seedFixture({
+      optimizationGoal: "OFFSITE_CONVERSIONS",
+      bindingGoal: "LEAD_GENERATION",
+    });
+
+    await expect(
+      resolveAndPublish({ budget: { amount: 1000, currency: "EUR" } }),
+    ).rejects.toMatchObject({ code: "metric_binding_mismatch" });
+
+    const { publicationId, resolved } = await resolveAndPublish({
+      budget: { amount: 1000, currency: "EUR" },
+      deviationReason: "Launching purchase ads while dashboard tracks leads",
+    });
+    expect(resolved.bindingMismatch).toBe(true);
+    expect(resolved.deviationReason).toContain("Launching");
+
+    const pub = await db.pool.query<{ deviation_reason: string | null }>(
+      `SELECT deviation_reason FROM publication WHERE id = $1`,
+      [publicationId],
+    );
+    expect(pub.rows[0]?.deviation_reason).toContain("Launching");
+  });
+
+  it("8 — missing budget → budget_required; no Meta objects", async () => {
+    await expect(
+      resolveAndPublish({}),
+    ).rejects.toMatchObject({ code: "budget_required" });
+    expect(mock.countByKind("campaign")).toBe(0);
+  });
+
+  it("9 — no path to ACTIVE: schema, sealed payload, write client, source scan", async () => {
+    // Agent schema rejects status.
+    const agentParsed = PublishAgentInputSchema.safeParse({
+      advertiserId,
+      metaAdAccountId: accountId,
+      creativeIds: [creativeId],
+      campaign: { mode: "new" },
+      adSet: { mode: "new" },
+      idempotencyKey: uuidv7(),
+      status: "ACTIVE",
+    });
+    // Zod strips unknown keys by default — status must not survive.
+    expect(agentParsed.success).toBe(true);
+    expect(agentParsed.data).not.toHaveProperty("status");
+    expect(JSON.stringify(PublishAgentInputSchema.shape)).not.toMatch(/status/);
+    expect(JSON.stringify(PublishHumanInputSchema.shape)).not.toMatch(/ACTIVE/);
+
+    const { resolved, outcome } = await resolveAndPublish({
+      budget: { amount: 500, currency: "EUR" },
+    });
+    expect(resolved.status).toBe("PAUSED");
+    expect(outcome.status).toBe("succeeded");
+
+    for (const call of mock.calls) {
+      if (
+        call.operation === "create_campaign" ||
+        call.operation === "create_adset" ||
+        call.operation === "create_ad"
+      ) {
+        const args = call.args as Record<string, unknown>;
+        // Write client sets PAUSED internally; args must never carry ACTIVE.
+        expect(JSON.stringify(args)).not.toMatch(/ACTIVE/);
+      }
+    }
+
+    // Source scan: publish path must not contain ACTIVE assignment.
+    const roots = [
+      join(__dirname, "..", "src", "publish"),
+      join(__dirname, "..", "src", "meta", "write-client.ts"),
+      join(__dirname, "..", "src", "app", "api", "meta", "publish"),
+      join(__dirname, "..", "src", "agent", "tools", "publish-ads.ts"),
+    ];
+    const offenders: string[] = [];
+    function scan(path: string) {
+      const st = statSync(path);
+      if (st.isDirectory()) {
+        for (const entry of readdirSync(path)) scan(join(path, entry));
+        return;
+      }
+      if (!path.endsWith(".ts") && !path.endsWith(".tsx")) return;
+      const text = readFileSync(path, "utf8");
+      // Allow mentions in comments/strings that refuse ACTIVE, but not status: "ACTIVE"
+      if (/status\s*[:=]\s*["']ACTIVE["']/.test(text)) {
+        offenders.push(path);
+      }
+    }
+    for (const root of roots) scan(root);
+    expect(offenders).toEqual([]);
+  });
+
+  it("10 — existing campaign: step succeeded with that id, no create call", async () => {
+    mock.seed("camp_existing", "campaign", "Existing Camp", "PAUSED");
+    const { publicationId, outcome } = await resolveAndPublish({
+      budget: { amount: 1000, currency: "EUR" },
+      campaign: { mode: "existing", existingCampaignId: "camp_existing" },
+      adSet: { mode: "new" },
+    });
+    expect(outcome.status).toBe("succeeded");
+
+    const campStep = await db.pool.query<{
+      status: string;
+      external_id: string | null;
+    }>(
+      `SELECT status, external_id FROM publication_step
+       WHERE publication_id = $1 AND operation = 'create_campaign'`,
+      [publicationId],
+    );
+    expect(campStep.rows[0]?.status).toBe("succeeded");
+    expect(campStep.rows[0]?.external_id).toBe("camp_existing");
+    expect(
+      mock.calls.filter((c) => c.operation === "create_campaign"),
+    ).toHaveLength(0);
+    expect(mock.countByKind("adset")).toBe(1);
+  });
+
+  it("11 — UTM applied without destroying click ids", () => {
+    const url = applyUtmParams(
+      "https://example.com/land?fbclid=ABC123&utm_source=old",
+      "utm_source=meta&utm_medium=paid&utm_campaign=summer",
+    );
+    const parsed = new URL(url);
+    expect(parsed.searchParams.get("fbclid")).toBe("ABC123");
+    expect(parsed.searchParams.get("utm_source")).toBe("meta");
+    expect(parsed.searchParams.get("utm_medium")).toBe("paid");
+    expect(parsed.searchParams.get("utm_campaign")).toBe("summer");
+  });
+
+  it("mutation — PAUSED gate: flipping sealed status to ACTIVE is refused", async () => {
+    const human = PublishHumanInputSchema.parse({
+      advertiserId,
+      metaAdAccountId: accountId,
+      creativeIds: [creativeId],
+      campaign: { mode: "new", budgetMode: "ABO" },
+      adSet: { mode: "new" },
+      idempotencyKey: uuidv7(),
+      budget: { amount: 1000, currency: "EUR" },
+    });
+    const resolved = await resolvePublishPayload(db.pool, {
+      tenantId: db.tenantId,
+      userId,
+      input: human,
+      allowHumanBudget: true,
+    });
+    const mutated = {
+      ...resolved,
+      status: "ACTIVE" as unknown as typeof META_PUBLISH_STATUS,
+    };
+    const runId = uuidv7();
+    await db.pool.query(
+      `INSERT INTO run (id, tenant_id, kind, status, input, created_at, updated_at)
+       VALUES ($1, $2, 'publish_request', 'queued', '{}'::jsonb, now(), now())`,
+      [runId, db.tenantId],
+    );
+    await expect(
+      createPublication(db.pool, {
+        tenantId: db.tenantId,
+        runId,
+        payload: mutated as typeof resolved,
+      }),
+    ).rejects.toMatchObject({ code: "validation_error" });
+  });
+
+  it("mutation — budget provenance: agent schema cannot carry budget", () => {
+    const parsed = PublishAgentInputSchema.safeParse({
+      advertiserId,
+      metaAdAccountId: accountId,
+      creativeIds: [creativeId],
+      campaign: { mode: "new" },
+      adSet: { mode: "new" },
+      idempotencyKey: uuidv7(),
+      budget: { amount: 999, currency: "EUR" },
+    });
+    expect(parsed.success).toBe(true);
+    expect(parsed.data).not.toHaveProperty("budget");
+
+    // CBO matrix still requires human budget at resolve time.
+    const placement = resolveBudgetPlacement({
+      campaignMode: "new",
+      adSetMode: "new",
+      budgetMode: "ABO",
+    });
+    expect(() =>
+      requireBudgetSource({
+        placement,
+        humanBudget: undefined,
+        decidedBy: userId,
+        decidedAt: new Date().toISOString(),
+      }),
+    ).toThrow(PublishError);
+  });
+
+  it("mutation — resume without duplicate: if create_campaign replayed blindly, test would see 2", async () => {
+    setCrashAfterPersistForTests(async (op) => {
+      if (op === "create_campaign") throw new Error("crash");
+    });
+    const first = await resolveAndPublish({
+      budget: { amount: 1000, currency: "EUR" },
+    });
+    setCrashAfterPersistForTests(null);
+
+    // Production resume:
+    await runPublication(db.pool, {
+      publicationId: first.publicationId,
+      tenantId: db.tenantId,
+      client: mock,
+      store,
+    });
+    expect(mock.countByKind("campaign")).toBe(1);
+
+    // Mutated behaviour would reset the step to pending and call Meta again:
+    await db.pool.query(
+      `UPDATE publication_step
+       SET status = 'pending', external_id = NULL
+       WHERE publication_id = $1 AND operation = 'create_campaign'`,
+      [first.publicationId],
+    );
+    await db.pool.query(
+      `UPDATE publication SET status = 'in_progress' WHERE id = $1`,
+      [first.publicationId],
+    );
+    // Remaining steps are succeeded — only campaign would re-run if we cleared them too.
+    // Mark later steps pending so the chain continues after the mutated campaign recreate.
+    await db.pool.query(
+      `UPDATE publication_step
+       SET status = 'pending', external_id = NULL
+       WHERE publication_id = $1 AND operation <> 'create_campaign'`,
+      [first.publicationId],
+    );
+    await runPublication(db.pool, {
+      publicationId: first.publicationId,
+      tenantId: db.tenantId,
+      client: mock,
+      store,
+    });
+    // This demonstrates the failure mode the production path prevents:
+    expect(mock.countByKind("campaign")).toBe(2);
+  });
+});

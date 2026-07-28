@@ -15,8 +15,9 @@ import {
   readScoreSnapshots,
 } from "@/metrics/snapshots";
 import {
+  CREATIVE_STRAIN_FORMULA_PREFIX,
   CREATIVE_STRAIN_FORMULA_VERSION,
-  FUNNEL_POSITION_FORMULA_VERSION,
+  FUNNEL_POSITION_FORMULA_PREFIX,
   type FunnelBand,
   type GateReason,
   type GateStatus,
@@ -301,7 +302,7 @@ export async function buildStrategistOverview(params: {
       windowStart: params.windowStart,
       windowEnd: params.windowEnd,
       dataAsOf,
-      formulaVersion: FUNNEL_POSITION_FORMULA_VERSION,
+      formulaPrefix: FUNNEL_POSITION_FORMULA_PREFIX,
     });
     const strainSnapshots = await readScoreSnapshots({
       pool: params.pool,
@@ -310,7 +311,7 @@ export async function buildStrategistOverview(params: {
       windowStart: params.windowStart,
       windowEnd: params.windowEnd,
       dataAsOf,
-      formulaVersion: CREATIVE_STRAIN_FORMULA_VERSION,
+      formulaPrefix: CREATIVE_STRAIN_FORMULA_PREFIX,
     });
     // Need snapshot ids — readScoreSnapshots doesn't return id. Query directly.
     const funnelIds = await params.pool.query<{ id: string; subject_id: string }>(
@@ -319,7 +320,7 @@ export async function buildStrategistOverview(params: {
        WHERE tenant_id = $1
          AND meta_ad_account_id = $2
          AND subject_type = 'ad'
-         AND formula_version = $3
+         AND formula_version LIKE ($3 || '%')
          AND window_start = $4::date
          AND window_end = $5::date
          AND data_as_of <= $6::timestamptz
@@ -327,7 +328,7 @@ export async function buildStrategistOverview(params: {
       [
         params.tenantId,
         params.metaAdAccountId,
-        FUNNEL_POSITION_FORMULA_VERSION,
+        FUNNEL_POSITION_FORMULA_PREFIX,
         params.windowStart,
         params.windowEnd,
         dataAsOf,

@@ -229,6 +229,10 @@ export async function computeAndPersistSnapshots(
 /**
  * Read the newest snapshot row for each subject at a given data_as_of.
  * Historical scores are facts — never recompute with today's formula.
+ *
+ * `formulaVersion` is an exact pin (optional). Historical callers should omit
+ * it and pass `formulaPrefix` so a stored v1 remains readable after the
+ * compiled constant moves to v2. Newest `computed_at` wins on ties.
  */
 export async function readScoreSnapshots(params: {
   pool: Pool;
@@ -237,7 +241,8 @@ export async function readScoreSnapshots(params: {
   windowStart: string;
   windowEnd: string;
   dataAsOf: DataAsOf;
-  formulaVersion: string;
+  formulaVersion?: string;
+  formulaPrefix?: string;
   subjectIds?: string[];
 }): Promise<Map<string, SnapshotScoreRow>> {
   const asOf = dataAsOfParam(params.dataAsOf);
@@ -279,8 +284,9 @@ export async function readScoreSnapshots(params: {
        AND window_start = $3::date
        AND window_end = $4::date
        AND data_as_of = $5::timestamptz
-       AND formula_version = $6
-       AND ($7::text[] IS NULL OR subject_id = ANY($7::text[]))
+       AND ($6::text IS NULL OR formula_version = $6)
+       AND ($7::text IS NULL OR formula_version LIKE ($7 || '%'))
+       AND ($8::text[] IS NULL OR subject_id = ANY($8::text[]))
      ORDER BY subject_id, computed_at DESC`,
     [
       params.tenantId,
@@ -288,7 +294,8 @@ export async function readScoreSnapshots(params: {
       params.windowStart,
       params.windowEnd,
       asOf,
-      params.formulaVersion,
+      params.formulaVersion ?? null,
+      params.formulaPrefix ?? null,
       params.subjectIds ?? null,
     ],
   );

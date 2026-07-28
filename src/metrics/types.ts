@@ -1,6 +1,10 @@
 export const FUNNEL_POSITION_FORMULA_VERSION = "funnel_position_v1" as const;
 export const CREATIVE_STRAIN_FORMULA_VERSION = "creative_strain_v1" as const;
 
+/** Family prefixes — historical reads match any version in the family. */
+export const FUNNEL_POSITION_FORMULA_PREFIX = "funnel_position_" as const;
+export const CREATIVE_STRAIN_FORMULA_PREFIX = "creative_strain_" as const;
+
 /** Attribution set that Etappe 2 actually syncs and stores. */
 export const SYNCED_ATTRIBUTION_SPEC = ["1d_view", "7d_click"] as const;
 

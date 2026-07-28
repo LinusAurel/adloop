@@ -13,7 +13,8 @@ import {
   readScoreSnapshots,
 } from "@/metrics/snapshots";
 import {
-  CREATIVE_STRAIN_FORMULA_VERSION,
+  CREATIVE_STRAIN_FORMULA_PREFIX,
+  FUNNEL_POSITION_FORMULA_PREFIX,
   FUNNEL_POSITION_FORMULA_VERSION,
   type FunnelBand,
   type GateReason,
@@ -155,6 +156,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     );
   } else {
     // Historical dataAsOf: scores are facts from snapshots, not recomputed.
+    // Do not pin to today's compiled formula version — a stored v1 must still
+    // resolve after the constant moves to v2. Return the snapshot's version.
     const [funnelSnaps, strainSnaps] = await Promise.all([
       readScoreSnapshots({
         pool,
@@ -163,7 +166,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         windowStart: parsed.data.windowStart,
         windowEnd: parsed.data.windowEnd,
         dataAsOf,
-        formulaVersion: FUNNEL_POSITION_FORMULA_VERSION,
+        formulaPrefix: FUNNEL_POSITION_FORMULA_PREFIX,
         subjectIds: resolved.rows.map((row) => row.metaAdId),
       }),
       readScoreSnapshots({
@@ -173,14 +176,15 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         windowStart: parsed.data.windowStart,
         windowEnd: parsed.data.windowEnd,
         dataAsOf,
-        formulaVersion: CREATIVE_STRAIN_FORMULA_VERSION,
+        formulaPrefix: CREATIVE_STRAIN_FORMULA_PREFIX,
         subjectIds: resolved.rows.map((row) => row.metaAdId),
       }),
     ]);
 
     const anyFunnel = [...funnelSnaps.values()][0];
     funnel = {
-      formulaVersion: FUNNEL_POSITION_FORMULA_VERSION,
+      formulaVersion:
+        anyFunnel?.formulaVersion ?? FUNNEL_POSITION_FORMULA_VERSION,
       scoreConfigVersion: anyFunnel?.scoreConfigVersion ?? "unknown",
       populationSize: anyFunnel?.populationSize ?? null,
       gateStatus: anyFunnel ? "ok" : "insufficient_data",

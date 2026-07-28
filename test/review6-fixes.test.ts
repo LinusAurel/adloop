@@ -1,22 +1,34 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { NextRequest } from "next/server";
 import { uuidv7 } from "uuidv7";
+import { GET as getMetricsResolve } from "@/app/api/metrics/resolve/route";
+import {
+  createSession,
+  encodeSession,
+  SESSION_COOKIE,
+} from "@/auth/session";
+import { setPoolForTests } from "@/db/pool";
+import { withTransaction } from "@/db/queryable";
 import { CreateConversionMetricSchema } from "@/metrics/definition";
 import { aggregateNumerator } from "@/metrics/numerator";
 import { resolveMetrics } from "@/metrics/resolve";
-import {
-  computeAndPersistSnapshots,
-  latestSyncDataAsOf,
-  readScoreSnapshots,
-} from "@/metrics/snapshots";
+import { computeAndPersistSnapshots } from "@/metrics/snapshots";
 import {
   assignMetricToAdAccount,
   createConversionMetric,
 } from "@/metrics/store";
+import { FUNNEL_POSITION_FORMULA_VERSION } from "@/metrics/types";
+import { MetaGraphClient } from "@/meta/graph-client";
 import {
-  FUNNEL_POSITION_FORMULA_VERSION,
-} from "@/metrics/types";
+  executeInsightSync,
+  type ExecuteInsightSyncOptions,
+  type LeaseWriter,
+} from "@/meta/insight-sync";
+import { HandlerError } from "@/queue/errors";
 import { metricSnapshotComputeFamily } from "@/queue/families/metric-snapshot-compute";
+import type { JobContext } from "@/queue/types";
 import { clearRegistry, registerFamily } from "@/queue/registry";
+import type { ObjectStore } from "@/storage/object-store";
 import type { TestDb } from "./db-harness";
 import { startTestDb } from "./db-harness";
 import {
@@ -31,18 +43,42 @@ import {
   type SeedAccount,
 } from "./metrics-fixtures";
 
+class MemoryObjectStore implements ObjectStore {
+  readonly values = new Map<string, unknown>();
+
+  async putJson(key: string, value: unknown): Promise<void> {
+    this.values.set(key, value);
+  }
+}
+
+function jsonResponse(body: unknown): Response {
+  return new Response(JSON.stringify(body), {
+    status: 200,
+    headers: { "content-type": "application/json" },
+  });
+}
+
 describe("review-6 adversarial fixes", () => {
   let db: TestDb;
   let account: SeedAccount;
+  let userId: string;
 
   beforeAll(async () => {
     db = await startTestDb();
+    setPoolForTests(db.pool);
     clearRegistry();
     registerFamily(metricSnapshotComputeFamily);
+    userId = uuidv7();
+    await db.pool.query(
+      `INSERT INTO app_user (id, tenant_id, email, role, ui_locale, agent_locale)
+       VALUES ($1, $2, 'owner-r6@example.com', 'owner', 'de', 'en')`,
+      [userId, db.tenantId],
+    );
   }, 60_000);
 
   afterAll(async () => {
     clearRegistry();
+    setPoolForTests(null);
     await db.stop();
   });
 
@@ -71,6 +107,25 @@ describe("review-6 adversarial fixes", () => {
     ]);
     account = await seedMetaAccount(db.pool, db.tenantId, "EUR");
   });
+
+  async function callMetricsResolve(params: {
+    metaAdAccountId: string;
+    windowStart: string;
+    windowEnd: string;
+    dataAsOf: string;
+  }): Promise<Response> {
+    const url = new URL("http://localhost/api/metrics/resolve");
+    url.searchParams.set("metaAdAccountId", params.metaAdAccountId);
+    url.searchParams.set("windowStart", params.windowStart);
+    url.searchParams.set("windowEnd", params.windowEnd);
+    url.searchParams.set("dataAsOf", params.dataAsOf);
+    const request = new NextRequest(url, {
+      headers: {
+        cookie: `${SESSION_COOKIE}=${encodeSession(createSession(userId, db.tenantId))}`,
+      },
+    });
+    return getMetricsResolve(request);
+  }
 
   it("finding 1: microsecond finished_at is included in as_of cutoff", async () => {
     const syncRunId = uuidv7();
@@ -149,6 +204,7 @@ describe("review-6 adversarial fixes", () => {
   it("finding 2: completeness uses business key, not query_signature", async () => {
     const oldSig = "etappe2-signature";
     const oldSync = uuidv7();
+    const adId = "900000000000000001";
     await db.pool.query(
       `INSERT INTO insight_sync_run (
          id, tenant_id, meta_ad_account_id, api_version, query_signature,
@@ -167,7 +223,7 @@ describe("review-6 adversarial fixes", () => {
       observedAt: new Date("2026-07-19T12:00:00.000Z"),
       rows: [
         {
-          metaAdId: "vanish-1",
+          metaAdId: adId,
           date: "2026-07-19",
           spend: 10,
           impressions: 100,
@@ -176,69 +232,154 @@ describe("review-6 adversarial fixes", () => {
       ],
     });
 
-    // New sync under a different signature — Meta no longer reports the lead.
     const { INSIGHT_QUERY_SIGNATURE } = await import("@/meta/insight-sync");
-    const newSync = await seedSucceededSync(db.pool, {
-      tenantId: db.tenantId,
-      accountId: account.accountId,
-      windowStart: "2026-07-19",
-      windowEnd: "2026-07-19",
-      finishedAt: new Date("2026-07-20T12:00:00.000Z"),
-    });
     expect(INSIGHT_QUERY_SIGNATURE).not.toBe(oldSig);
 
-    // Simulate writeInsightRow previous-action lookup + tombstone.
-    const previous = await db.pool.query<{
-      action_type: string;
-      attribution_spec: string[];
-    }>(
-      `SELECT DISTINCT a.action_type, a.attribution_spec
-       FROM insight_action_daily a
-       JOIN insight_sync_run r
-         ON r.id = a.sync_run_id AND r.tenant_id = a.tenant_id
-       WHERE a.tenant_id = $1
-         AND a.meta_ad_id = $2
-         AND a.date = $3
-         AND r.meta_ad_account_id = $4
-         AND r.status = 'succeeded'`,
-      [db.tenantId, "vanish-1", "2026-07-19", account.accountId],
+    const external = await db.pool.query<{ meta_ad_account_id: string }>(
+      `SELECT meta_ad_account_id FROM meta_ad_account WHERE id = $1`,
+      [account.accountId],
     );
-    expect(previous.rows.some((row) => row.action_type === "lead")).toBe(true);
+    const store = new MemoryObjectStore();
+    const leaseWriter: LeaseWriter = async (write) =>
+      withTransaction(db.pool, async (client) => ({
+        acquired: true as const,
+        value: await write(client),
+      }));
+    // Second sync under today's signature — Meta no longer reports the lead.
+    // Must go through executeInsightSync → writeInsightRow so a regression in
+    // the tombstone path fails this test.
+    const pageWithoutLead = {
+      data: [
+        {
+          ad_id: adId,
+          date_start: "2026-07-19",
+          date_stop: "2026-07-19",
+          spend: "10.00",
+          impressions: "100",
+          clicks: "0",
+          inline_link_clicks: "0",
+          reach: "80",
+          frequency: "1.25",
+          attribution_setting: "1d_view_7d_click",
+          actions: [
+            {
+              action_type: "landing_page_view",
+              value: "5",
+              "1d_view": "1",
+              "7d_click": "4",
+            },
+          ],
+        },
+      ],
+    };
+    const graph = new MetaGraphClient({
+      accessToken: "synthetic-access-token",
+      apiVersion: "v25.0",
+      fetchImpl: async (input) => {
+        const url = new URL(String(input));
+        if (url.pathname.endsWith("/ads")) {
+          return jsonResponse({
+            data: [
+              {
+                id: adId,
+                name: "Vanish Ad",
+                status: "ACTIVE",
+                effective_status: "ACTIVE",
+                campaign_id: "200000000000001",
+                adset_id: "300000000000001",
+                created_time: "2026-01-01T00:00:00+0000",
+              },
+            ],
+          });
+        }
+        if (
+          /\/act_[^/]+\/insights$/.test(url.pathname) &&
+          url.searchParams.get("time_increment") === "all_days"
+        ) {
+          const range = JSON.parse(url.searchParams.get("time_range")!) as {
+            since: string;
+            until: string;
+          };
+          return jsonResponse({
+            data: [
+              {
+                date_start: range.since,
+                date_stop: range.until,
+                reach: "100",
+                frequency: "1",
+                impressions: "100",
+                spend: "10",
+              },
+            ],
+          });
+        }
+        if (
+          new RegExp(`/${adId}/insights$`).test(url.pathname) &&
+          url.searchParams.get("time_increment") === "all_days"
+        ) {
+          const range = JSON.parse(url.searchParams.get("time_range")!) as {
+            since: string;
+            until: string;
+          };
+          return jsonResponse({
+            data: [
+              {
+                ad_id: adId,
+                date_start: range.since,
+                date_stop: range.until,
+                reach: "80",
+                frequency: "1.25",
+                impressions: "100",
+                spend: "10",
+              },
+            ],
+          });
+        }
+        if (
+          new RegExp(`/${adId}/insights$`).test(url.pathname) &&
+          url.searchParams.get("time_increment") === "1"
+        ) {
+          return jsonResponse({
+            data: [
+              {
+                ad_id: adId,
+                date_start: "2026-01-01",
+                date_stop: "2026-01-01",
+                impressions: "1",
+              },
+            ],
+          });
+        }
+        // Account-level daily insights (time_increment=1): the page under test.
+        return jsonResponse(pageWithoutLead);
+      },
+    });
+    const syncRunId = uuidv7();
+    const options: ExecuteInsightSyncOptions = {
+      pool: db.pool,
+      tenantId: db.tenantId,
+      internalAdAccountId: account.accountId,
+      externalAdAccountId: external.rows[0]!.meta_ad_account_id,
+      accountTimezone: "Europe/Berlin",
+      apiVersion: "v25.0",
+      syncRunId,
+      window: { start: "2026-07-19", end: "2026-07-19" },
+      graph,
+      objectStore: store,
+      signal: new AbortController().signal,
+      progress: async () => {},
+      withLease: leaseWriter,
+    };
+    await executeInsightSync(options);
 
-    await db.pool.query(
-      `INSERT INTO insight_daily (
-         tenant_id, meta_ad_id, date, spend, impressions, clicks,
-         link_clicks, landing_page_views, reach, frequency,
-         video_plays, video_p25, video_p50, video_p75, video_p95, video_p100,
-         thruplays, avg_seconds_watched, sync_run_id, observed_at
-       ) VALUES (
-         $1, 'vanish-1', '2026-07-19', 10, 100, 0, 0, 0, 0, 0,
-         0, 0, 0, 0, 0, 0, 0, 0, $2, $3
-       )`,
-      [db.tenantId, newSync, new Date("2026-07-20T12:00:00.000Z").toISOString()],
+    const finished = await db.pool.query<{ finished_at: string }>(
+      `SELECT finished_at::text AS finished_at FROM insight_sync_run WHERE id = $1`,
+      [syncRunId],
     );
-    for (const old of previous.rows) {
-      await db.pool.query(
-        `INSERT INTO insight_action_daily (
-           tenant_id, meta_ad_id, date, action_type, attribution_spec,
-           count, value, sync_run_id, observed_at
-         ) VALUES (
-           $1, 'vanish-1', '2026-07-19', $2, $3::text[], 0, 0, $4, $5
-         )`,
-        [
-          db.tenantId,
-          old.action_type,
-          old.attribution_spec,
-          newSync,
-          new Date("2026-07-20T12:00:00.000Z").toISOString(),
-        ],
-      );
-    }
-
     const asOf = await db.pool.query<{ count: string }>(
       `SELECT count::text FROM insight_action_daily_as_of($1, $2::timestamptz)
-       WHERE meta_ad_id = 'vanish-1' AND action_type = 'lead'`,
-      [db.tenantId, "2026-07-20T12:00:00.000Z"],
+       WHERE meta_ad_id = $3 AND action_type = 'lead'`,
+      [db.tenantId, finished.rows[0]!.finished_at, adId],
     );
     expect(asOf.rows).toEqual([{ count: "0" }]);
   });
@@ -332,7 +473,13 @@ describe("review-6 adversarial fixes", () => {
     expect(resolved.rows[0]?.numerator).toBeNull();
   });
 
-  it("finding 4: historical dataAsOf reads snapshots; missing → no_snapshot", async () => {
+  it("finding 4: historical resolve returns prior formula version via route", async () => {
+    // Snapshot stored under an older family version than today's constant.
+    // The route must still return it; hard-filtering on FUNNEL_POSITION_FORMULA_VERSION
+    // yields no_snapshot and fails this test.
+    const priorVersion = "funnel_position_v0";
+    expect(priorVersion).not.toBe(FUNNEL_POSITION_FORMULA_VERSION);
+
     const population = buildPassingPopulation();
     const sync1 = await seedSucceededSync(db.pool, {
       tenantId: db.tenantId,
@@ -352,44 +499,75 @@ describe("review-6 adversarial fixes", () => {
       dataAsOf: "2026-07-20T12:00:00.000Z",
       sourceSyncRunIds: [sync1],
     });
+    await db.pool.query(
+      `UPDATE metric_snapshot
+       SET formula_version = $1
+       WHERE tenant_id = $2
+         AND meta_ad_account_id = $3
+         AND data_as_of = $4::timestamptz
+         AND formula_version = $5`,
+      [
+        priorVersion,
+        db.tenantId,
+        account.accountId,
+        "2026-07-20T12:00:00.000Z",
+        FUNNEL_POSITION_FORMULA_VERSION,
+      ],
+    );
 
-    const sync2 = await seedSucceededSync(db.pool, {
+    // Newer sync makes 2026-07-20 historical (scoresFromSnapshot path).
+    await seedSucceededSync(db.pool, {
       tenantId: db.tenantId,
       accountId: account.accountId,
       windowStart: population.windowStart,
       windowEnd: population.windowEnd,
       finishedAt: new Date("2026-07-21T12:00:00.000Z"),
     });
-    void sync2;
 
-    const historical = await readScoreSnapshots({
-      pool: db.pool,
-      tenantId: db.tenantId,
-      adAccountId: account.accountId,
+    const response = await callMetricsResolve({
+      metaAdAccountId: account.accountId,
       windowStart: population.windowStart,
       windowEnd: population.windowEnd,
       dataAsOf: "2026-07-20T12:00:00.000Z",
-      formulaVersion: FUNNEL_POSITION_FORMULA_VERSION,
     });
-    expect(historical.size).toBeGreaterThan(0);
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      scoresFromSnapshot: boolean;
+      funnel: {
+        formulaVersion: string;
+        gateStatus: string;
+        gateReasons: string[];
+      };
+      ads: Array<{
+        funnelPosition: {
+          gateStatus: string;
+          gateReasons: string[];
+          score: number | null;
+        } | null;
+      }>;
+    };
+    expect(body.scoresFromSnapshot).toBe(true);
+    expect(body.funnel.formulaVersion).toBe(priorVersion);
+    expect(body.funnel.gateStatus).toBe("ok");
+    expect(body.funnel.gateReasons).not.toContain("no_snapshot");
+    const scored = body.ads.filter(
+      (ad) => ad.funnelPosition && ad.funnelPosition.score !== null,
+    );
+    expect(scored.length).toBeGreaterThan(0);
 
-    const missing = await readScoreSnapshots({
-      pool: db.pool,
-      tenantId: db.tenantId,
-      adAccountId: account.accountId,
+    const missing = await callMetricsResolve({
+      metaAdAccountId: account.accountId,
       windowStart: population.windowStart,
       windowEnd: population.windowEnd,
       dataAsOf: "2026-07-15T12:00:00.000Z",
-      formulaVersion: FUNNEL_POSITION_FORMULA_VERSION,
     });
-    expect(missing.size).toBe(0);
-
-    const latest = await latestSyncDataAsOf(
-      db.pool,
-      db.tenantId,
-      account.accountId,
-    );
-    expect(latest).toContain("2026-07-21");
+    expect(missing.status).toBe(200);
+    const missingBody = (await missing.json()) as {
+      scoresFromSnapshot: boolean;
+      funnel: { gateReasons: string[] };
+    };
+    expect(missingBody.scoresFromSnapshot).toBe(true);
+    expect(missingBody.funnel.gateReasons).toContain("no_snapshot");
   });
 
   it("finding 5: backdated assignment created later does not rewrite past dataAsOf", async () => {
@@ -549,19 +727,30 @@ describe("review-6 adversarial fixes", () => {
     expect(sync.rows[0]?.meta_ad_account_id).toBe(account.accountId);
     expect(sync.rows[0]?.meta_ad_account_id).not.toBe(other.accountId);
 
-    // Handler refuses a mismatched pairing (same check as production).
-    const { HandlerError } = await import("@/queue/errors");
-    const row = sync.rows[0]!;
-    const mismatchedInput = other.accountId;
-    expect(() => {
-      if (row.meta_ad_account_id !== mismatchedInput) {
-        throw new HandlerError(
-          "SYNC_ACCOUNT_MISMATCH",
-          "sync_account_mismatch",
-          false,
-        );
-      }
-    }).toThrow(HandlerError);
+    // Drive the real handler with a mismatched account — must refuse.
+    const ctx: JobContext<{
+      metaAdAccountId: string;
+      syncRunId: string;
+      windowEnd: string;
+    }> = {
+      input: {
+        metaAdAccountId: other.accountId,
+        syncRunId: syncA,
+        windowEnd: "2026-07-19",
+      },
+      tenantId: db.tenantId,
+      signal: new AbortController().signal,
+      progress: async () => {},
+      withLease: async () => ({ acquired: false }),
+      isCancelled: () => false,
+    };
+    await expect(metricSnapshotComputeFamily.handler(ctx)).rejects.toSatisfy(
+      (err: unknown) =>
+        err instanceof HandlerError &&
+        err.code === "SYNC_ACCOUNT_MISMATCH" &&
+        err.message === "sync_account_mismatch" &&
+        err.retryable === false,
+    );
 
     // Public POST /api/runs must not start this family.
     const routeSource = await import("@/app/api/runs/route");

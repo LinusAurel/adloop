@@ -114,12 +114,18 @@ class AnthropicModel implements AgentModel {
     let text = "";
     const toolUses: ToolUseRequest[] = [];
 
+    // Serialize delta persistence so order matches token order and rejections
+    // are not lost as unhandled promise rejections (Review-8 P0-2).
+    let deltaChain: Promise<void> = Promise.resolve();
     stream.on("text", (delta) => {
       text += delta;
-      void params.onDelta?.(delta);
+      if (params.onDelta) {
+        deltaChain = deltaChain.then(() => Promise.resolve(params.onDelta!(delta)));
+      }
     });
 
     const final = await stream.finalMessage();
+    await deltaChain;
     for (const block of final.content) {
       if (block.type === "tool_use") {
         toolUses.push({

@@ -11,7 +11,11 @@ export interface RunEventRow {
 
 /**
  * Append a run_event with a strictly monotonic, gapless seq per run.
- * Uses the transaction to serialize appends for one run.
+ *
+ * Seq is allocated by bumping `run.event_seq` in the same statement as the
+ * INSERT. Row-level locking on that UPDATE serializes concurrent writers;
+ * a single-statement CTE keeps allocation+insert atomic (and gapless on
+ * rollback) whether or not the caller is already in a transaction.
  */
 export async function appendRunEvent(
   db: Queryable,
@@ -23,9 +27,10 @@ export async function appendRunEvent(
 ): Promise<RunEventRow> {
   const result = await db.query<RunEventRow>(
     `WITH next AS (
-       SELECT COALESCE(MAX(seq), 0) + 1 AS seq
-       FROM run_event
-       WHERE run_id = $1
+       UPDATE run
+       SET event_seq = event_seq + 1
+       WHERE id = $1
+       RETURNING event_seq AS seq
      )
      INSERT INTO run_event (run_id, seq, kind, payload)
      SELECT $1, next.seq, $2, $3::jsonb FROM next

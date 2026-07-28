@@ -30,7 +30,8 @@ export const CreateChatRunInputSchema = z.object({
   assistantMessageId: z.string().uuid(),
   message: z.string().min(1),
   playbookSlug: z.string().min(1).default("general"),
-  agentLocale: z.enum(["de", "en"]).default("de"),
+  /** Omit to use app_user.agent_locale; request value overrides the preference. */
+  agentLocale: z.enum(["de", "en"]).optional(),
 });
 export type CreateChatRunInput = z.infer<typeof CreateChatRunInputSchema>;
 
@@ -39,6 +40,19 @@ export type CreateChatRunResult =
   | { outcome: "idempotent_replay"; runId: string }
   | { outcome: "conflict"; runId: string }
   | { outcome: "chat_not_found" };
+
+async function resolveAgentLocale(
+  db: Queryable,
+  params: { userId: string; tenantId: string; override?: "de" | "en" },
+): Promise<"de" | "en"> {
+  if (params.override) return params.override;
+  const row = await db.query<{ agent_locale: string }>(
+    `SELECT agent_locale FROM app_user WHERE id = $1 AND tenant_id = $2`,
+    [params.userId, params.tenantId],
+  );
+  const stored = row.rows[0]?.agent_locale;
+  return stored === "en" || stored === "de" ? stored : "de";
+}
 
 /**
  * Chat inherits createRun idempotency (auftrag §0.4): same runId + same
@@ -49,6 +63,12 @@ export async function createChatRun(
   db: Queryable,
   params: CreateChatRunInput,
 ): Promise<CreateChatRunResult> {
+  const agentLocale = await resolveAgentLocale(db, {
+    userId: params.userId,
+    tenantId: params.tenantId,
+    override: params.agentLocale,
+  });
+
   const jobInput = {
     runId: params.runId,
     chatId: params.chatId,
@@ -56,7 +76,7 @@ export async function createChatRun(
     assistantMessageId: params.assistantMessageId,
     message: params.message,
     playbookSlug: params.playbookSlug,
-    agentLocale: params.agentLocale,
+    agentLocale,
     userId: params.userId,
   };
 
@@ -66,7 +86,7 @@ export async function createChatRun(
     assistantMessageId: params.assistantMessageId,
     message: params.message,
     playbookSlug: params.playbookSlug,
-    agentLocale: params.agentLocale,
+    agentLocale,
   };
 
   const result = await withTransaction(db, async (client) => {

@@ -76,6 +76,47 @@ describe("i18n catalogues", () => {
       expect(registry.has(key), `unregistered message key: ${key}`).toBe(true);
     }
   });
+
+  it("tsx files that use useTranslations do not embed visible prose outside t(...)", () => {
+    // Catches hard-coded labels like "save override" that never call t().
+    // Scoped to files that already participate in i18n (useTranslations) so
+    // legacy etappe-2/3 pages without catalogues are not false positives.
+    const root = join(__dirname, "..", "src");
+    const files: string[] = [];
+    function walk(dir: string) {
+      for (const name of readdirSync(dir)) {
+        const path = join(dir, name);
+        if (statSync(path).isDirectory()) walk(path);
+        else if (name.endsWith(".tsx")) files.push(path);
+      }
+    }
+    walk(root);
+
+    const offenders: string[] = [];
+    // Single-line JSX text nodes with a space (user-facing phrase).
+    const betweenTags = />\s*([A-Za-zÄÖÜäöüß][^<{\n]*\s[^<{\n]*?)\s*</g;
+
+    for (const file of files) {
+      const text = readFileSync(file, "utf8");
+      if (!text.includes("useTranslations")) continue;
+
+      const scrubbed = text
+        .replace(/\bt\(\s*["'][^"']+["'][^)]*\)/g, "t(/*ok*/)")
+        .replace(/\{t\([^)]*\)\}/g, "{/*t*/}");
+
+      let match: RegExpExecArray | null;
+      betweenTags.lastIndex = 0;
+      while ((match = betweenTags.exec(scrubbed))) {
+        const phrase = match[1]!.trim();
+        if (!phrase || phrase.length < 3) continue;
+        if (/^[A-Za-z0-9_./:-]+$/.test(phrase)) continue;
+        if (/[{}`=()]/.test(phrase)) continue;
+        offenders.push(`${relative(join(__dirname, ".."), file)}: "${phrase}"`);
+      }
+    }
+
+    expect(offenders).toEqual([]);
+  });
 });
 
 describe("design constraints", () => {

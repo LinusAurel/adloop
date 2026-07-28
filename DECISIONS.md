@@ -425,3 +425,16 @@ costs a build run that the current budget does not justify.
   resume/phase assertions.
 - **Screenshots for both theme modes** are a manual verification step (auftrag §0.9b);
   automated coverage is the no-hex-outside-theme test plus `.data` / `--font-data` usage.
+- **`run.event_seq` is the concurrent-safe allocator for `run_event.seq` (Review-8 P0-2).**
+  `COALESCE(MAX(seq),0)+1` races under parallel writers. Chosen over a separate sequence
+  table: bumping a counter column on `run` via
+  `UPDATE … SET event_seq = event_seq + 1 RETURNING` in the same statement as the
+  `run_event` INSERT uses ordinary row locking, needs no nested transaction, stays
+  gapless on rollback, and works whether or not the caller is already inside a
+  transaction. Deltas are also awaited in order on the model stream so token order
+  matches event order and rejections are not dropped as unhandled promises.
+- **Post-consent tool execution uses `executePersistedApproval` (Review-8 P0-1).**
+  `resolve()` runs once when the pending approval is created; after human consent the
+  worker loads `resolved_payload` by approval id and never re-resolves. Retries load
+  `reserved_operation` before any resolve. Hash-mismatch remains only for callers that
+  try to consume an approval via a freshly resolved (different) payload.

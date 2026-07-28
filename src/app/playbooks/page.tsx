@@ -60,7 +60,7 @@ export default function PlaybooksPage() {
       <main style={{ maxWidth: 720, margin: "2rem auto", padding: "0 1rem" }}>
         <h1>{t("playbooks")}</h1>
         <label style={{ display: "block", marginBottom: "0.5rem" }}>
-          slug
+          {t("playbookSlug")}
           <input
             className="data"
             value={slug}
@@ -104,10 +104,10 @@ export default function PlaybooksPage() {
             cursor: "pointer",
           }}
         >
-          save override
+          {t("saveOverride")}
         </button>
         {error && <p style={{ color: "var(--crit)" }} className="data">{error}</p>}
-        <h2 style={{ marginTop: "2rem" }}>active overrides</h2>
+        <h2 style={{ marginTop: "2rem" }}>{t("activeOverrides")}</h2>
         <ul style={{ listStyle: "none", padding: 0 }}>
           {overrides
             .filter((o) => o.active)
@@ -141,7 +141,7 @@ export default function PlaybooksPage() {
                     cursor: "pointer",
                   }}
                 >
-                  reset
+                  {t("resetOverride")}
                 </button>
               </li>
             ))}

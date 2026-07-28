@@ -1,14 +1,35 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { uuidv7 } from "uuidv7";
+import { evaluateAccessPolicy } from "@/access/policy";
 import { authenticate } from "@/auth/guard";
 import { hashPlaybookFiles } from "@/lib/canonical-json";
 import { getPool } from "@/db/pool";
 import { errorResponse } from "@/lib/api-error";
 import { env } from "@/lib/env";
 
-export async function GET(request: NextRequest): Promise<NextResponse> {
+async function requireEditPlaybooks(
+  request: NextRequest,
+): Promise<
+  | { ok: true; session: { userId: string; tenantId: string } }
+  | { ok: false; response: NextResponse }
+> {
   const auth = authenticate(request);
+  if (!auth.ok) return auth;
+  const pool = getPool();
+  const user = await pool.query<{ role: string }>(
+    `SELECT role FROM app_user WHERE id = $1 AND tenant_id = $2`,
+    [auth.session.userId, auth.session.tenantId],
+  );
+  const policy = evaluateAccessPolicy(user.rows[0]?.role ?? "");
+  if (!policy.actions.editPlaybooks) {
+    return { ok: false, response: errorResponse(403, "forbidden") };
+  }
+  return { ok: true, session: auth.session };
+}
+
+export async function GET(request: NextRequest): Promise<NextResponse> {
+  const auth = await requireEditPlaybooks(request);
   if (!auth.ok) return auth.response;
   const pool = getPool();
   const rows = await pool.query(
@@ -29,7 +50,7 @@ const UpsertSchema = z.object({
 });
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
-  const auth = authenticate(request);
+  const auth = await requireEditPlaybooks(request);
   if (!auth.ok) return auth.response;
   const parsed = UpsertSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return errorResponse(400, "validation_error");
@@ -80,7 +101,7 @@ const ResetSchema = z.object({
 });
 
 export async function DELETE(request: NextRequest): Promise<NextResponse> {
-  const auth = authenticate(request);
+  const auth = await requireEditPlaybooks(request);
   if (!auth.ok) return auth.response;
   const parsed = ResetSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return errorResponse(400, "validation_error");
@@ -95,7 +116,7 @@ export async function DELETE(request: NextRequest): Promise<NextResponse> {
 
 /** Export is off by default — enables only with PLAYBOOK_EXPORT_ENABLED=true. */
 export async function PUT(request: NextRequest): Promise<NextResponse> {
-  const auth = authenticate(request);
+  const auth = await requireEditPlaybooks(request);
   if (!auth.ok) return auth.response;
   if (process.env.PLAYBOOK_EXPORT_ENABLED !== "true") {
     return errorResponse(403, "export_disabled");

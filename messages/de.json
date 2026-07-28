@@ -11,7 +11,11 @@
     "send": "Senden",
     "themeLight": "Hell",
     "themeDark": "Dunkel",
-    "themeSystem": "System"
+    "themeSystem": "System",
+    "playbookSlug": "Slug",
+    "saveOverride": "Override speichern",
+    "activeOverrides": "Aktive Overrides",
+    "resetOverride": "Zurücksetzen"
   },
   "chat": {
     "empty": "Schreib eine Nachricht, um zu starten.",
@@ -47,6 +51,7 @@
     "approval_not_decidable": "Freigabe nicht mehr entscheidbar",
     "playbook_missing": "Playbook fehlt",
     "export_disabled": "Export ist deaktiviert",
+    "forbidden": "Keine Berechtigung",
     "account_not_selected": "Wähle zuerst ein Werbekonto aus",
     "meta_not_configured": "Meta-Zugangsdaten fehlen",
     "sync_in_progress": "Für dieses Werbekonto läuft bereits ein Sync",

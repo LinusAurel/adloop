@@ -166,7 +166,8 @@ async function reserveFromApproval(
 /**
  * Execute a tool call. readOnly runs immediately. Anything else requires a
  * decided, unconsumed, unexpired approval whose hash and tool_version match
- * the resolved payload. Retries use operation_id (auftrag §0.1 / Fall 7).
+ * the resolved payload. Retries load the reserved operation *before* any
+ * resolve (auftrag §0.1 / Fall 7) — the persisted payload is authoritative.
  */
 export async function executeToolCall(
   db: Queryable,
@@ -185,19 +186,7 @@ export async function executeToolCall(
     return { outcome: "rejected", code: "unknown_tool", message: "unknown_tool" };
   }
 
-  const parsed = tool.inputSchema.safeParse(params.rawInput);
-  if (!parsed.success) {
-    return { outcome: "rejected", code: "invalid_input", message: parsed.error.message };
-  }
-
-  const resolvedPayload = await tool.resolve(parsed.data, params.ctx);
-  const resolvedHash = sha256Canonical({
-    tool: tool.name,
-    version: tool.version,
-    payload: resolvedPayload,
-  });
-
-  // Retry path: operation already reserved — no new approval (Fall 7).
+  // Retry path: load the reservation first — never re-resolve (Review-8 P0-1).
   if (params.operationId) {
     const reserved = await db.query<{
       operation_id: string;
@@ -206,6 +195,7 @@ export async function executeToolCall(
       resolved_payload: unknown;
       resolved_request_hash: string;
       tool_version: string;
+      tool_name: string;
     }>(
       `SELECT * FROM reserved_operation
        WHERE operation_id = $1 AND tenant_id = $2`,
@@ -219,18 +209,25 @@ export async function executeToolCall(
         message: "operation_not_found",
       };
     }
+    if (row.tool_name !== tool.name) {
+      return {
+        outcome: "rejected",
+        code: "approval_hash_mismatch",
+        message: "operation_tool_mismatch",
+      };
+    }
+    if (row.tool_version !== tool.version) {
+      return {
+        outcome: "rejected",
+        code: "approval_version_mismatch",
+        message: "operation_version_mismatch",
+      };
+    }
     if (row.status === "succeeded") {
       return {
         outcome: "executed",
         result: row.result,
         operationId: row.operation_id,
-      };
-    }
-    if (row.resolved_request_hash !== resolvedHash || row.tool_version !== tool.version) {
-      return {
-        outcome: "rejected",
-        code: "approval_hash_mismatch",
-        message: "operation_payload_mismatch",
       };
     }
     try {
@@ -252,6 +249,18 @@ export async function executeToolCall(
       throw error;
     }
   }
+
+  const parsed = tool.inputSchema.safeParse(params.rawInput);
+  if (!parsed.success) {
+    return { outcome: "rejected", code: "invalid_input", message: parsed.error.message };
+  }
+
+  const resolvedPayload = await tool.resolve(parsed.data, params.ctx);
+  const resolvedHash = sha256Canonical({
+    tool: tool.name,
+    version: tool.version,
+    payload: resolvedPayload,
+  });
 
   if (tool.sideEffect === "readOnly") {
     const result = await tool.handler(resolvedPayload, params.ctx);
@@ -385,6 +394,7 @@ export async function executeToolCall(
   }
 
   try {
+    // Execute the *persisted* payload, never the freshly resolved one.
     const result = await tool.handler(approval.resolved_payload, params.ctx);
     await db.query(
       `UPDATE reserved_operation
@@ -410,8 +420,9 @@ export async function executeToolCall(
 }
 
 /**
- * Test/helper: approve + execute using only the persisted payload (worker path).
- * Never re-resolves — that would invalidate time-dependent args (auftrag §0.1).
+ * Post-consent worker path: approve already happened; load the persisted
+ * payload by approval id and execute it verbatim. Never re-resolves — that
+ * would invalidate time-dependent args (auftrag §0.1 / Review-8 P0-1).
  */
 export async function executePersistedApproval(
   db: Queryable,

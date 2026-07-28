@@ -245,7 +245,7 @@ describe("etappe 4 — agent, chat, playbooks", () => {
     }
   });
 
-  it("5 — approval for resolved A rejects execution after resolution changes to B", async () => {
+  it("5 — same raw args, resolution changes to B: persisted payload A is executed", async () => {
     const runId = uuidv7();
     await db.pool.query(
       `INSERT INTO run (id, tenant_id, kind, status, input) VALUES ($1, $2, 'agent_turn', 'queued', '{}')`,
@@ -268,12 +268,52 @@ describe("etappe 4 — agent, chat, playbooks", () => {
       approve: true,
     });
 
-    // Same raw args; resolve now yields B — hash must not match (Fall 5).
+    // Same raw args; resolve would now yield B. Production path must still
+    // execute the persisted payload A (auftrag §0.1 / Review-8 P0-1).
+    resolutionDefault = "B";
+    const executed = await executePersistedApproval(db.pool, {
+      approvalId: pending.approval.id,
+      tenantId: db.tenantId,
+      ctx: toolCtx(runId),
+    });
+    expect(executed.outcome).toBe("executed");
+    if (executed.outcome === "executed") {
+      expect(executed.result).toEqual({
+        ok: true,
+        resolved: { label: "same", resolvedDefault: "A" },
+      });
+    }
+  });
+
+  it("5b — re-resolve path rejects when trying to consume approval with payload B", async () => {
+    const runId = uuidv7();
+    await db.pool.query(
+      `INSERT INTO run (id, tenant_id, kind, status, input) VALUES ($1, $2, 'agent_turn', 'queued', '{}')`,
+      [runId, db.tenantId],
+    );
+    resolutionDefault = "A";
+    const pending = await executeToolCall(db.pool, {
+      ctx: toolCtx(runId),
+      toolName: "writes_probe",
+      rawInput: { label: "mismatch" },
+      requestApproval: true,
+    });
+    expect(pending.outcome).toBe("needs_approval");
+    if (pending.outcome !== "needs_approval") return;
+
+    await decideApproval(db.pool, {
+      approvalId: pending.approval.id,
+      tenantId: db.tenantId,
+      userId,
+      approve: true,
+    });
+
+    // Caller tries to consume via freshly resolved B — hash must not match.
     resolutionDefault = "B";
     const rejected = await executeToolCall(db.pool, {
       ctx: toolCtx(runId),
       toolName: "writes_probe",
-      rawInput: { label: "same" },
+      rawInput: { label: "mismatch" },
     });
     expect(rejected.outcome).toBe("rejected");
     if (rejected.outcome === "rejected") {
@@ -317,7 +357,7 @@ describe("etappe 4 — agent, chat, playbooks", () => {
     }
   });
 
-  it("7 — consumed approval rejected; retry of same operation_id continues", async () => {
+  it("7 — consumed approval rejected; retry of same operation_id continues without re-resolve", async () => {
     const runId = uuidv7();
     await db.pool.query(
       `INSERT INTO run (id, tenant_id, kind, status, input) VALUES ($1, $2, 'agent_turn', 'queued', '{}')`,
@@ -340,6 +380,7 @@ describe("etappe 4 — agent, chat, playbooks", () => {
       approve: true,
     });
 
+    // Production post-consent path (same helper the turn uses).
     const first = await executePersistedApproval(db.pool, {
       approvalId: pending.approval.id,
       tenantId: db.tenantId,
@@ -358,6 +399,8 @@ describe("etappe 4 — agent, chat, playbooks", () => {
       expect(consumed.code).toBe("approval_consumed");
     }
 
+    // Resolution changed after reserve — retry must still run persisted A.
+    resolutionDefault = "B";
     const retried = await executeToolCall(db.pool, {
       ctx: toolCtx(runId),
       toolName: "writes_probe",
@@ -365,6 +408,12 @@ describe("etappe 4 — agent, chat, playbooks", () => {
       operationId: first.operationId,
     });
     expect(retried.outcome).toBe("executed");
+    if (retried.outcome === "executed") {
+      expect(retried.result).toEqual({
+        ok: true,
+        resolved: { label: "retry", resolvedDefault: "A" },
+      });
+    }
   });
 
   it("8 — missing playbook in production does not fall back to fixture", async () => {
@@ -460,6 +509,7 @@ describe("etappe 4 — agent, chat, playbooks", () => {
     expect(row.context_packet).toContain("Performance window:");
     expect(row.context_packet).toContain("Agent locale: de");
     expect(row.context_packet).toContain("Content locale:");
+    expect(row.context_packet).toMatch(/no_ad_account_selected|no_sync_completed|no_metrics_selected/);
     expect(row.prompt_hash).toMatch(/^[a-f0-9]{64}$/);
 
     const playbook = await resolvePlaybook(db.pool, {

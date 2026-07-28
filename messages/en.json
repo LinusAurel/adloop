@@ -11,7 +11,11 @@
     "send": "Send",
     "themeLight": "Light",
     "themeDark": "Dark",
-    "themeSystem": "System"
+    "themeSystem": "System",
+    "playbookSlug": "Slug",
+    "saveOverride": "Save override",
+    "activeOverrides": "Active overrides",
+    "resetOverride": "Reset"
   },
   "chat": {
     "empty": "Send a message to get started.",
@@ -47,6 +51,7 @@
     "approval_not_decidable": "Approval can no longer be decided",
     "playbook_missing": "Playbook missing",
     "export_disabled": "Export is disabled",
+    "forbidden": "Forbidden",
     "account_not_selected": "Select an ad account first",
     "meta_not_configured": "Meta credentials are not configured",
     "sync_in_progress": "A sync is already running for this ad account",

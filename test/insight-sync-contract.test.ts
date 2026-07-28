@@ -134,6 +134,11 @@ describe("insight observation read contract", () => {
           return jsonResponse({
             data: adIds.map((id) => ({
               id,
+              name: `Synthetic Ad ${id}`,
+              status: "ACTIVE",
+              effective_status: "ACTIVE",
+              campaign_id: "200000000000001",
+              adset_id: "300000000000001",
               created_time: "2026-01-01T00:00:00+0000",
             })),
           });

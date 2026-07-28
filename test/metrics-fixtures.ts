@@ -393,6 +393,45 @@ export async function seedAccountWindow(
   );
 }
 
+export async function seedMetaAd(
+  pool: Pool,
+  params: {
+    tenantId: string;
+    accountId: string;
+    syncRunId: string;
+    metaAdId: string;
+    name: string;
+    status?: string;
+    effectiveStatus?: string;
+    campaignId?: string;
+    adsetId?: string;
+    observedAt?: Date;
+  },
+): Promise<void> {
+  await pool.query(
+    `INSERT INTO meta_ad (
+       tenant_id, meta_ad_id, meta_ad_account_id,
+       name, status, effective_status,
+       meta_campaign_id, meta_adset_id,
+       sync_run_id, observed_at
+     ) VALUES (
+       $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+     )`,
+    [
+      params.tenantId,
+      params.metaAdId,
+      params.accountId,
+      params.name,
+      params.status ?? "ACTIVE",
+      params.effectiveStatus ?? "ACTIVE",
+      params.campaignId ?? "200000000000001",
+      params.adsetId ?? "300000000000001",
+      params.syncRunId,
+      (params.observedAt ?? new Date("2026-07-10T12:00:00.000Z")).toISOString(),
+    ],
+  );
+}
+
 /** Make metric/assignment rows known at a historical dataAsOf. */
 export async function backdateMetricCreatedAt(
   pool: Pool,

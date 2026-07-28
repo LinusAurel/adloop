@@ -35,7 +35,7 @@ PROMPT-etappe-1.md §0).
 | `META_REDIRECT_URI` | Exact registered callback URI, normally `http://localhost:3000/api/auth/meta/callback` |
 | `ENCRYPTION_KEY` | Base64-encoded 32-byte key (or 64 hex characters) for Meta tokens |
 | `META_GRAPH_API_VERSION` | Explicit Marketing API version, currently `v25.0` |
-| `SYNC_BACKFILL_DAYS` | Daily correction window; defaults to 7 |
+| `SYNC_BACKFILL_DAYS` | Daily correction window; defaults to 180 (max 400) so a 90-day Vorperiode is covered |
 | `JOB_POLL_INTERVAL_MS` | How often the worker polls when idle (LISTEN/NOTIFY wakes it sooner) |
 | `JOB_LEASE_MS` | How long a claimed job's lease lasts without a heartbeat |
 | `JOB_HEARTBEAT_INTERVAL_MS` | How often the worker renews the lease of a running job |

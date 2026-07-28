@@ -25,7 +25,9 @@ const envSchema = z
   META_APP_SECRET: z.string().min(1).optional(),
   META_REDIRECT_URI: z.string().url().optional(),
   META_GRAPH_API_VERSION: z.string().regex(/^v\d+\.\d+$/).default("v25.0"),
-  SYNC_BACKFILL_DAYS: z.coerce.number().int().min(1).max(90).default(7),
+  // 180 covers a 90-day window plus its previous period; max 400 leaves headroom
+  // for longer custom windows without silently truncating Vorperioden data.
+  SYNC_BACKFILL_DAYS: z.coerce.number().int().min(1).max(400).default(180),
 
   PLAYBOOK_DIR: z.string().min(1).optional(),
   ANTHROPIC_API_KEY: z.string().min(1).optional(),

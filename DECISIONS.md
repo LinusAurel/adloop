@@ -332,7 +332,49 @@ What changed, and why:
   delivered do not acquire synthetic daily rows. The zero row uses the new
   sync run and also tombstones every previously observed action type.
 
+## Etappe 3
+
+- **`conversion_metric` is keyed by `(id, version)` and append-only.** A
+  "change" inserts a new version. Prior rows are never UPDATEd. Resolve picks
+  the version known at `dataAsOf` (`created_at <= dataAsOf`) whose
+  `effective_from` is at or before `windowEnd`. Assignments are likewise
+  append-only inserts; supersession is resolved at read time the same way.
+  Snapshots pin both id and version so a later rewrite cannot reinterpret an
+  old score.
+- **Resolve reads only `*_as_of(tenant, dataAsOf)`, never `_current` or raw
+  tables.** `_current` is `now()`-bound and cannot reconstruct a snapshot's
+  `data_as_of`.
+- **Half-windows are part of the insight sync contract.** Creative strain
+  needs exact `frequency` / reach for each half; those are non-additive, so
+  Etappe 2's 30/90 windows alone are not enough. CTR still comes from daily
+  rows.
+- **`insight_action_daily.value` is NULL-able.** Missing `action_values` for
+  an action type writes NULL (unknown), not 0. Completeness tombstones with
+  `count = 0` still store `value = 0` — that zero is an observation.
+- **Unsynced attribution specs fail closed with `attribution_not_synced`.**
+  Etappe 2 only stores `["1d_view","7d_click"]`; there is no silent remap to
+  the synced set.
+- **Data-gate thresholds live in `score-config/data-gate-v1.ts`.** `minSpend`
+  is in the ad account's currency with no FX; snapshots record that currency
+  next to spend-gated results. Weights and thresholds are reasoned assumptions
+  without calibration — stated as comments on the config objects.
+- **Account-level reach/frequency are stored in `insight_account_window`.**
+  Sync queries Meta at account level for comparison windows; resolve reads
+  via `insight_account_window_as_of`. Never summed from ads.
+- **Fallback metric is in-code, not a DB seed.** No assignment →
+  `configuredBy: "fallback"` purchase definition. User assignments are
+  `configuredBy: "user"`.
+- **`metric_snapshot_compute` is enqueued after a successful sync** and is
+  best-effort relative to the sync lease: sync success is not rolled back if
+  the snapshot enqueue is skipped (e.g. family not registered in a narrow
+  test harness). It is not publicly startable via `POST /api/runs`. The
+  handler requires `syncRunId` and `metaAdAccountId` to refer to the same
+  account. Historical `dataAsOf` reads `metric_snapshot`; the latest sync
+  recomputes live and persists. Incomplete daily coverage for a score window
+  yields `window_incomplete` — no partial-window rates.
+
 ## Known limitation: attribution_setting is asserted, not tolerated
+
 
 `MetaInsightRowSchema` declares `attribution_setting: z.literal("1d_view_7d_click")`.
 A row computed under any other setting fails validation and aborts the sync.

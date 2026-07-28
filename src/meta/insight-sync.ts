@@ -117,6 +117,19 @@ const MetaWindowPageSchema = z.object({
   data: z.array(MetaWindowRowSchema).max(1),
 });
 
+const MetaAccountWindowRowSchema = z.object({
+  date_start: z.string().date(),
+  date_stop: z.string().date(),
+  reach: NumericString,
+  frequency: NumericString,
+  impressions: NumericString,
+  spend: NumericString,
+});
+
+const MetaAccountWindowPageSchema = z.object({
+  data: z.array(MetaAccountWindowRowSchema).max(1),
+});
+
 const ATTRIBUTION_SPEC = ["1d_view", "7d_click"] as const;
 export const META_INSIGHT_FIELDS = [
   "ad_id",
@@ -163,7 +176,17 @@ const QUERY_CONTRACT = {
     fields: META_WINDOW_FIELDS,
     periods: [30, 90],
     includePrevious: true,
+    /** Exact half-windows for creative-strain frequency/reach (non-additive). */
+    includeHalves: true,
+    windowSplit: 0.5,
     cumulativeFromDeliveryStart: true,
+  },
+  /** Account-level reach/frequency — never derived by summing ads. */
+  accountWindows: {
+    level: "account",
+    fields: ["reach", "frequency", "impressions", "spend"] as const,
+    periods: [30, 90],
+    includePrevious: true,
   },
 };
 
@@ -233,11 +256,57 @@ export function insightComparisonWindows(end: string): SyncWindow[] {
   ];
 }
 
+/**
+ * Exact half-windows for each comparison period. frequency and reach-share are
+ * non-additive, so creative strain cannot reconstruct these from daily rows.
+ */
+export function insightHalfWindows(
+  end: string,
+  windowSplit = QUERY_CONTRACT.windows.windowSplit,
+): SyncWindow[] {
+  const halves: SyncWindow[] = [];
+  for (const window of insightComparisonWindows(end)) {
+    const days = daysInclusive(window);
+    const firstHalfDays = Math.max(1, Math.floor(days * windowSplit));
+    const midEnd = addDays(window.start, firstHalfDays - 1);
+    const secondStart = addDays(midEnd, 1);
+    if (secondStart <= window.end) {
+      halves.push({ start: window.start, end: midEnd });
+      halves.push({ start: secondStart, end: window.end });
+    }
+  }
+  return halves;
+}
+
+export function allInsightWindows(end: string): SyncWindow[] {
+  const seen = new Set<string>();
+  const windows: SyncWindow[] = [];
+  for (const window of [
+    ...insightComparisonWindows(end),
+    ...insightHalfWindows(end),
+  ]) {
+    const key = `${window.start}:${window.end}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    windows.push(window);
+  }
+  return windows;
+}
+
 function actionValue(
   actions: MetaInsightRow["actions"] | MetaInsightRow["action_values"],
   actionType: string,
 ): number {
   return actions?.find((action) => action.action_type === actionType)?.value ?? 0;
+}
+
+/** NULL when Meta omitted action_values for this type — not the same as 0. */
+function actionValueOrNull(
+  actions: MetaInsightRow["action_values"],
+  actionType: string,
+): number | null {
+  const found = actions?.find((action) => action.action_type === actionType);
+  return found === undefined ? null : found.value;
 }
 
 function videoValue(
@@ -251,7 +320,8 @@ function videoValue(
 interface NormalizedAction {
   actionType: string;
   count: number;
-  value: number;
+  /** NULL = Meta omitted action_values; 0 = reported zero / completeness row. */
+  value: number | null;
 }
 
 function normalizedActions(row: MetaInsightRow): NormalizedAction[] {
@@ -264,7 +334,7 @@ function normalizedActions(row: MetaInsightRow): NormalizedAction[] {
     result.set(action.action_type, {
       actionType: action.action_type,
       count: action.value,
-      value: actionValue(row.action_values, action.action_type),
+      value: actionValueOrNull(row.action_values, action.action_type),
     });
   }
   return [...result.values()].sort((left, right) =>
@@ -500,13 +570,12 @@ async function writeWindowObservation(
        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, clock_timestamp()
      )
      ON CONFLICT (
-       tenant_id, meta_ad_id, window_start, window_end, sync_run_id
+       tenant_id, meta_ad_id, window_start, window_end, is_cumulative, sync_run_id
      ) DO UPDATE SET
        reach = EXCLUDED.reach,
        frequency = EXCLUDED.frequency,
        impressions = EXCLUDED.impressions,
        spend = EXCLUDED.spend,
-       is_cumulative = EXCLUDED.is_cumulative,
        observed_at = EXCLUDED.observed_at`,
     [
       options.tenantId,
@@ -530,7 +599,7 @@ async function syncInsightWindows(
   const reports: unknown[] = [];
   const deliveryHistory: unknown[] = [];
   for (const ad of listed.ads) {
-    for (const window of insightComparisonWindows(options.window.end)) {
+    for (const window of allInsightWindows(options.window.end)) {
       const result = await fetchWindowObservation(options, ad.id, window, false);
       const written = await options.withLease((client) =>
         writeWindowObservation(client, options, result.observation),
@@ -543,7 +612,7 @@ async function syncInsightWindows(
     deliveryHistory.push({ adId: ad.id, responses: delivery.raw });
     if (!delivery.date) continue;
     const boundaries = new Set<string>();
-    for (const window of insightComparisonWindows(options.window.end)) {
+    for (const window of allInsightWindows(options.window.end)) {
       boundaries.add(window.end);
       boundaries.add(addDays(window.start, -1));
     }
@@ -563,6 +632,104 @@ async function syncInsightWindows(
     deliveryHistory,
     reports,
   };
+}
+
+async function fetchAccountWindowObservation(
+  options: ExecuteInsightSyncOptions,
+  window: SyncWindow,
+): Promise<{
+  observation: {
+    start: string;
+    end: string;
+    reach: number;
+    frequency: number;
+    impressions: number;
+    spend: number;
+  };
+  raw: unknown;
+}> {
+  const params = new URLSearchParams({
+    fields: QUERY_CONTRACT.accountWindows.fields.join(","),
+    time_increment: "all_days",
+    time_range: JSON.stringify({ since: window.start, until: window.end }),
+    limit: "1",
+  });
+  const response = await options.graph.request(
+    `/${options.externalAdAccountId}/insights?${params.toString()}`,
+    MetaAccountWindowPageSchema,
+    { signal: options.signal },
+  );
+  const row = response.data.data[0];
+  if (row && (row.date_start !== window.start || row.date_stop !== window.end)) {
+    throw new Error("meta_account_window_range_mismatch");
+  }
+  return {
+    observation: {
+      ...window,
+      reach: row?.reach ?? 0,
+      frequency: row?.frequency ?? 0,
+      impressions: row?.impressions ?? 0,
+      spend: row?.spend ?? 0,
+    },
+    raw: response.raw,
+  };
+}
+
+async function writeAccountWindowObservation(
+  client: PoolClient,
+  options: ExecuteInsightSyncOptions,
+  observation: {
+    start: string;
+    end: string;
+    reach: number;
+    frequency: number;
+    impressions: number;
+    spend: number;
+  },
+): Promise<void> {
+  await client.query(
+    `INSERT INTO insight_account_window (
+       tenant_id, meta_ad_account_id, window_start, window_end,
+       reach, frequency, impressions, spend, sync_run_id, observed_at
+     ) VALUES (
+       $1, $2, $3, $4, $5, $6, $7, $8, $9, clock_timestamp()
+     )
+     ON CONFLICT (
+       tenant_id, meta_ad_account_id, window_start, window_end, sync_run_id
+     ) DO UPDATE SET
+       reach = EXCLUDED.reach,
+       frequency = EXCLUDED.frequency,
+       impressions = EXCLUDED.impressions,
+       spend = EXCLUDED.spend,
+       observed_at = EXCLUDED.observed_at`,
+    [
+      options.tenantId,
+      options.internalAdAccountId,
+      observation.start,
+      observation.end,
+      observation.reach,
+      observation.frequency,
+      observation.impressions,
+      observation.spend,
+      options.syncRunId,
+    ],
+  );
+}
+
+/** Dedicated account-level Meta windows — reach/frequency are non-additive. */
+async function syncAccountWindows(
+  options: ExecuteInsightSyncOptions,
+): Promise<unknown> {
+  const reports: unknown[] = [];
+  for (const window of insightComparisonWindows(options.window.end)) {
+    const result = await fetchAccountWindowObservation(options, window);
+    const written = await options.withLease((client) =>
+      writeAccountWindowObservation(client, options, result.observation),
+    );
+    if (!written.acquired) throw new JobCancelledError();
+    reports.push({ kind: "account_comparison", window, response: result.raw });
+  }
+  return { reports };
 }
 
 async function writeInsightRow(
@@ -640,14 +807,12 @@ async function writeInsightRow(
          AND a.meta_ad_id = $2
          AND a.date = $3
          AND r.meta_ad_account_id = $4
-         AND r.query_signature = $5
          AND r.status = 'succeeded'`,
       [
         options.tenantId,
         row.ad_id,
         row.date_start,
         options.internalAdAccountId,
-        INSIGHT_QUERY_SIGNATURE,
       ],
     );
     const current = new Map(actions.map((action) => [action.actionType, action]));
@@ -656,6 +821,8 @@ async function writeInsightRow(
         old.attribution_spec.join(",") === ATTRIBUTION_SPEC.join(",") &&
         !current.has(old.action_type)
       ) {
+        // Completeness tombstone: count=0 is an explicit observation, not a
+        // missing Meta value — keep value 0 (see Etappe 3 §0.4).
         current.set(old.action_type, {
           actionType: old.action_type,
           count: 0,
@@ -724,22 +891,20 @@ async function reconcileMissingInsightRows(
       AND r.tenant_id = d.tenant_id
      WHERE d.tenant_id = $1
        AND r.meta_ad_account_id = $2
-       AND r.query_signature = $3
        AND r.status = 'succeeded'
-       AND d.date BETWEEN $4 AND $5
+       AND d.date BETWEEN $3 AND $4
        AND NOT EXISTS (
          SELECT 1
          FROM insight_daily current_observation
          WHERE current_observation.tenant_id = d.tenant_id
            AND current_observation.meta_ad_id = d.meta_ad_id
            AND current_observation.date = d.date
-           AND current_observation.sync_run_id = $6
+           AND current_observation.sync_run_id = $5
        )
      ORDER BY d.meta_ad_id, d.date, d.observed_at DESC`,
     [
       options.tenantId,
       options.internalAdAccountId,
-      INSIGHT_QUERY_SIGNATURE,
       options.window.start,
       options.window.end,
       options.syncRunId,
@@ -942,6 +1107,7 @@ export async function executeInsightSync(
 
     await reconcileMissingInsightRows(options);
     const windowResponses = await syncInsightWindows(options);
+    const accountWindowResponses = await syncAccountWindows(options);
     const rawPages = await options.pool.query<{ raw_response: unknown }>(
       `SELECT raw_response
        FROM insight_sync_page
@@ -956,6 +1122,7 @@ export async function executeInsightSync(
       {
         pages: rawPages.rows.map((row) => row.raw_response),
         windows: windowResponses,
+        accountWindows: accountWindowResponses,
       },
       options.signal,
     );

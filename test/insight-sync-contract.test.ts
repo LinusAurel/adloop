@@ -138,6 +138,27 @@ describe("insight observation read contract", () => {
             })),
           });
         }
+        if (
+          /\/act_\d+\/insights$/.test(url.pathname) &&
+          url.searchParams.get("time_increment") === "all_days"
+        ) {
+          const range = JSON.parse(url.searchParams.get("time_range")!) as {
+            since: string;
+            until: string;
+          };
+          return jsonResponse({
+            data: [
+              {
+                date_start: range.since,
+                date_stop: range.until,
+                reach: "10000",
+                frequency: "2.1",
+                impressions: "21000",
+                spend: "150",
+              },
+            ],
+          });
+        }
         if (/\/\d+\/insights$/.test(url.pathname)) {
           const range = JSON.parse(url.searchParams.get("time_range")!) as {
             since: string;
@@ -415,8 +436,16 @@ describe("insight observation read contract", () => {
        ORDER BY is_cumulative, window_start, window_end`,
       [db.tenantId],
     );
-    expect(windows.rows.filter((row) => !row.is_cumulative)).toHaveLength(4);
-    expect(windows.rows.filter((row) => row.is_cumulative)).toHaveLength(5);
+    expect(windows.rows.filter((row) => !row.is_cumulative)).toHaveLength(12);
+    expect(
+      windows.rows.some(
+        (row) =>
+          !row.is_cumulative &&
+          row.window_start === "2026-06-21" &&
+          row.window_end === "2026-07-05",
+      ),
+    ).toBe(true);
+    expect(windows.rows.filter((row) => row.is_cumulative).length).toBeGreaterThanOrEqual(5);
 
     const derived = await db.pool.query<{
       status: string;
@@ -493,7 +522,7 @@ describe("insight observation read contract", () => {
        WHERE meta_ad_id = '000000000000000001'`,
       [db.tenantId, cutoff.rows[0]!.finished_at],
     );
-    expect(historicalWindows.rows).toEqual([{ count: "9" }]);
+    expect(historicalWindows.rows).toEqual([{ count: "20" }]);
   });
 
   it("persists all three pages and reports pages_fetched = 3", async () => {

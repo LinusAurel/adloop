@@ -28,6 +28,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       endpoint: "/api/meta/sync/refresh",
     });
   }
+  if (parsed.data.family === "metric_snapshot_compute") {
+    return errorResponse(400, "family_internal_only", {
+      family: "metric_snapshot_compute",
+    });
+  }
 
   const result = await createRun(getPool(), {
     ...parsed.data,

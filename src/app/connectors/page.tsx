@@ -161,7 +161,7 @@ export default function ConnectorsPage() {
 
       {!status && <p>Status wird geladen…</p>}
       {status && !status.metaConfigured && (
-        <p style={{ color: "#8a5b00" }}>
+        <p style={{ color: "var(--warn)" }}>
           Meta ist noch nicht konfiguriert. Setze App-Kennung, App-Geheimnis, Redirect-URI und Verschlüsselungsschlüssel.
         </p>
       )}
@@ -175,7 +175,7 @@ export default function ConnectorsPage() {
       </button>
 
       {status?.connections.map((connection) => (
-        <p key={connection.id} style={{ color: connection.expiringSoon ? "crimson" : "#555" }}>
+        <p key={connection.id} style={{ color: connection.expiringSoon ? "var(--crit)" : "var(--dim)" }}>
           Token: {connection.status}, noch {connection.expiresInDays} Tage
           {connection.expiringSoon ? " — bitte Meta erneut verbinden" : ""}
         </p>
@@ -186,7 +186,7 @@ export default function ConnectorsPage() {
       {status?.adAccounts.map((account) => (
         <section
           key={account.id}
-          style={{ border: "1px solid #ddd", borderRadius: 8, padding: "1rem", marginBottom: "1rem" }}
+          style={{ border: "1px solid var(--line)", borderRadius: 8, padding: "1rem", marginBottom: "1rem" }}
         >
           <h3>{account.name}</h3>
           <p>

@@ -1,0 +1,101 @@
+/* theme/default.css — sole colour source (DESIGN.md). No component may hardcode hex. */
+
+:root {
+  --bg: #0d1017;
+  --surface: #151a22;
+  --raised: #1c222c;
+  --fg: #d5dce6;
+  --dim: #7e8899;
+  --line: #232a35;
+
+  --accent: #8b84f7;
+  --on-accent: #10101e;
+
+  --good: #4fb477;
+  --warn: #f0921b;
+  --crit: #e2585b;
+  --none: #3a424f;
+
+  --font-ui: system-ui, sans-serif;
+  --font-data: ui-monospace, monospace;
+  --radius: 6px;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #f5f6f9;
+    --surface: #ffffff;
+    --raised: #ebeef3;
+    --fg: #161a21;
+    --dim: #5c6672;
+    --line: #dce0e7;
+
+    --accent: #4f46b8;
+    --on-accent: #ffffff;
+    --good: #157347;
+    --warn: #f0921b;
+    --crit: #c22b30;
+    --none: #aeb6c1;
+  }
+}
+
+:root[data-theme="light"] {
+  --bg: #f5f6f9;
+  --surface: #ffffff;
+  --raised: #ebeef3;
+  --fg: #161a21;
+  --dim: #5c6672;
+  --line: #dce0e7;
+
+  --accent: #4f46b8;
+  --on-accent: #ffffff;
+  --good: #157347;
+  --warn: #f0921b;
+  --crit: #c22b30;
+  --none: #aeb6c1;
+}
+
+:root[data-theme="dark"] {
+  --bg: #0d1017;
+  --surface: #151a22;
+  --raised: #1c222c;
+  --fg: #d5dce6;
+  --dim: #7e8899;
+  --line: #232a35;
+
+  --accent: #8b84f7;
+  --on-accent: #10101e;
+  --good: #4fb477;
+  --warn: #f0921b;
+  --crit: #e2585b;
+  --none: #3a424f;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-ui);
+  min-height: 100%;
+}
+
+a {
+  color: var(--accent);
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+.data {
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+}

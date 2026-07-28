@@ -331,3 +331,25 @@ What changed, and why:
   observations, not from every ad in the account, so ads that never
   delivered do not acquire synthetic daily rows. The zero row uses the new
   sync run and also tombstones every previously observed action type.
+
+## Known limitation: attribution_setting is asserted, not tolerated
+
+`MetaInsightRowSchema` declares `attribution_setting: z.literal("1d_view_7d_click")`.
+A row computed under any other setting fails validation and aborts the sync.
+
+This is deliberate. Meta returns per-window values in separate keys while `value`
+carries the account's default attribution; storing `value` under a requested window
+set would label a number with a window it did not come from. Asserting the setting
+is the only way to know the stored number matches its `attribution_spec` label.
+Fail-closed beats a plausible wrong number — the same reasoning as the inverted
+funnel formula and the non-existent `net_new_reach` field.
+
+**The limitation:** per Meta's reference, `attribution_setting` is a property of each
+ad set, not of the account. An account whose ad sets use mixed settings makes the
+sync abort entirely instead of degrading. Single-tenant operation on one account is
+unaffected; reading third-party accounts is not.
+
+The fix, when it is needed, is to label each row with the setting Meta actually
+reports rather than rejecting it — the `attribution_spec` column already carries
+that information per row. Not done now because it is out of scope for stage 2 and
+costs a build run that the current budget does not justify.

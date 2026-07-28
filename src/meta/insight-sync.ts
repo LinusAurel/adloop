@@ -78,6 +78,11 @@ const MetaDateTime = z.string().refine((value) => Number.isFinite(Date.parse(val
 
 const MetaAdSchema = z.object({
   id: z.string().regex(/^\d+$/),
+  name: z.string().min(1),
+  status: z.string().min(1),
+  effective_status: z.string().min(1),
+  campaign_id: z.string().regex(/^\d+$/).optional(),
+  adset_id: z.string().regex(/^\d+$/).optional(),
   created_time: MetaDateTime,
   ad_schedule_start_time: MetaDateTime.optional(),
 });
@@ -476,7 +481,7 @@ async function listAds(
   await options.graph.paginate({
     path:
       `/${options.externalAdAccountId}/ads` +
-      "?fields=id%2Ccreated_time%2Cad_schedule_start_time&limit=500",
+      "?fields=id%2Cname%2Cstatus%2Ceffective_status%2Ccampaign_id%2Cadset_id%2Ccreated_time%2Cad_schedule_start_time&limit=500",
     pageSchema,
     signal: options.signal,
     onPage: async (page) => {
@@ -592,6 +597,41 @@ async function writeWindowObservation(
   );
 }
 
+async function writeMetaAdObservation(
+  client: PoolClient,
+  options: ExecuteInsightSyncOptions,
+  ad: z.infer<typeof MetaAdSchema>,
+): Promise<void> {
+  await client.query(
+    `INSERT INTO meta_ad (
+       tenant_id, meta_ad_id, meta_ad_account_id,
+       name, status, effective_status,
+       meta_campaign_id, meta_adset_id,
+       sync_run_id, observed_at
+     ) VALUES (
+       $1, $2, $3, $4, $5, $6, $7, $8, $9, clock_timestamp()
+     )
+     ON CONFLICT (tenant_id, meta_ad_id, sync_run_id) DO UPDATE SET
+       name = EXCLUDED.name,
+       status = EXCLUDED.status,
+       effective_status = EXCLUDED.effective_status,
+       meta_campaign_id = EXCLUDED.meta_campaign_id,
+       meta_adset_id = EXCLUDED.meta_adset_id,
+       observed_at = EXCLUDED.observed_at`,
+    [
+      options.tenantId,
+      ad.id,
+      options.internalAdAccountId,
+      ad.name,
+      ad.status,
+      ad.effective_status,
+      ad.campaign_id ?? null,
+      ad.adset_id ?? null,
+      options.syncRunId,
+    ],
+  );
+}
+
 async function syncInsightWindows(
   options: ExecuteInsightSyncOptions,
 ): Promise<unknown> {
@@ -599,6 +639,11 @@ async function syncInsightWindows(
   const reports: unknown[] = [];
   const deliveryHistory: unknown[] = [];
   for (const ad of listed.ads) {
+    const writtenAd = await options.withLease((client) =>
+      writeMetaAdObservation(client, options, ad),
+    );
+    if (!writtenAd.acquired) throw new JobCancelledError();
+
     for (const window of allInsightWindows(options.window.end)) {
       const result = await fetchWindowObservation(options, ad.id, window, false);
       const written = await options.withLease((client) =>

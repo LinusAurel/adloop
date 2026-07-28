@@ -1,4 +1,3 @@
-import type { Pool } from "pg";
 import type { Queryable } from "@/db/queryable";
 import { sha256Canonical, sha256Text } from "@/lib/canonical-json";
 import { resolveMetrics } from "@/metrics/resolve";
@@ -196,25 +195,49 @@ export function emptyContextPacket(params: {
  * Build the context packet from Etappe-2/3 facts via resolveMetrics / *_as_of
  * at the run's dataAsOf. Missing data is a named gate reason, never silent n/a
  * without explanation (Review-8 P1-5).
+ *
+ * Optional targeting (Etappe 5): when metaAdAccountId / analysisWindow /
+ * metaAdId / funnelSnapshot are supplied, the packet mirrors exactly what the
+ * strategist UI showed. Omitted fields keep the Etappe-4 default (selected
+ * account, rolling 30-day window from caller).
  */
 export async function assembleContextPacket(
-  pool: Pool,
+  pool: Queryable,
   params: {
     tenantId: string;
     agentLocale: "de" | "en";
     contentLocale: string;
     windowStart: string;
     windowEnd: string;
+    metaAdAccountId?: string;
+    metaAdId?: string;
+    dataAsOf?: string;
+    funnelSnapshot?: {
+      id: string;
+      score: number | null;
+      gateStatus: string;
+      gateReasons: string[];
+      band: string | null;
+      inputs: unknown;
+      metricDefinitionId: string | null;
+      metricDefinitionVersion: number | null;
+      windowStart: string;
+      windowEnd: string;
+      dataAsOf: string;
+    };
   },
-): Promise<{ packet: string; dataAsOf: string | null }> {
-  const account = await pool.query<{ id: string }>(
-    `SELECT id FROM meta_ad_account
-     WHERE tenant_id = $1 AND selected = true
-     ORDER BY updated_at DESC
-     LIMIT 1`,
-    [params.tenantId],
-  );
-  const adAccountId = account.rows[0]?.id;
+): Promise<{ packet: string; dataAsOf: string | null; metricDefinitionVersion: number | null }> {
+  let adAccountId = params.metaAdAccountId;
+  if (!adAccountId) {
+    const account = await pool.query<{ id: string }>(
+      `SELECT id FROM meta_ad_account
+       WHERE tenant_id = $1 AND selected = true
+       ORDER BY updated_at DESC
+       LIMIT 1`,
+      [params.tenantId],
+    );
+    adAccountId = account.rows[0]?.id;
+  }
   if (!adAccountId) {
     return {
       packet: emptyContextPacket({
@@ -222,21 +245,25 @@ export async function assembleContextPacket(
         dataGateReasons: ["no_ad_account_selected"],
       }),
       dataAsOf: null,
+      metricDefinitionVersion: null,
     };
   }
 
-  const sync = await pool.query<{ finished_at: string }>(
-    `SELECT finished_at::text AS finished_at
-     FROM insight_sync_run
-     WHERE tenant_id = $1
-       AND meta_ad_account_id = $2
-       AND status = 'succeeded'
-       AND finished_at IS NOT NULL
-     ORDER BY finished_at DESC
-     LIMIT 1`,
-    [params.tenantId, adAccountId],
-  );
-  const dataAsOf = sync.rows[0]?.finished_at ?? null;
+  let dataAsOf = params.dataAsOf ?? null;
+  if (!dataAsOf) {
+    const sync = await pool.query<{ finished_at: string }>(
+      `SELECT finished_at::text AS finished_at
+       FROM insight_sync_run
+       WHERE tenant_id = $1
+         AND meta_ad_account_id = $2
+         AND status = 'succeeded'
+         AND finished_at IS NOT NULL
+       ORDER BY finished_at DESC
+       LIMIT 1`,
+      [params.tenantId, adAccountId],
+    );
+    dataAsOf = sync.rows[0]?.finished_at ?? null;
+  }
   if (!dataAsOf) {
     return {
       packet: emptyContextPacket({
@@ -244,6 +271,7 @@ export async function assembleContextPacket(
         dataGateReasons: ["no_sync_completed"],
       }),
       dataAsOf: null,
+      metricDefinitionVersion: null,
     };
   }
 
@@ -256,7 +284,22 @@ export async function assembleContextPacket(
     dataAsOf,
   });
 
-  const totals = resolved.accountTotals;
+  const focusRow = params.metaAdId
+    ? resolved.rows.find((row) => row.metaAdId === params.metaAdId)
+    : null;
+
+  const totals = focusRow
+    ? {
+        spend: focusRow.spend,
+        impressions: focusRow.impressions,
+        clicks: focusRow.clicks,
+        reach: focusRow.reach,
+        frequency: focusRow.frequency,
+        numerator: focusRow.numerator,
+        metaRoas: focusRow.metaRoas,
+      }
+    : resolved.accountTotals;
+
   const impressions = totals.impressions;
   const clicks = totals.clicks;
   const spend = totals.spend;
@@ -270,13 +313,32 @@ export async function assembleContextPacket(
   let creativeStrain: string | null = null;
   let creativeStrainScore: number | null = null;
 
-  if (resolved.gateStatus === "ok" && resolved.rows.length > 0) {
+  if (params.funnelSnapshot) {
+    funnelScore = params.funnelSnapshot.score;
+    funnelPosition =
+      params.funnelSnapshot.gateStatus === "ok"
+        ? (params.funnelSnapshot.band ?? "scored")
+        : "insufficient_data";
+    if (params.funnelSnapshot.gateStatus !== "ok") {
+      gateReasons.push(...params.funnelSnapshot.gateReasons);
+    }
+  } else if (resolved.gateStatus === "ok" && resolved.rows.length > 0) {
     const funnel = computeFunnelPosition({
       rows: resolved.rows,
       metricDefinition: resolved.metricDefinition,
       accountCurrency: resolved.accountCurrency,
     });
-    if (funnel.gateStatus === "ok" && funnel.ads.length > 0) {
+    if (params.metaAdId) {
+      const ad = funnel.ads.find((entry) => entry.metaAdId === params.metaAdId);
+      if (ad) {
+        funnelScore = ad.score;
+        funnelPosition =
+          ad.gateStatus === "ok" ? (ad.band as string) : "insufficient_data";
+        if (ad.gateStatus !== "ok") gateReasons.push(...ad.gateReasons);
+      } else {
+        gateReasons.push(...funnel.gateReasons);
+      }
+    } else if (funnel.gateStatus === "ok" && funnel.ads.length > 0) {
       const scored = funnel.ads.filter((ad) => ad.score !== null && ad.band);
       if (scored.length > 0) {
         const mean =
@@ -291,7 +353,9 @@ export async function assembleContextPacket(
     } else {
       gateReasons.push(...funnel.gateReasons);
     }
+  }
 
+  if (resolved.gateStatus === "ok" && resolved.rows.length > 0) {
     const strain = await computeCreativeStrain({
       pool,
       tenantId: params.tenantId,
@@ -299,7 +363,9 @@ export async function assembleContextPacket(
       windowStart: params.windowStart,
       windowEnd: params.windowEnd,
       dataAsOf,
-      metaAdIds: resolved.rows.map((row) => row.metaAdId),
+      metaAdIds: params.metaAdId
+        ? [params.metaAdId]
+        : resolved.rows.map((row) => row.metaAdId),
     });
     const strainScored = strain.ads.filter((ad) => ad.value !== null);
     if (strainScored.length > 0) {
@@ -319,21 +385,36 @@ export async function assembleContextPacket(
     }
   }
 
+  if (params.metaAdId && !focusRow) {
+    gateReasons.push("missing_observations");
+  }
+
   const dataGatePassed = gateReasons.length === 0 && resolved.gateStatus === "ok";
   if (!dataGatePassed && gateReasons.length === 0) {
     gateReasons.push(...resolved.gateReasons);
     if (gateReasons.length === 0) gateReasons.push("insufficient_data");
   }
 
+  let adName: string | null = null;
+  if (params.metaAdId) {
+    const nameRow = await pool.query<{ name: string }>(
+      `SELECT name FROM meta_ad_as_of($1::uuid, $2::timestamptz)
+       WHERE meta_ad_id = $3
+       LIMIT 1`,
+      [params.tenantId, dataAsOf, params.metaAdId],
+    );
+    adName = nameRow.rows[0]?.name ?? null;
+  }
+
   const definitions = [
     ...DEFAULT_METRIC_DEFINITIONS,
     {
       name: resolved.metricDefinition.label,
-      definition: `Configured conversion metric (${resolved.metricDefinition.valueSource}); denominator=${resolved.metricDefinition.denominator ?? "none"}.`,
+      definition: `Configured conversion metric id=${resolved.metricDefinition.id} version=${resolved.metricDefinition.version} (${resolved.metricDefinition.valueSource}); denominator=${resolved.metricDefinition.denominator ?? "none"}; configuredBy=${resolved.metricDefinition.configuredBy}.`,
     },
   ];
 
-  const packet = buildContextPacketMarkdown({
+  const packetLines = buildContextPacketMarkdown({
     agentLocale: params.agentLocale,
     contentLocale: params.contentLocale,
     windowStart: params.windowStart,
@@ -366,7 +447,30 @@ export async function assembleContextPacket(
     metricDefinitions: definitions,
   });
 
-  return { packet, dataAsOf };
+  const headerExtras: string[] = [];
+  if (params.metaAdId) {
+    headerExtras.push(`- Meta ad id: ${params.metaAdId}`);
+    if (adName) headerExtras.push(`- Meta ad name: ${adName}`);
+  }
+  headerExtras.push(`- Meta ad account id: ${adAccountId}`);
+  headerExtras.push(`- dataAsOf: ${dataAsOf}`);
+  headerExtras.push(
+    `- Metric definition: ${resolved.metricDefinition.label} v${resolved.metricDefinition.version} (${resolved.metricDefinition.id})`,
+  );
+  if (params.funnelSnapshot) {
+    headerExtras.push(`- Funnel snapshot id: ${params.funnelSnapshot.id}`);
+  }
+
+  const packet = packetLines.replace(
+    `# Context packet\n\n`,
+    `# Context packet\n\n${headerExtras.join("\n")}\n\n`,
+  );
+
+  return {
+    packet,
+    dataAsOf,
+    metricDefinitionVersion: resolved.metricDefinition.version,
+  };
 }
 
 function mode(values: string[]): string | null {

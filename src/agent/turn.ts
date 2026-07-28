@@ -17,7 +17,13 @@ import type { ToolContext } from "@/agent/tools/types";
 import { HandlerError } from "@/queue/errors";
 import type { JobFamilyDefinition } from "@/queue/types";
 
-const InputSchema = z.object({
+const AnalysisWindowSchema = z.object({
+  since: z.string().date(),
+  until: z.string().date(),
+  dataAsOf: z.string().min(1),
+});
+
+export const AgentTurnInputSchema = z.object({
   runId: z.string().uuid(),
   chatId: z.string().uuid(),
   userMessageId: z.string().uuid(),
@@ -26,7 +32,14 @@ const InputSchema = z.object({
   playbookSlug: z.string().min(1),
   agentLocale: z.enum(["de", "en"]),
   userId: z.string().uuid(),
+  /** Etappe 5 — optional targeting. Absent → Etappe-4 default behaviour. */
+  metaAdAccountId: z.string().uuid().optional(),
+  metaAdId: z.string().min(1).optional(),
+  analysisWindow: AnalysisWindowSchema.optional(),
+  snapshotId: z.string().uuid().optional(),
 });
+
+const InputSchema = AgentTurnInputSchema;
 
 const ResultSchema = z.object({
   assistantMessageId: z.string().uuid(),
@@ -108,16 +121,93 @@ export const agentTurnFamily: JobFamilyDefinition<Input, Result> = {
       }
 
       const contentLocale = await loadAdvertiserContentLocale(pool, ctx.tenantId);
-      const windowEnd = new Date().toISOString().slice(0, 10);
-      const windowStart = new Date(Date.parse(windowEnd) - 29 * 86_400_000)
-        .toISOString()
-        .slice(0, 10);
+      const windowEnd =
+        ctx.input.analysisWindow?.until ??
+        new Date().toISOString().slice(0, 10);
+      const windowStart =
+        ctx.input.analysisWindow?.since ??
+        new Date(Date.parse(windowEnd) - 29 * 86_400_000)
+          .toISOString()
+          .slice(0, 10);
+
+      let funnelSnapshot:
+        | {
+            id: string;
+            score: number | null;
+            gateStatus: string;
+            gateReasons: string[];
+            band: string | null;
+            inputs: unknown;
+            metricDefinitionId: string | null;
+            metricDefinitionVersion: number | null;
+            windowStart: string;
+            windowEnd: string;
+            dataAsOf: string;
+          }
+        | undefined;
+
+      if (ctx.input.snapshotId) {
+        const snap = await pool.query<{
+          id: string;
+          subject_id: string;
+          meta_ad_account_id: string;
+          window_start: string;
+          window_end: string;
+          data_as_of: string;
+          value: string | null;
+          gate_status: string;
+          gate_reasons: string[];
+          inputs: unknown;
+          metric_definition_id: string | null;
+          metric_definition_version: number | null;
+        }>(
+          `SELECT id, subject_id, meta_ad_account_id,
+                  window_start::text, window_end::text, data_as_of::text,
+                  value::text, gate_status, gate_reasons, inputs,
+                  metric_definition_id::text, metric_definition_version
+           FROM metric_snapshot
+           WHERE id = $1 AND tenant_id = $2`,
+          [ctx.input.snapshotId, ctx.tenantId],
+        );
+        const row = snap.rows[0];
+        if (
+          !row ||
+          (ctx.input.metaAdId && row.subject_id !== ctx.input.metaAdId) ||
+          (ctx.input.metaAdAccountId &&
+            row.meta_ad_account_id !== ctx.input.metaAdAccountId) ||
+          row.window_start !== windowStart ||
+          row.window_end !== windowEnd
+        ) {
+          await setPhase("failed");
+          await writeTerminal("failed", "snapshot_mismatch");
+          throw new HandlerError("SNAPSHOT_MISMATCH", "snapshot_mismatch", false);
+        }
+        const inputs = row.inputs as { band?: string | null } | null;
+        funnelSnapshot = {
+          id: row.id,
+          score: row.value !== null ? Number(row.value) : null,
+          gateStatus: row.gate_status,
+          gateReasons: row.gate_reasons,
+          band: inputs?.band ?? null,
+          inputs: row.inputs,
+          metricDefinitionId: row.metric_definition_id,
+          metricDefinitionVersion: row.metric_definition_version,
+          windowStart: row.window_start,
+          windowEnd: row.window_end,
+          dataAsOf: row.data_as_of,
+        };
+      }
+
       const { packet: contextPacket, dataAsOf } = await assembleContextPacket(pool, {
         tenantId: ctx.tenantId,
         agentLocale: ctx.input.agentLocale,
         contentLocale,
         windowStart,
         windowEnd,
+        metaAdAccountId: ctx.input.metaAdAccountId,
+        metaAdId: ctx.input.metaAdId,
+        dataAsOf: ctx.input.analysisWindow?.dataAsOf,
+        funnelSnapshot,
       });
       const playbookContent = playbookBody(playbook);
       const promptHash = computePromptHash({
@@ -146,9 +236,24 @@ export const agentTurnFamily: JobFamilyDefinition<Input, Result> = {
             windowStart,
             windowEnd,
             dataAsOf,
+            metaAdAccountId: ctx.input.metaAdAccountId ?? null,
+            metaAdId: ctx.input.metaAdId ?? null,
+            snapshotId: ctx.input.snapshotId ?? null,
           }),
           runId,
         ],
+      );
+
+      // Strategist mapping rows keep the packet they were judged on.
+      await pool.query(
+        `UPDATE creative_strategy_run
+         SET payload = payload || jsonb_build_object(
+           'evidence', coalesce(payload->'evidence', '{}'::jsonb) || jsonb_build_object(
+             'inputPacketMarkdown', $2::text
+           )
+         )
+         WHERE run_id = $1 AND tenant_id = $3`,
+        [runId, contextPacket, ctx.tenantId],
       );
 
       await setPhase("invoking_model");

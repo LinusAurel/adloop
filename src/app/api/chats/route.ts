@@ -11,7 +11,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const projectId = request.nextUrl.searchParams.get("projectId");
   const pool = getPool();
   const chats = await pool.query(
-    `SELECT id, project_id, name, summary, archived, pinned, awaiting_clarify, updated_at
+    `SELECT id, project_id, name, name_code, name_params, summary, archived, pinned, awaiting_clarify, updated_at
      FROM chat
      WHERE tenant_id = $1
        AND ($2::uuid IS NULL OR project_id = $2)

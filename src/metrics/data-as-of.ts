@@ -37,6 +37,32 @@ export function eachDateInclusive(start: string, end: string): string[] {
   return dates;
 }
 
+/** Shift a YYYY-MM-DD calendar date by `days` (can be negative). */
+export function addCalendarDays(date: string, days: number): string {
+  const cursor = new Date(`${date}T00:00:00.000Z`);
+  cursor.setUTCDate(cursor.getUTCDate() + days);
+  return cursor.toISOString().slice(0, 10);
+}
+
+/** Inclusive day count between two YYYY-MM-DD dates. */
+export function inclusiveDayCount(start: string, end: string): number {
+  return eachDateInclusive(start, end).length;
+}
+
+/**
+ * Previous period of equal inclusive length ending the day before `windowStart`.
+ * Example: 30-day window 2026-06-21..2026-07-20 → previous 2026-05-22..2026-06-20.
+ */
+export function previousEqualWindow(
+  windowStart: string,
+  windowEnd: string,
+): { start: string; end: string } {
+  const length = inclusiveDayCount(windowStart, windowEnd);
+  const end = addCalendarDays(windowStart, -1);
+  const start = addCalendarDays(end, -(length - 1));
+  return { start, end };
+}
+
 export interface MissingDateRange {
   missingStart: string;
   missingEnd: string;

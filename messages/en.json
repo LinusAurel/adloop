@@ -5,6 +5,7 @@
     "projects": "Projects",
     "connectors": "Connectors",
     "metrics": "Metrics",
+    "strategist": "Strategist",
     "playbooks": "Playbooks",
     "queueSmoke": "Queue",
     "newChat": "New chat",
@@ -30,6 +31,75 @@
     "resolvedValues": "Resolved values",
     "waitingApproval": "Waiting for approval…"
   },
+  "strategist": {
+    "adAccount": "Ad account",
+    "timeWindow": "Window",
+    "window30": "Last 30 days",
+    "window90": "Last 90 days",
+    "refreshSync": "Refresh sync",
+    "pulse": "Pulse",
+    "overview": "Overview",
+    "ads": "Ads",
+    "detail": "Detail",
+    "selectAd": "Select an ad",
+    "loadFailed": "Could not load overview",
+    "actionFailed": "Action failed",
+    "pulseIndex": {
+      "overall": "Overall",
+      "creativeStrain": "Creative Strain",
+      "spendEfficiency": "Spend Efficiency",
+      "accountHealth": "Account Health"
+    },
+    "pulseBand": {
+      "healthy": "Healthy",
+      "attention_required": "Needs attention",
+      "critical": "Critical"
+    },
+    "pulseReason": {
+      "no_ads_in_gate": "No ads in gate",
+      "no_conversion_metric": "No conversion metric",
+      "previous_period_incomplete": "Previous period incomplete",
+      "window_incomplete": "Window incomplete",
+      "no_spend": "No spend",
+      "insufficient_data": "Insufficient data"
+    },
+    "metric": {
+      "spend": "Spend",
+      "impressions": "Impressions",
+      "clicks": "Clicks",
+      "reach": "Reach",
+      "frequency": "Frequency",
+      "conversions": "Conversions",
+      "cpa": "CPA",
+      "cpm": "CPM",
+      "ctr": "CTR",
+      "roas": "ROAS"
+    },
+    "col": {
+      "ad": "Ad",
+      "funnel": "Funnel",
+      "spend": "Spend",
+      "conversions": "Conversions",
+      "cpa": "CPA",
+      "impressions": "Impressions",
+      "netNewReach": "Net-new reach",
+      "conversionValue": "Value",
+      "cpm": "CPM",
+      "ctr": "CTR"
+    },
+    "action": {
+      "copychief": "Copy review",
+      "croPreview": "Funnel review (preview)",
+      "cro": "Funnel review",
+      "variations": "Variations"
+    },
+    "copychief_review_title": "Copy review · {adName}",
+    "cro_review_title": "Funnel review · {adName}",
+    "variations_title": "Variations · {adName}",
+    "copychief_review_request": "Run a copy review for ad {adName} over {since} to {until}.",
+    "cro_review_request": "Run a funnel review for ad {adName} over {since} to {until}.",
+    "variations_request": "Propose variations for ad {adName} based on {since} to {until}."
+  },
   "progress": {
     "echo_step": "Step {step} of {total}",
     "metric_snapshot_window": "Snapshot window {index}/{total}",
@@ -43,6 +113,12 @@
   "errors": {
     "insufficient_data": "Insufficient data for this score",
     "below_minimum_spend": "Below minimum spend",
+    "population_too_small": "Population too small",
+    "previous_period_incomplete": "Previous period incomplete",
+    "snapshot_mismatch": "Snapshot does not match this ad",
+    "review_already_running": "A review is already running for this ad",
+    "no_ads_in_gate": "No ads in gate",
+    "no_conversion_metric": "No conversion metric",
     "token_expired": "Meta token expired",
     "unauthenticated": "Please sign in again",
     "not_found": "Not found",

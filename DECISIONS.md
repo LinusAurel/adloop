@@ -438,3 +438,60 @@ costs a build run that the current budget does not justify.
   worker loads `resolved_payload` by approval id and never re-resolves. Retries load
   `reserved_operation` before any resolve. Hash-mismatch remains only for callers that
   try to consume an approval via a freshly resolved (different) payload.
+
+## Etappe 5
+
+- **`SYNC_BACKFILL_DAYS` default is 180, max 400.** A 90-day window needs its previous
+  period of equal length for Vorperiodenvergleich; without 180 days of dailies the
+  comparison would silently undercount conversions. Incomplete previous coverage yields
+  `previous: null` with `reason: "previous_period_incomplete"` — no partial sums.
+- **`creative_strategy_run` is a mapping table, not a second run.** Job, context packet,
+  prompt hash and idempotency live on `run`. The mapping only adds ad/account, run type,
+  title and payload (steps/evidence).
+- **Client-assigned IDs for ad-review** (`runId`, `userMessageId`, `assistantMessageId`)
+  match the Etappe-4 turn contract; the endpoint never mints them. Chat is created in the
+  same transaction as the run.
+- **Turn targeting is optional.** `metaAdAccountId`, `metaAdId`, `analysisWindow` and
+  `snapshotId` on the job input override the Etappe-4 defaults (selected account, rolling
+  30 days). Omitted → prior behaviour unchanged.
+- **Funnel position is bound via `snapshotId`.** The client may not inject metric values;
+  the server loads `metric_snapshot`, checks tenant/ad/window, and rejects mismatches with
+  `snapshot_mismatch`.
+- **`execute: false` is side-effect free.** No run, job, chat or mapping row — preview
+  returns context packet, cost estimate and metric definition only.
+- **`meta_ad` is append-only with `meta_ad_as_of`.** Field names verified against the live
+  Marketing API (`id`, `name`, `status`, `effective_status`, `campaign_id`, `adset_id`).
+- **Pulse indices live in `score-config/pulse-v1.ts`.** Weights are reasoned assumptions
+  without calibration (same caveat as creative strain). Codes only in the API
+  (`healthy` / `attention_required` / `critical` / `insufficient_data`); UI owns prose.
+- **Account-health `metric_binding_missing` is reserved for Etappe 7**
+  (`metric_optimization_binding`). Until then the signal is never active; fallback Leitmetrik
+  sets `no_conversion_metric` instead.
+- **Playbooks `copychief`, `cro`, `variations`.** Synthetic fixtures under
+  `fixtures/playbooks/` for tests. Production must mount real playbooks via `PLAYBOOK_DIR`
+  — otherwise every strategist run ends `playbook_missing`. Fail-closed; no silent fixture
+  fallback outside `NODE_ENV=test`.
+- **Job families `copychief_review` / `cro_review` / `variations`** share the agent-turn
+  handler with distinct timeouts and a concurrency limit of one active job per ad+type.
+  Not startable via `POST /api/runs` — dedicated `/api/creative-strategies/ad-review`.
+- **`ad_table` render artifact** uses the generic field-list schema from Etappe 4 with
+  `labelCode` (not prose `label`); the frontend translates codes and does not interpret
+  field semantics (§8.2).
+- **Request-ID tenant binding on ad-review (Review-10 post-fix).** Every client-supplied
+  identifier that participates in a lookup is scoped to the session tenant before any
+  write:
+  - `chatId` — `SELECT … FROM chat WHERE id AND tenant_id`; miss → `not_found` (same for
+    foreign and unknown, no existence oracle).
+  - `runId` — `SELECT … FROM run WHERE id AND tenant_id FOR UPDATE`; foreign rows are
+    invisible. Own-tenant fingerprint mismatch → `conflict`. Global `run.id` PK means a
+    foreign-owned UUID still cannot be inserted; that residual collision surfaces as
+    `conflict` after the insert attempt and is inherent to client-assigned global IDs —
+    we never return `conflict` merely from *reading* another tenant's run.
+  - `metaAdAccountId` — `meta_ad_account.id AND tenant_id`; miss → `not_found`.
+  - `metaAdId` — `meta_ad_as_of(tenant, dataAsOf)` filtered by `meta_ad_account_id`; miss
+    → `not_found`.
+  - `snapshotId` — `metric_snapshot.id AND tenant_id`, then ad/account/window/`data_as_of`
+    match; miss or mismatch → `snapshot_mismatch`.
+  - `userMessageId` / `assistantMessageId` — inserted with `tenant_id`; they are global
+    PKs like `run.id`. Collisions abort the transaction; they are never looked up
+    unscoped to decide success vs conflict.

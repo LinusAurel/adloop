@@ -1,3 +1,10 @@
+/** Median via percentile_cont(0.5). Empty input returns null. */
+export function median(values: readonly number[]): number | null {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  return percentileCont(sorted, 0.5);
+}
+
 /** Linear interpolation percentile as in Postgres `percentile_cont`. */
 export function percentileCont(sortedAscending: readonly number[], p: number): number {
   if (sortedAscending.length === 0) {

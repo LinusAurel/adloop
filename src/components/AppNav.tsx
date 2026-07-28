@@ -29,6 +29,9 @@ export function AppNav() {
       <Link href="/chat" style={linkStyle}>
         {t("chat")}
       </Link>
+      <Link href="/strategist" style={linkStyle}>
+        {t("strategist")}
+      </Link>
       <Link href="/connectors" style={linkStyle}>
         {t("connectors")}
       </Link>

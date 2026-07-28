@@ -1,4 +1,4 @@
-import type { Pool } from "pg";
+import type { Queryable } from "@/db/queryable";
 import {
   FALLBACK_PURCHASE_METRIC,
   toMetricDefinitionInfo,
@@ -23,7 +23,7 @@ import {
 import type { DenominatorField, GateReason, GateStatus } from "./types";
 
 export interface ResolveMetricsParams {
-  pool: Pool;
+  pool: Queryable;
   tenantId: string;
   adAccountId: string;
   windowStart: string;
@@ -159,7 +159,7 @@ function denominatorValue(
  * Backdated assignments created later must not rewrite past evaluations.
  */
 async function loadMetricDefinition(
-  pool: Pool,
+  pool: Queryable,
   tenantId: string,
   adAccountId: string,
   windowEnd: Date,

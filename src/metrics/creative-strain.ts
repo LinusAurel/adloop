@@ -1,4 +1,4 @@
-import type { Pool } from "pg";
+import type { Queryable } from "@/db/queryable";
 import { creativeStrainV1 } from "./score-config/creative-strain-v1";
 import { dataAsOfCutoff, type DataAsOf } from "./data-as-of";
 import { CREATIVE_STRAIN_FORMULA_VERSION, type GateReason, type GateStatus } from "./types";
@@ -79,7 +79,7 @@ interface NetNewHalfRow {
 }
 
 async function loadHalfWindows(
-  pool: Pool,
+  pool: Queryable,
   tenantId: string,
   adAccountId: string,
   half: { start: string; end: string },
@@ -109,7 +109,7 @@ async function loadHalfWindows(
 }
 
 async function loadHalfCtr(
-  pool: Pool,
+  pool: Queryable,
   tenantId: string,
   adAccountId: string,
   half: { start: string; end: string },
@@ -145,7 +145,7 @@ async function loadHalfCtr(
 }
 
 async function loadHalfNetNew(
-  pool: Pool,
+  pool: Queryable,
   tenantId: string,
   half: { start: string; end: string },
   dataAsOf: DataAsOf,
@@ -177,7 +177,7 @@ async function loadHalfNetNew(
 }
 
 export async function computeCreativeStrain(params: {
-  pool: Pool;
+  pool: Queryable;
   tenantId: string;
   adAccountId: string;
   windowStart: string;

@@ -19,7 +19,25 @@ export type GateReason =
   | "currency_mismatch"
   | "window_incomplete"
   | "no_snapshot"
-  | "missing_observations";
+  | "missing_observations"
+  | "previous_period_incomplete"
+  | "no_ads_in_gate"
+  | "no_conversion_metric"
+  | "snapshot_mismatch";
+
+export type PulseBandCode =
+  | "healthy"
+  | "attention_required"
+  | "critical"
+  | "insufficient_data";
+
+export type PulseIndexReason =
+  | "no_ads_in_gate"
+  | "no_conversion_metric"
+  | "previous_period_incomplete"
+  | "window_incomplete"
+  | "no_spend"
+  | "insufficient_data";
 
 export type GateStatus = "ok" | "insufficient_data";
 

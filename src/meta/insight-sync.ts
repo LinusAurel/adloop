@@ -163,6 +163,9 @@ const QUERY_CONTRACT = {
     fields: META_WINDOW_FIELDS,
     periods: [30, 90],
     includePrevious: true,
+    /** Exact half-windows for creative-strain frequency/reach (non-additive). */
+    includeHalves: true,
+    windowSplit: 0.5,
     cumulativeFromDeliveryStart: true,
   },
 };
@@ -233,11 +236,57 @@ export function insightComparisonWindows(end: string): SyncWindow[] {
   ];
 }
 
+/**
+ * Exact half-windows for each comparison period. frequency and reach-share are
+ * non-additive, so creative strain cannot reconstruct these from daily rows.
+ */
+export function insightHalfWindows(
+  end: string,
+  windowSplit = QUERY_CONTRACT.windows.windowSplit,
+): SyncWindow[] {
+  const halves: SyncWindow[] = [];
+  for (const window of insightComparisonWindows(end)) {
+    const days = daysInclusive(window);
+    const firstHalfDays = Math.max(1, Math.floor(days * windowSplit));
+    const midEnd = addDays(window.start, firstHalfDays - 1);
+    const secondStart = addDays(midEnd, 1);
+    if (secondStart <= window.end) {
+      halves.push({ start: window.start, end: midEnd });
+      halves.push({ start: secondStart, end: window.end });
+    }
+  }
+  return halves;
+}
+
+export function allInsightWindows(end: string): SyncWindow[] {
+  const seen = new Set<string>();
+  const windows: SyncWindow[] = [];
+  for (const window of [
+    ...insightComparisonWindows(end),
+    ...insightHalfWindows(end),
+  ]) {
+    const key = `${window.start}:${window.end}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    windows.push(window);
+  }
+  return windows;
+}
+
 function actionValue(
   actions: MetaInsightRow["actions"] | MetaInsightRow["action_values"],
   actionType: string,
 ): number {
   return actions?.find((action) => action.action_type === actionType)?.value ?? 0;
+}
+
+/** NULL when Meta omitted action_values for this type — not the same as 0. */
+function actionValueOrNull(
+  actions: MetaInsightRow["action_values"],
+  actionType: string,
+): number | null {
+  const found = actions?.find((action) => action.action_type === actionType);
+  return found === undefined ? null : found.value;
 }
 
 function videoValue(
@@ -251,7 +300,8 @@ function videoValue(
 interface NormalizedAction {
   actionType: string;
   count: number;
-  value: number;
+  /** NULL = Meta omitted action_values; 0 = reported zero / completeness row. */
+  value: number | null;
 }
 
 function normalizedActions(row: MetaInsightRow): NormalizedAction[] {
@@ -264,7 +314,7 @@ function normalizedActions(row: MetaInsightRow): NormalizedAction[] {
     result.set(action.action_type, {
       actionType: action.action_type,
       count: action.value,
-      value: actionValue(row.action_values, action.action_type),
+      value: actionValueOrNull(row.action_values, action.action_type),
     });
   }
   return [...result.values()].sort((left, right) =>
@@ -530,7 +580,7 @@ async function syncInsightWindows(
   const reports: unknown[] = [];
   const deliveryHistory: unknown[] = [];
   for (const ad of listed.ads) {
-    for (const window of insightComparisonWindows(options.window.end)) {
+    for (const window of allInsightWindows(options.window.end)) {
       const result = await fetchWindowObservation(options, ad.id, window, false);
       const written = await options.withLease((client) =>
         writeWindowObservation(client, options, result.observation),
@@ -543,7 +593,7 @@ async function syncInsightWindows(
     deliveryHistory.push({ adId: ad.id, responses: delivery.raw });
     if (!delivery.date) continue;
     const boundaries = new Set<string>();
-    for (const window of insightComparisonWindows(options.window.end)) {
+    for (const window of allInsightWindows(options.window.end)) {
       boundaries.add(window.end);
       boundaries.add(addDays(window.start, -1));
     }
@@ -656,6 +706,8 @@ async function writeInsightRow(
         old.attribution_spec.join(",") === ATTRIBUTION_SPEC.join(",") &&
         !current.has(old.action_type)
       ) {
+        // Completeness tombstone: count=0 is an explicit observation, not a
+        // missing Meta value — keep value 0 (see Etappe 3 §0.4).
         current.set(old.action_type, {
           actionType: old.action_type,
           count: 0,

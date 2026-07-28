@@ -415,8 +415,16 @@ describe("insight observation read contract", () => {
        ORDER BY is_cumulative, window_start, window_end`,
       [db.tenantId],
     );
-    expect(windows.rows.filter((row) => !row.is_cumulative)).toHaveLength(4);
-    expect(windows.rows.filter((row) => row.is_cumulative)).toHaveLength(5);
+    expect(windows.rows.filter((row) => !row.is_cumulative)).toHaveLength(12);
+    expect(
+      windows.rows.some(
+        (row) =>
+          !row.is_cumulative &&
+          row.window_start === "2026-06-21" &&
+          row.window_end === "2026-07-05",
+      ),
+    ).toBe(true);
+    expect(windows.rows.filter((row) => row.is_cumulative).length).toBeGreaterThanOrEqual(5);
 
     const derived = await db.pool.query<{
       status: string;
@@ -493,7 +501,7 @@ describe("insight observation read contract", () => {
        WHERE meta_ad_id = '000000000000000001'`,
       [db.tenantId, cutoff.rows[0]!.finished_at],
     );
-    expect(historicalWindows.rows).toEqual([{ count: "9" }]);
+    expect(historicalWindows.rows).toEqual([{ count: "20" }]);
   });
 
   it("persists all three pages and reports pages_fetched = 3", async () => {

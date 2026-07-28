@@ -161,7 +161,9 @@
     "needs_human_review": "Needs human review",
     "defaults_missing": "Defaults missing",
     "status_forbidden": "Status field is not allowed",
-    "active_forbidden": "ACTIVE is not allowed"
+    "active_forbidden": "ACTIVE is not allowed",
+    "dsa_details_required": "DSA beneficiary and payer are required",
+    "campaign_not_found": "Campaign not found"
   },
   "settings": {
     "title": "Ad account defaults",
@@ -170,6 +172,8 @@
     "identity": "Identity",
     "pageId": "Page ID",
     "instagramActorId": "Instagram actor",
+    "beneficiaryName": "DSA beneficiary",
+    "payerName": "DSA payer",
     "adSet": "Ad set",
     "optimizationGoal": "Optimization goal",
     "budgetMode": "Budget mode",
@@ -194,6 +198,8 @@
     "newCampaign": "New campaign",
     "existingCampaign": "Existing campaign",
     "existingCampaignId": "Campaign ID",
+    "existingCbo": "CBO — no ad set budget",
+    "existingAbo": "ABO — ad set budget required",
     "budgetMode": "Budget mode",
     "budget": "Daily budget",
     "budgetHint": "Minor units, human input only",

@@ -25,6 +25,7 @@ export type WriteClient = Pick<
   | "createAdCreative"
   | "createAd"
   | "getObjectStatus"
+  | "getCampaign"
   | "searchByName"
   | "deleteObject"
 >;
@@ -43,6 +44,8 @@ interface StepRow {
   external_correlation: string;
   object_name: string;
   error: unknown;
+  /** Set immediately before the Meta create — lost responses reconcile, never retry. */
+  dispatched_at: string | null;
 }
 
 interface PublicationRow {
@@ -300,6 +303,8 @@ async function markStepInFlight(
   leaseMs: number,
 ): Promise<StepRow | null> {
   const leaseExpires = new Date(publishNow().getTime() + leaseMs).toISOString();
+  // Only claim steps that have never been dispatched. A step that already
+  // hit Meta must reconcile — blind retry of pending/failed would duplicate.
   const result = await db.query<StepRow>(
     `UPDATE publication_step
      SET status = 'in_flight',
@@ -309,10 +314,25 @@ async function markStepInFlight(
          updated_at = now()
      WHERE id = $1
        AND status IN ('pending', 'failed')
+       AND dispatched_at IS NULL
+       AND reconcile_state IN ('none', 'resolved')
      RETURNING *`,
     [step.id, leaseExpires],
   );
   return result.rows[0] ?? null;
+}
+
+async function markStepDispatched(
+  db: Queryable,
+  stepId: string,
+): Promise<void> {
+  await db.query(
+    `UPDATE publication_step
+     SET dispatched_at = COALESCE(dispatched_at, now()),
+         updated_at = now()
+     WHERE id = $1`,
+    [stepId],
+  );
 }
 
 async function markStepSucceeded(
@@ -344,8 +364,36 @@ async function markStepFailed(
          error = $2::jsonb,
          lease_expires_at = NULL,
          updated_at = now()
-     WHERE id = $1`,
+     WHERE id = $1
+       AND dispatched_at IS NULL`,
     [stepId, JSON.stringify({ message: String(error) })],
+  );
+}
+
+/**
+ * Post-dispatch failure (timeout / connection drop / 5xx after send).
+ * Never mark failed — resume must reconcile by correlation, not recreate.
+ */
+async function markStepNeedsReconcile(
+  db: Queryable,
+  stepId: string,
+  error: unknown,
+): Promise<void> {
+  await db.query(
+    `UPDATE publication_step
+     SET reconcile_state = 'pending',
+         lease_expires_at = $2::timestamptz,
+         error = $3::jsonb,
+         updated_at = now()
+     WHERE id = $1`,
+    [
+      stepId,
+      new Date(publishNow().getTime() - 1).toISOString(),
+      JSON.stringify({
+        code: "post_dispatch_uncertain",
+        message: String(error),
+      }),
+    ],
   );
 }
 
@@ -503,6 +551,8 @@ async function executeStep(
         payload.budgetSource?.level === "campaign"
           ? payload.budgetSource.amount
           : undefined;
+      // Persist dispatch before the call — catch can tell pre- vs post-send.
+      await markStepDispatched(db, step.id);
       const result = await client.createCampaign({
         adAccountId: accountId,
         name: step.object_name,
@@ -528,6 +578,7 @@ async function executeStep(
       ) {
         throw new PublishError("budget_wrong_level", { level: "adset" });
       }
+      await markStepDispatched(db, step.id);
       const result = await client.createAdSet({
         adAccountId: accountId,
         campaignId: campaignIdFromSteps(steps),
@@ -556,6 +607,8 @@ async function executeStep(
         filename: `${creative.creativeId}.png`,
         signal,
       });
+      // Image upload is idempotent enough to retry; fence the named creative.
+      await markStepDispatched(db, step.id);
       const result = await client.createAdCreative({
         adAccountId: accountId,
         name: step.object_name,
@@ -583,6 +636,7 @@ async function executeStep(
         )?.step_index ?? step.step_index - 1,
       );
       void creative;
+      await markStepDispatched(db, step.id);
       const result = await client.createAd({
         adAccountId: accountId,
         adSetId: adSetIdFromSteps(steps),
@@ -655,12 +709,21 @@ export async function runPublication(
       };
     }
 
-    // Expired in_flight → reconcile, not retry.
-    if (step.status === "in_flight") {
-      const leaseExpired =
+    // Post-dispatch uncertain OR expired in_flight → reconcile, never recreate.
+    const needsReconcile =
+      step.reconcile_state === "pending" ||
+      (step.status === "in_flight" &&
         step.lease_expires_at !== null &&
-        new Date(step.lease_expires_at).getTime() <= publishNow().getTime();
-      if (!leaseExpired) {
+        new Date(step.lease_expires_at).getTime() <= publishNow().getTime()) ||
+      step.dispatched_at !== null;
+
+    if (needsReconcile) {
+      if (
+        step.status === "in_flight" &&
+        step.lease_expires_at !== null &&
+        new Date(step.lease_expires_at).getTime() > publishNow().getTime() &&
+        step.reconcile_state !== "pending"
+      ) {
         // Still leased by another worker — stop.
         return {
           status: "failed",
@@ -689,6 +752,21 @@ export async function runPublication(
       ));
       step = steps[i]!;
       if (step.status === "succeeded") continue;
+      // Still unresolved after reconcile — do not claim for retry.
+      return {
+        status: "needs_human_review",
+        publicationId: publication.id,
+        code: "needs_human_review",
+      };
+    }
+
+    if (step.status === "in_flight") {
+      // Still leased by another worker — stop.
+      return {
+        status: "failed",
+        publicationId: publication.id,
+        code: "step_in_flight",
+      };
     }
 
     const claimed = await markStepInFlight(db, step, leaseMs);
@@ -733,6 +811,24 @@ export async function runPublication(
         };
       }
     } catch (error) {
+      // Reload to learn whether dispatch already happened.
+      const latest = await db.query<{ dispatched_at: string | null }>(
+        `SELECT dispatched_at FROM publication_step WHERE id = $1`,
+        [step.id],
+      );
+      const dispatched = latest.rows[0]?.dispatched_at !== null;
+      if (dispatched) {
+        await markStepNeedsReconcile(db, step.id, error);
+        await db.query(
+          `UPDATE publication SET status = 'failed', updated_at = now() WHERE id = $1`,
+          [publication.id],
+        );
+        return {
+          status: "failed",
+          publicationId: publication.id,
+          code: "post_dispatch_uncertain",
+        };
+      }
       await markStepFailed(db, step.id, error);
       await db.query(
         `UPDATE publication SET status = 'failed', updated_at = now() WHERE id = $1`,

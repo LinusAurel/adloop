@@ -12,6 +12,8 @@ interface AdvertiserOption {
 type DefaultsForm = {
   pageId: string;
   instagramActorId: string;
+  beneficiaryName: string;
+  payerName: string;
   optimizationGoal: string;
   budgetMode: "CBO" | "ABO";
   countries: string;
@@ -25,6 +27,8 @@ type DefaultsForm = {
 const emptyForm: DefaultsForm = {
   pageId: "",
   instagramActorId: "",
+  beneficiaryName: "",
+  payerName: "",
   optimizationGoal: "LINK_CLICKS",
   budgetMode: "ABO",
   countries: "DE",
@@ -66,7 +70,12 @@ export default function SettingsPage() {
     const data = (await res.json()) as {
       version: number | null;
       settings: {
-        identity: { pageId: string; instagramActorId?: string };
+        identity: {
+          pageId: string;
+          instagramActorId?: string;
+          beneficiaryName?: string;
+          payerName?: string;
+        };
         adSet: {
           optimizationGoal: string;
           budgetMode: "CBO" | "ABO";
@@ -85,6 +94,8 @@ export default function SettingsPage() {
       setForm({
         pageId: data.settings.identity.pageId,
         instagramActorId: data.settings.identity.instagramActorId ?? "",
+        beneficiaryName: data.settings.identity.beneficiaryName ?? "",
+        payerName: data.settings.identity.payerName ?? "",
         optimizationGoal: data.settings.adSet.optimizationGoal,
         budgetMode: data.settings.adSet.budgetMode,
         countries: data.settings.adSet.targeting.countries.join(","),
@@ -114,6 +125,10 @@ export default function SettingsPage() {
         ...(form.instagramActorId
           ? { instagramActorId: form.instagramActorId }
           : {}),
+        ...(form.beneficiaryName.trim()
+          ? { beneficiaryName: form.beneficiaryName.trim() }
+          : {}),
+        ...(form.payerName.trim() ? { payerName: form.payerName.trim() } : {}),
       },
       adSet: {
         optimizationGoal: form.optimizationGoal,
@@ -255,6 +270,8 @@ export default function SettingsPage() {
           <h2 style={{ marginTop: 0, fontSize: "1.05rem" }}>{t("settings.identity")}</h2>
           {field("pageId", t("settings.pageId"))}
           {field("instagramActorId", t("settings.instagramActorId"))}
+          {field("beneficiaryName", t("settings.beneficiaryName"))}
+          {field("payerName", t("settings.payerName"))}
         </section>
 
         <section

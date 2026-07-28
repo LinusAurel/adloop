@@ -161,7 +161,9 @@
     "needs_human_review": "Menschliche Prüfung nötig",
     "defaults_missing": "Vorgaben fehlen",
     "status_forbidden": "Statusfeld ist nicht erlaubt",
-    "active_forbidden": "ACTIVE ist nicht erlaubt"
+    "active_forbidden": "ACTIVE ist nicht erlaubt",
+    "dsa_details_required": "DSA-Angaben (Begünstigter und Zahler) fehlen",
+    "campaign_not_found": "Kampagne nicht gefunden"
   },
   "settings": {
     "title": "Werbekonto-Vorgaben",
@@ -170,6 +172,8 @@
     "identity": "Identität",
     "pageId": "Seiten-ID",
     "instagramActorId": "Instagram-Akteur",
+    "beneficiaryName": "DSA-Begünstigter",
+    "payerName": "DSA-Zahler",
     "adSet": "Anzeigengruppe",
     "optimizationGoal": "Optimierungsziel",
     "budgetMode": "Budgetmodus",
@@ -194,6 +198,8 @@
     "newCampaign": "Neue Kampagne",
     "existingCampaign": "Bestehende Kampagne",
     "existingCampaignId": "Kampagnen-ID",
+    "existingCbo": "CBO — kein Ad-Set-Budget",
+    "existingAbo": "ABO — Budget am Ad Set nötig",
     "budgetMode": "Budgetmodus",
     "budget": "Tagesbudget",
     "budgetHint": "Minor Units, menschliche Eingabe",

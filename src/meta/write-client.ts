@@ -225,6 +225,44 @@ export class MetaWriteClient {
     return response.data;
   }
 
+  /**
+   * Read campaign budget fields to decide CBO vs ABO for an existing campaign.
+   * Presence of daily_budget or lifetime_budget ⇒ CBO.
+   */
+  async getCampaign(
+    campaignId: string,
+    signal?: AbortSignal,
+  ): Promise<{
+    id: string;
+    name?: string;
+    dailyBudget: number | null;
+    lifetimeBudget: number | null;
+  }> {
+    const CampaignBudgetSchema = z.object({
+      id: z.string().min(1),
+      name: z.string().optional(),
+      daily_budget: z.union([z.string(), z.number()]).optional().nullable(),
+      lifetime_budget: z.union([z.string(), z.number()]).optional().nullable(),
+    });
+    const response = await this.graph.request(
+      `/${campaignId}?fields=id,name,daily_budget,lifetime_budget`,
+      CampaignBudgetSchema,
+      { signal },
+    );
+    const row = response.data;
+    const toNumber = (v: string | number | null | undefined): number | null => {
+      if (v === null || v === undefined || v === "") return null;
+      const n = typeof v === "number" ? v : Number(v);
+      return Number.isFinite(n) ? n : null;
+    };
+    return {
+      id: row.id,
+      name: row.name,
+      dailyBudget: toNumber(row.daily_budget),
+      lifetimeBudget: toNumber(row.lifetime_budget),
+    };
+  }
+
   async searchByName(params: {
     adAccountId: string;
     edge: "campaigns" | "adsets" | "ads" | "adcreatives";

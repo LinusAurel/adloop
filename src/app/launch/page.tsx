@@ -44,6 +44,8 @@ export default function LaunchPage() {
   const [existingCampaignId, setExistingCampaignId] = useState("");
   const [budgetMode, setBudgetMode] = useState<"ABO" | "CBO">("ABO");
   const [budgetAmount, setBudgetAmount] = useState("500");
+  /** null = unknown / loading; for existing campaigns from Meta lookup. */
+  const [existingIsCbo, setExistingIsCbo] = useState<boolean | null>(null);
   const [deviationReason, setDeviationReason] = useState("");
   const [approval, setApproval] = useState<PendingApproval | null>(null);
   const [publicationId, setPublicationId] = useState<string | null>(null);
@@ -107,8 +109,43 @@ export default function LaunchPage() {
     void loadCreatives();
   }, [loadCreatives]);
 
+  useEffect(() => {
+    if (campaignMode !== "existing" || !existingCampaignId.trim() || !metaAdAccountId) {
+      setExistingIsCbo(null);
+      return;
+    }
+    let cancelled = false;
+    setExistingIsCbo(null);
+    void (async () => {
+      const res = await fetch(
+        `/api/meta/campaign-budget?metaAdAccountId=${metaAdAccountId}` +
+          `&campaignId=${encodeURIComponent(existingCampaignId.trim())}`,
+        { cache: "no-store" },
+      );
+      if (cancelled) return;
+      if (!res.ok) {
+        setExistingIsCbo(null);
+        return;
+      }
+      const data = (await res.json()) as { isCbo: boolean };
+      setExistingIsCbo(data.isCbo);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [campaignMode, existingCampaignId, metaAdAccountId]);
+
+  const budgetNeeded =
+    campaignMode === "new"
+      ? true
+      : existingIsCbo === null
+        ? false
+        : !existingIsCbo;
+
   async function requestPublish() {
     if (!advertiserId || !metaAdAccountId || !selectedCreative) return;
+    if (campaignMode === "existing" && !existingCampaignId.trim()) return;
+    if (campaignMode === "existing" && existingIsCbo === null) return;
     setBusy(true);
     setError(null);
     setErrorParams(null);
@@ -120,15 +157,17 @@ export default function LaunchPage() {
         creativeIds: [selectedCreative],
         campaign:
           campaignMode === "existing"
-            ? { mode: "existing", existingCampaignId }
+            ? { mode: "existing", existingCampaignId: existingCampaignId.trim() }
             : { mode: "new", budgetMode },
         adSet: { mode: "new" },
         idempotencyKey: uuidv7(),
-        budget: {
+      };
+      if (budgetNeeded) {
+        body.budget = {
           amount: Number(budgetAmount),
           currency: "EUR",
-        },
-      };
+        };
+      }
       if (deviationReason.trim()) {
         body.deviationReason = deviationReason.trim();
       }
@@ -266,6 +305,11 @@ export default function LaunchPage() {
                 onChange={(e) => setExistingCampaignId(e.target.value)}
                 style={inputStyle}
               />
+              {existingCampaignId.trim() && existingIsCbo !== null ? (
+                <span style={{ color: "var(--dim)", marginLeft: "0.5rem" }}>
+                  {existingIsCbo ? t("launch.existingCbo") : t("launch.existingAbo")}
+                </span>
+              ) : null}
             </label>
           ) : (
             <label>
@@ -285,20 +329,22 @@ export default function LaunchPage() {
             </label>
           )}
 
-          <label>
-            <span style={{ color: "var(--dim)", marginRight: "0.5rem" }}>
-              {t("launch.budget")}
-            </span>
-            <input
-              value={budgetAmount}
-              onChange={(e) => setBudgetAmount(e.target.value)}
-              style={inputStyle}
-              inputMode="numeric"
-            />
-            <span style={{ color: "var(--dim)", marginLeft: "0.35rem" }}>
-              {t("launch.budgetHint")}
-            </span>
-          </label>
+          {budgetNeeded ? (
+            <label>
+              <span style={{ color: "var(--dim)", marginRight: "0.5rem" }}>
+                {t("launch.budget")}
+              </span>
+              <input
+                value={budgetAmount}
+                onChange={(e) => setBudgetAmount(e.target.value)}
+                style={inputStyle}
+                inputMode="numeric"
+              />
+              <span style={{ color: "var(--dim)", marginLeft: "0.35rem" }}>
+                {t("launch.budgetHint")}
+              </span>
+            </label>
+          ) : null}
 
           <label>
             <span style={{ color: "var(--dim)", marginRight: "0.5rem" }}>

@@ -111,6 +111,8 @@ export const MESSAGE_KEYS = [
   "settings.identity",
   "settings.pageId",
   "settings.instagramActorId",
+  "settings.beneficiaryName",
+  "settings.payerName",
   "settings.adSet",
   "settings.optimizationGoal",
   "settings.budgetMode",
@@ -133,6 +135,8 @@ export const MESSAGE_KEYS = [
   "launch.newCampaign",
   "launch.existingCampaign",
   "launch.existingCampaignId",
+  "launch.existingCbo",
+  "launch.existingAbo",
   "launch.budgetMode",
   "launch.budget",
   "launch.budgetHint",
@@ -183,6 +187,8 @@ export const MESSAGE_KEYS = [
   "errors.defaults_missing",
   "errors.status_forbidden",
   "errors.active_forbidden",
+  "errors.dsa_details_required",
+  "errors.campaign_not_found",
 ] as const;
 
 export type MessageKey = (typeof MESSAGE_KEYS)[number];

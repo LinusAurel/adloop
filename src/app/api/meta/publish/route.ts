@@ -19,6 +19,11 @@ import {
 } from "@/publish/schemas";
 import { resolvePublishPayload } from "@/publish/resolve";
 import { createPublication } from "@/publish/chain";
+import {
+  buildLiveWriteClient,
+  campaignReaderFromClient,
+} from "@/publish/live-client";
+import { getWriteClientOrThrow } from "@/publish/client-factory";
 
 ensureQueueBootstrapped();
 ensureToolsBootstrapped();
@@ -45,6 +50,22 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const pool = getPool();
 
+  let campaignReader;
+  if (parsed.data.campaign.mode === "existing") {
+    try {
+      const live = await buildLiveWriteClient(
+        auth.session.tenantId,
+        parsed.data.metaAdAccountId,
+      );
+      campaignReader = campaignReaderFromClient(getWriteClientOrThrow(live));
+    } catch (error) {
+      if (error instanceof PublishError) {
+        return errorResponse(400, error.code, error.params);
+      }
+      throw error;
+    }
+  }
+
   let resolved;
   try {
     resolved = await resolvePublishPayload(pool, {
@@ -52,6 +73,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       userId: auth.session.userId,
       input: parsed.data,
       allowHumanBudget: true,
+      campaignReader,
     });
   } catch (error) {
     if (error instanceof PublishError) {

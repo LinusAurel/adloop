@@ -2,7 +2,12 @@ import type { Queryable } from "@/db/queryable";
 import { uuidv7 } from "uuidv7";
 import {
   AdvertiserDefaultsSchema,
-  attributionToMetaSpec,
+  attributionToLabels,
+  bindingAttributionToMetaSpec,
+  sameLabelSet,
+  targetingRequiresDsa,
+  wallTimeInZoneToIso,
+  zonedCalendarDate,
   type AdvertiserDefaults,
 } from "./settings";
 import {
@@ -19,6 +24,7 @@ import {
 } from "./schemas";
 import { applyUtmParams, expandNamingTemplate, formatCorrelatedName } from "./utm";
 import { PromotedObjectSchema } from "./settings";
+import { publishNow } from "./fault";
 
 export interface BindingRow {
   id: string;
@@ -28,6 +34,21 @@ export interface BindingRow {
   optimization_goal: string;
   promoted_object: unknown;
   attribution_spec: string[];
+}
+
+/** Reads campaign budget fields from Meta (or a mock) for the CBO matrix. */
+export type CampaignBudgetReader = {
+  getCampaign(campaignId: string): Promise<{
+    dailyBudget: number | null;
+    lifetimeBudget: number | null;
+  }>;
+};
+
+export function campaignIsCbo(budgets: {
+  dailyBudget: number | null;
+  lifetimeBudget: number | null;
+}): boolean {
+  return budgets.dailyBudget != null || budgets.lifetimeBudget != null;
 }
 
 export async function loadLatestDefaults(
@@ -62,13 +83,25 @@ export async function saveDefaults(
   },
 ): Promise<{ version: number; id: string }> {
   const parsed = AdvertiserDefaultsSchema.parse(params.settings);
-  const latest = await db.query<{ version: number }>(
-    `SELECT version FROM advertiser_defaults
-     WHERE tenant_id = $1 AND advertiser_id = $2
-     ORDER BY version DESC LIMIT 1`,
-    [params.tenantId, params.advertiserId],
+  const previous = await loadLatestDefaults(
+    db,
+    params.tenantId,
+    params.advertiserId,
   );
-  const version = (latest.rows[0]?.version ?? 0) + 1;
+  // Preserve DSA identity fields when the incoming payload omits them
+  // (UI that does not know the fields must not wipe API-set values).
+  const merged: AdvertiserDefaults = {
+    ...parsed,
+    identity: {
+      ...parsed.identity,
+      beneficiaryName:
+        parsed.identity.beneficiaryName ??
+        previous?.settings.identity.beneficiaryName,
+      payerName:
+        parsed.identity.payerName ?? previous?.settings.identity.payerName,
+    },
+  };
+  const version = (previous?.version ?? 0) + 1;
   const id = uuidv7();
   await db.query(
     `INSERT INTO advertiser_defaults (
@@ -79,7 +112,7 @@ export async function saveDefaults(
       params.tenantId,
       params.advertiserId,
       version,
-      JSON.stringify(parsed),
+      JSON.stringify(merged),
       params.createdBy,
     ],
   );
@@ -126,13 +159,23 @@ export async function resolveAssignedMetricId(
   return result.rows[0] ?? null;
 }
 
-function scheduleStartTime(defaults: AdvertiserDefaults): string {
+function scheduleStartTime(
+  defaults: AdvertiserDefaults,
+  accountTimezone: string,
+): string {
   const offset = defaults.adSet.schedule.offsetDays;
   const [hh, mm] = defaults.adSet.schedule.time.split(":").map(Number);
-  const start = new Date();
-  start.setUTCDate(start.getUTCDate() + offset);
-  start.setUTCHours(hh ?? 0, mm ?? 0, 0, 0);
-  return start.toISOString();
+  // Prefer the Meta ad account timezone (source of truth for delivery).
+  const timeZone = accountTimezone || defaults.adSet.schedule.timezone;
+  const cal = zonedCalendarDate(publishNow(), timeZone, offset);
+  return wallTimeInZoneToIso(
+    timeZone,
+    cal.year,
+    cal.month,
+    cal.day,
+    hh ?? 0,
+    mm ?? 0,
+  );
 }
 
 function buildTargeting(defaults: AdvertiserDefaults): Record<string, unknown> {
@@ -170,6 +213,11 @@ export async function resolvePublishPayload(
     input: PublishHumanInput | PublishAgentInput;
     /** True when budget may come from the human form. */
     allowHumanBudget: boolean;
+    /**
+     * Required when campaign.mode === "existing": reads daily/lifetime budget
+     * from Meta so the CBO matrix is not guessed from defaults.
+     */
+    campaignReader?: CampaignBudgetReader;
   },
 ): Promise<ResolvedPublishPayload> {
   const input = params.input;
@@ -181,8 +229,9 @@ export async function resolvePublishPayload(
     meta_ad_account_id: string;
     advertiser_id: string;
     currency: string | null;
+    timezone_name: string;
   }>(
-    `SELECT id, meta_ad_account_id, advertiser_id, currency
+    `SELECT id, meta_ad_account_id, advertiser_id, currency, timezone_name
      FROM meta_ad_account
      WHERE id = $1 AND tenant_id = $2`,
     [input.metaAdAccountId, params.tenantId],
@@ -200,17 +249,35 @@ export async function resolvePublishPayload(
   if (!defaultsRow) throw new PublishError("defaults_missing");
   const defaults = defaultsRow.settings;
 
-  const budgetMode: BudgetMode =
+  let existingCampaignIsCbo: boolean | undefined;
+  let budgetMode: BudgetMode =
     input.campaign.mode === "new"
       ? (input.campaign.budgetMode ?? defaults.adSet.budgetMode)
       : defaults.adSet.budgetMode;
+
+  if (input.campaign.mode === "existing") {
+    if (!params.campaignReader) {
+      throw new PublishError("validation_error", {
+        reason: "campaign_reader_required",
+      });
+    }
+    let budgets: { dailyBudget: number | null; lifetimeBudget: number | null };
+    try {
+      budgets = await params.campaignReader.getCampaign(
+        input.campaign.existingCampaignId,
+      );
+    } catch {
+      throw new PublishError("campaign_not_found");
+    }
+    existingCampaignIsCbo = campaignIsCbo(budgets);
+    budgetMode = existingCampaignIsCbo ? "CBO" : "ABO";
+  }
 
   const placement = resolveBudgetPlacement({
     campaignMode: input.campaign.mode,
     adSetMode: input.adSet.mode,
     budgetMode,
-    existingCampaignIsCbo:
-      input.campaign.mode === "existing" ? budgetMode === "CBO" : undefined,
+    existingCampaignIsCbo,
   });
 
   const budgetSource = requireBudgetSource({
@@ -261,14 +328,35 @@ export async function resolvePublishPayload(
     };
 
     const effectiveGoal = defaults.adSet.optimizationGoal;
-    if (effectiveGoal !== active.optimization_goal) {
+    const defaultsAttribution = attributionToLabels(defaults.adSet.attribution);
+    const attributionDiverges = !sameLabelSet(
+      defaultsAttribution,
+      active.attribution_spec,
+    );
+    if (effectiveGoal !== active.optimization_goal || attributionDiverges) {
       bindingMismatch = true;
       if (!input.deviationReason) {
         throw new PublishError("metric_binding_mismatch", {
           measured: active.optimization_goal,
           optimizing: effectiveGoal,
+          ...(attributionDiverges
+            ? { reason: "attribution_mismatch" }
+            : {}),
         });
       }
+    }
+  }
+
+  // EU targeting requires DSA beneficiary + payor before any Meta create.
+  if (
+    input.adSet.mode === "new" &&
+    targetingRequiresDsa(defaults.adSet.targeting.countries)
+  ) {
+    if (
+      !defaults.identity.beneficiaryName?.trim() ||
+      !defaults.identity.payerName?.trim()
+    ) {
+      throw new PublishError("dsa_details_required");
     }
   }
 
@@ -358,6 +446,14 @@ export async function resolvePublishPayload(
       ? (input.campaign.objective ?? defaults.campaignObjective)
       : defaults.campaignObjective;
 
+  // Binding attribution wins — defaults only apply when there is no binding.
+  const attributionSpec =
+    binding !== null
+      ? bindingAttributionToMetaSpec(binding.attributionSpec)
+      : bindingAttributionToMetaSpec(
+          attributionToLabels(defaults.adSet.attribution),
+        );
+
   const payload: ResolvedPublishPayload = {
     advertiserId: input.advertiserId,
     metaAdAccountId: input.metaAdAccountId,
@@ -390,9 +486,9 @@ export async function resolvePublishPayload(
             bidStrategy: defaults.adSet.bidStrategy,
             bidAmount: defaults.adSet.bidAmount,
             targeting: buildTargeting(defaults),
-            attributionSpec: attributionToMetaSpec(defaults.adSet.attribution),
+            attributionSpec,
             promotedObject: binding?.promotedObject,
-            startTime: scheduleStartTime(defaults),
+            startTime: scheduleStartTime(defaults, accountRow.timezone_name),
             dsaBeneficiary: defaults.identity.beneficiaryName,
             dsaPayor: defaults.identity.payerName,
           },

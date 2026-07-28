@@ -5,6 +5,11 @@ import { createRun } from "@/queue/create-run";
 import type { ToolDefinition } from "@/agent/tools/types";
 import { PublishAgentInputSchema, PublishError, ResolvedPublishPayloadSchema } from "@/publish/schemas";
 import { resolvePublishPayload } from "@/publish/resolve";
+import {
+  buildLiveWriteClient,
+  campaignReaderFromClient,
+} from "@/publish/live-client";
+import { getWriteClientOrThrow } from "@/publish/client-factory";
 
 /**
  * Expensive external tool. Schema has NO budget and NO status.
@@ -29,12 +34,18 @@ export const publishAdsTool: ToolDefinition<
   async resolve(raw, ctx) {
     // Agent path: no budget field exists on the schema. Resolve will throw
     // budget_required when placement requires one.
+    let campaignReader;
+    if (raw.campaign.mode === "existing") {
+      const live = await buildLiveWriteClient(ctx.tenantId, raw.metaAdAccountId);
+      campaignReader = campaignReaderFromClient(getWriteClientOrThrow(live));
+    }
     try {
       const resolved = await resolvePublishPayload(getPool(), {
         tenantId: ctx.tenantId,
         userId: ctx.userId,
         input: raw,
         allowHumanBudget: false,
+        campaignReader,
       });
       return ResolvedPublishPayloadSchema.parse(resolved);
     } catch (error) {

@@ -1,9 +1,6 @@
 import { z } from "zod";
 import { getPool } from "@/db/pool";
 import { env } from "@/lib/env";
-import { decryptToken } from "@/meta/token-crypto";
-import { MetaGraphClient } from "@/meta/graph-client";
-import { MetaWriteClient } from "@/meta/write-client";
 import { getObjectStore } from "@/storage/object-store";
 import { HandlerError } from "../errors";
 import type { JobFamilyDefinition } from "../types";
@@ -12,6 +9,7 @@ import {
   runPublication,
 } from "@/publish/chain";
 import { getWriteClientOrThrow } from "@/publish/client-factory";
+import { buildLiveWriteClient } from "@/publish/live-client";
 import {
   META_PUBLISH_STATUS,
   ResolvedPublishPayloadSchema,
@@ -43,37 +41,6 @@ const ResultSchema = z.discriminatedUnion("status", [
 
 type Input = z.infer<typeof InputSchema>;
 type Result = z.infer<typeof ResultSchema>;
-
-async function buildLiveWriteClient(
-  tenantId: string,
-  metaAdAccountId: string,
-): Promise<MetaWriteClient> {
-  if (!env.ENCRYPTION_KEY) {
-    throw new HandlerError(
-      "meta_not_configured",
-      "ENCRYPTION_KEY missing",
-      false,
-    );
-  }
-  const pool = getPool();
-  const row = await pool.query<{ token_encrypted: string }>(
-    `SELECT c.token_encrypted
-     FROM meta_ad_account a
-     JOIN meta_connection c ON c.id = a.connection_id
-     WHERE a.id = $1 AND a.tenant_id = $2`,
-    [metaAdAccountId, tenantId],
-  );
-  const tokenRow = row.rows[0];
-  if (!tokenRow) {
-    throw new HandlerError("account_not_found", "account_not_found", false);
-  }
-  const accessToken = decryptToken(tokenRow.token_encrypted, env.ENCRYPTION_KEY);
-  const graph = new MetaGraphClient({
-    accessToken,
-    apiVersion: env.META_GRAPH_API_VERSION,
-  });
-  return new MetaWriteClient(graph);
-}
 
 export const metaPublishFamily: JobFamilyDefinition<Input, Result> = {
   name: "meta_publish",

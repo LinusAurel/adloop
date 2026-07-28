@@ -18,6 +18,7 @@ export class MockMetaWriteClient implements Pick<
   | "createAdCreative"
   | "createAd"
   | "getObjectStatus"
+  | "getCampaign"
   | "searchByName"
   | "deleteObject"
 > {
@@ -35,7 +36,7 @@ export class MockMetaWriteClient implements Pick<
     this.failNext.add(operation);
   }
 
-  /** Succeed the Meta write, then throw — models crash after persist window. */
+  /** Succeed the Meta write, then throw — models lost response after create. */
   crashAfterSuccess(operation: PublishStepOperation): void {
     this.failAfterSuccess.add(operation);
   }
@@ -80,7 +81,12 @@ export class MockMetaWriteClient implements Pick<
       kind: "campaign",
       name: params.name,
       status: "PAUSED",
-      meta: { ...params, status: "PAUSED" },
+      meta: {
+        ...params,
+        status: "PAUSED",
+        dailyBudget: params.dailyBudget ?? null,
+        lifetimeBudget: null,
+      },
     });
     this.afterSuccess("create_campaign");
     return { id };
@@ -99,6 +105,8 @@ export class MockMetaWriteClient implements Pick<
     attributionSpec: Array<{ event_type: string; window_days: number }>;
     promotedObject?: Record<string, unknown>;
     startTime: string;
+    dsaBeneficiary?: string;
+    dsaPayor?: string;
     signal?: AbortSignal;
   }): Promise<{ id: string }> {
     this.calls.push({ operation: "create_adset", args: params });
@@ -182,6 +190,27 @@ export class MockMetaWriteClient implements Pick<
     return { id: objectId, status: obj.status, name: obj.name };
   }
 
+  async getCampaign(campaignId: string): Promise<{
+    id: string;
+    name?: string;
+    dailyBudget: number | null;
+    lifetimeBudget: number | null;
+  }> {
+    this.calls.push({ operation: "get_status", args: { getCampaign: campaignId } });
+    const obj = this.objects.get(campaignId);
+    if (!obj || obj.kind !== "campaign") {
+      throw new Error(`mock_campaign_missing_${campaignId}`);
+    }
+    const daily = obj.meta.dailyBudget;
+    const lifetime = obj.meta.lifetimeBudget;
+    return {
+      id: campaignId,
+      name: obj.name,
+      dailyBudget: typeof daily === "number" ? daily : null,
+      lifetimeBudget: typeof lifetime === "number" ? lifetime : null,
+    };
+  }
+
   async searchByName(params: {
     adAccountId: string;
     edge: "campaigns" | "adsets" | "ads" | "adcreatives";
@@ -224,7 +253,13 @@ export class MockMetaWriteClient implements Pick<
   }
 
   /** Seed an existing object (for "existing campaign" tests). */
-  seed(id: string, kind: string, name: string, status = "PAUSED"): void {
-    this.objects.set(id, { kind, name, status, meta: {} });
+  seed(
+    id: string,
+    kind: string,
+    name: string,
+    status = "PAUSED",
+    meta: Record<string, unknown> = {},
+  ): void {
+    this.objects.set(id, { kind, name, status, meta });
   }
 }

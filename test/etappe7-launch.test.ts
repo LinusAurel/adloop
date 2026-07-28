@@ -42,11 +42,17 @@ const PNG_1X1 = Buffer.from([
 
 function defaultSettings(pageId = "page_test"): AdvertiserDefaults {
   return AdvertiserDefaultsSchema.parse({
-    identity: { pageId },
+    identity: {
+      pageId,
+      beneficiaryName: "Test GmbH",
+      payerName: "Test GmbH",
+    },
     adSet: {
       optimizationGoal: "LINK_CLICKS",
       targeting: { countries: ["DE"] },
       budgetMode: "ABO",
+      schedule: { timezone: "Europe/Berlin", offsetDays: 1, time: "09:00" },
+      attribution: { click: "7d_click", view: "1d_view", engaged: "none" },
     },
     website: {
       url: "https://example.com/land",
@@ -74,6 +80,10 @@ describe("etappe 7 — launch", () => {
   async function seedFixture(options?: {
     optimizationGoal?: AdvertiserDefaults["adSet"]["optimizationGoal"];
     bindingGoal?: string;
+    bindingAttribution?: string[];
+    defaultsAttribution?: AdvertiserDefaults["adSet"]["attribution"];
+    countries?: string[];
+    omitDsa?: boolean;
   }) {
     const seeded = await seedMetaAccount(db.pool, db.tenantId);
     advertiserId = seeded.advertiserId;
@@ -84,6 +94,16 @@ describe("etappe 7 — launch", () => {
     if (options?.optimizationGoal) {
       settings.adSet.optimizationGoal = options.optimizationGoal;
     }
+    if (options?.defaultsAttribution) {
+      settings.adSet.attribution = options.defaultsAttribution;
+    }
+    if (options?.countries) {
+      settings.adSet.targeting.countries = options.countries;
+    }
+    if (options?.omitDsa) {
+      delete settings.identity.beneficiaryName;
+      delete settings.identity.payerName;
+    }
     await saveDefaults(db.pool, {
       tenantId: db.tenantId,
       advertiserId,
@@ -92,6 +112,7 @@ describe("etappe 7 — launch", () => {
     });
 
     metricId = uuidv7();
+    const bindingAttr = options?.bindingAttribution ?? ["1d_view", "7d_click"];
     await db.pool.query(
       `INSERT INTO conversion_metric (
          id, tenant_id, label, version,
@@ -99,10 +120,10 @@ describe("etappe 7 — launch", () => {
          denominator, value_source, effective_from
        ) VALUES (
          $1, $2, 'Lead', 1,
-         ARRAY['lead'], 'sum_disjoint', ARRAY['1d_view','7d_click'],
+         ARRAY['lead'], 'sum_disjoint', $3::text[],
          NULL, 'none', now() - interval '1 day'
        )`,
-      [metricId, db.tenantId],
+      [metricId, db.tenantId, bindingAttr],
     );
     await db.pool.query(
       `INSERT INTO ad_account_metric_assignment (
@@ -117,7 +138,7 @@ describe("etappe 7 — launch", () => {
          version, active
        ) VALUES (
          $1, $2, $3, 1,
-         $4, $5::jsonb, ARRAY['1d_view','7d_click'],
+         $4, $5::jsonb, $6::text[],
          1, true
        )`,
       [
@@ -126,6 +147,7 @@ describe("etappe 7 — launch", () => {
         metricId,
         options?.bindingGoal ?? "LINK_CLICKS",
         JSON.stringify({ page_id: "page_test" }),
+        bindingAttr,
       ],
     );
 
@@ -176,6 +198,12 @@ describe("etappe 7 — launch", () => {
       userId,
       input: human,
       allowHumanBudget: true,
+      campaignReader:
+        human.campaign.mode === "existing"
+          ? {
+              getCampaign: (id) => mock.getCampaign(id),
+            }
+          : undefined,
     });
     const runId = uuidv7();
     await db.pool.query(
@@ -625,14 +653,19 @@ describe("etappe 7 — launch", () => {
     expect(offenders).toEqual([]);
   });
 
-  it("10 — existing campaign: step succeeded with that id, no create call", async () => {
-    mock.seed("camp_existing", "campaign", "Existing Camp", "PAUSED");
-    const { publicationId, outcome } = await resolveAndPublish({
+  it("10 — existing ABO campaign: step succeeded with that id, no create call", async () => {
+    mock.seed("camp_existing", "campaign", "Existing Camp", "PAUSED", {
+      dailyBudget: null,
+      lifetimeBudget: null,
+    });
+    const { publicationId, outcome, resolved } = await resolveAndPublish({
       budget: { amount: 1000, currency: "EUR" },
       campaign: { mode: "existing", existingCampaignId: "camp_existing" },
       adSet: { mode: "new" },
     });
     expect(outcome.status).toBe("succeeded");
+    expect(resolved.budgetMode).toBe("ABO");
+    expect(resolved.budgetSource?.level).toBe("adset");
 
     const campStep = await db.pool.query<{
       status: string;
@@ -660,6 +693,220 @@ describe("etappe 7 — launch", () => {
     expect(parsed.searchParams.get("utm_source")).toBe("meta");
     expect(parsed.searchParams.get("utm_medium")).toBe("paid");
     expect(parsed.searchParams.get("utm_campaign")).toBe("summer");
+  });
+
+  it("R18-1 — lost Meta response: resume reconciles, no duplicate, id from search", async () => {
+    mock.crashAfterSuccess("create_campaign");
+    const first = await resolveAndPublish({
+      budget: { amount: 1000, currency: "EUR" },
+    });
+    expect(first.outcome.status).toBe("failed");
+    expect(first.outcome).toMatchObject({ code: "post_dispatch_uncertain" });
+    expect(mock.countByKind("campaign")).toBe(1);
+
+    const stepAfter = await db.pool.query<{
+      status: string;
+      reconcile_state: string;
+      dispatched_at: string | null;
+      external_id: string | null;
+    }>(
+      `SELECT status, reconcile_state, dispatched_at, external_id
+       FROM publication_step
+       WHERE publication_id = $1 AND operation = 'create_campaign'`,
+      [first.publicationId],
+    );
+    expect(stepAfter.rows[0]?.dispatched_at).toBeTruthy();
+    expect(stepAfter.rows[0]?.reconcile_state).toBe("pending");
+    expect(stepAfter.rows[0]?.external_id).toBeNull();
+
+    const resumed = await runPublication(db.pool, {
+      publicationId: first.publicationId,
+      tenantId: db.tenantId,
+      client: mock,
+      store,
+    });
+    expect(resumed.status).toBe("succeeded");
+    expect(mock.countByKind("campaign")).toBe(1);
+
+    const final = await db.pool.query<{
+      status: string;
+      external_id: string | null;
+      reconcile_state: string;
+    }>(
+      `SELECT status, external_id, reconcile_state FROM publication_step
+       WHERE publication_id = $1 AND operation = 'create_campaign'`,
+      [first.publicationId],
+    );
+    expect(final.rows[0]?.status).toBe("succeeded");
+    expect(final.rows[0]?.external_id).toMatch(/^camp_/);
+    expect(final.rows[0]?.reconcile_state).toBe("resolved");
+  });
+
+  it("R18-1 mutation — skipping reconcile after dispatch would duplicate", async () => {
+    // Documented failure mode: if post-dispatch were marked failed and
+    // claimed again without reconcile, a second Meta object appears.
+    mock.crashAfterSuccess("create_campaign");
+    const first = await resolveAndPublish({
+      budget: { amount: 1000, currency: "EUR" },
+    });
+    expect(mock.countByKind("campaign")).toBe(1);
+
+    // Mutate: wipe dispatch fence and force failed so claim retries blindly.
+    await db.pool.query(
+      `UPDATE publication_step
+       SET status = 'failed',
+           reconcile_state = 'none',
+           dispatched_at = NULL,
+           lease_expires_at = NULL,
+           external_id = NULL
+       WHERE publication_id = $1 AND operation = 'create_campaign'`,
+      [first.publicationId],
+    );
+    await db.pool.query(
+      `UPDATE publication SET status = 'failed' WHERE id = $1`,
+      [first.publicationId],
+    );
+    mock.clearFaults();
+    await runPublication(db.pool, {
+      publicationId: first.publicationId,
+      tenantId: db.tenantId,
+      client: mock,
+      store,
+    });
+    expect(mock.countByKind("campaign")).toBe(2);
+  });
+
+  it("R18-2 — binding attribution wins; mismatch without reason is rejected", async () => {
+    await db.pool.query(`DELETE FROM publication_step`);
+    await db.pool.query(`DELETE FROM publication`);
+    await db.pool.query(`DELETE FROM metric_optimization_binding`);
+    await db.pool.query(`DELETE FROM ad_account_metric_assignment`);
+    await db.pool.query(`DELETE FROM conversion_metric`);
+    await db.pool.query(`DELETE FROM advertiser_defaults`);
+    await db.pool.query(`DELETE FROM creative`);
+    await db.pool.query(`DELETE FROM asset`);
+    await db.pool.query(`DELETE FROM meta_ad_account`);
+    await db.pool.query(`DELETE FROM meta_connection`);
+    await db.pool.query(`DELETE FROM advertiser WHERE tenant_id = $1`, [
+      db.tenantId,
+    ]);
+    await seedFixture({
+      bindingAttribution: ["1d_click"],
+      defaultsAttribution: {
+        click: "7d_click",
+        view: "1d_view",
+        engaged: "none",
+      },
+    });
+
+    await expect(
+      resolveAndPublish({ budget: { amount: 1000, currency: "EUR" } }),
+    ).rejects.toMatchObject({ code: "metric_binding_mismatch" });
+
+    const { resolved } = await resolveAndPublish({
+      budget: { amount: 1000, currency: "EUR" },
+      deviationReason: "Binding requires 1d_click for LINK_CLICKS",
+    });
+    expect(resolved.bindingMismatch).toBe(true);
+    expect(resolved.adSet.mode).toBe("new");
+    if (resolved.adSet.mode === "new") {
+      expect(resolved.adSet.attributionSpec).toEqual([
+        { event_type: "CLICK_THROUGH", window_days: 1 },
+      ]);
+    }
+  });
+
+  it("R18-3 — existing CBO from Meta: no budget; wrong budget rejected", async () => {
+    mock.seed("camp_cbo", "campaign", "CBO Camp", "PAUSED", {
+      dailyBudget: 5000,
+      lifetimeBudget: null,
+    });
+
+    await expect(
+      resolveAndPublish({
+        budget: { amount: 1000, currency: "EUR" },
+        campaign: { mode: "existing", existingCampaignId: "camp_cbo" },
+      }),
+    ).rejects.toMatchObject({ code: "budget_wrong_level" });
+
+    const { resolved, outcome } = await resolveAndPublish({
+      campaign: { mode: "existing", existingCampaignId: "camp_cbo" },
+    });
+    expect(resolved.budgetMode).toBe("CBO");
+    expect(resolved.budgetSource).toBeUndefined();
+    expect(outcome.status).toBe("succeeded");
+    const adSetCall = mock.calls.find((c) => c.operation === "create_adset");
+    expect(adSetCall).toBeTruthy();
+    expect(
+      (adSetCall!.args as { dailyBudget?: number }).dailyBudget,
+    ).toBeUndefined();
+  });
+
+  it("R18-4 — EU targeting without DSA → dsa_details_required before Meta", async () => {
+    await db.pool.query(`DELETE FROM publication_step`);
+    await db.pool.query(`DELETE FROM publication`);
+    await db.pool.query(`DELETE FROM metric_optimization_binding`);
+    await db.pool.query(`DELETE FROM ad_account_metric_assignment`);
+    await db.pool.query(`DELETE FROM conversion_metric`);
+    await db.pool.query(`DELETE FROM advertiser_defaults`);
+    await db.pool.query(`DELETE FROM creative`);
+    await db.pool.query(`DELETE FROM asset`);
+    await db.pool.query(`DELETE FROM meta_ad_account`);
+    await db.pool.query(`DELETE FROM meta_connection`);
+    await db.pool.query(`DELETE FROM advertiser WHERE tenant_id = $1`, [
+      db.tenantId,
+    ]);
+    await seedFixture({ omitDsa: true, countries: ["DE"] });
+
+    await expect(
+      resolveAndPublish({ budget: { amount: 1000, currency: "EUR" } }),
+    ).rejects.toMatchObject({ code: "dsa_details_required" });
+    expect(mock.countByKind("campaign")).toBe(0);
+  });
+
+  it("R18-4b — saveDefaults preserves DSA when omitted on subsequent save", async () => {
+    const latest = await saveDefaults(db.pool, {
+      tenantId: db.tenantId,
+      advertiserId,
+      settings: AdvertiserDefaultsSchema.parse({
+        identity: { pageId: "page_test" },
+        adSet: {
+          optimizationGoal: "LINK_CLICKS",
+          targeting: { countries: ["DE"] },
+          budgetMode: "ABO",
+        },
+        website: { url: "https://example.com", utmParams: "" },
+        autoNaming: {
+          creativeTemplate: "{advertiser}",
+          adSetTemplate: "{advertiser}",
+          adTemplate: "{creative}",
+        },
+      }),
+      createdBy: userId,
+    });
+    expect(latest.version).toBeGreaterThan(1);
+
+    const loaded = await db.pool.query<{ settings: AdvertiserDefaults }>(
+      `SELECT settings FROM advertiser_defaults
+       WHERE advertiser_id = $1 ORDER BY version DESC LIMIT 1`,
+      [advertiserId],
+    );
+    const settings = AdvertiserDefaultsSchema.parse(loaded.rows[0]?.settings);
+    expect(settings.identity.beneficiaryName).toBe("Test GmbH");
+    expect(settings.identity.payerName).toBe("Test GmbH");
+  });
+
+  it("R18-5 — start_time uses account timezone (Europe/Berlin), not UTC wall", async () => {
+    // Summer: Europe/Berlin is UTC+2. 09:00 local → 07:00Z.
+    setPublishClockForTests(Date.parse("2026-07-15T12:00:00.000Z"));
+    const { resolved } = await resolveAndPublish({
+      budget: { amount: 1000, currency: "EUR" },
+    });
+    expect(resolved.adSet.mode).toBe("new");
+    if (resolved.adSet.mode === "new") {
+      expect(resolved.adSet.startTime).toBe("2026-07-16T07:00:00.000Z");
+    }
+    setPublishClockForTests(null);
   });
 
   it("mutation — PAUSED gate: flipping sealed status to ACTIVE is refused", async () => {
@@ -747,7 +994,8 @@ describe("etappe 7 — launch", () => {
     // Mutated behaviour would reset the step to pending and call Meta again:
     await db.pool.query(
       `UPDATE publication_step
-       SET status = 'pending', external_id = NULL
+       SET status = 'pending', external_id = NULL, dispatched_at = NULL,
+           reconcile_state = 'none'
        WHERE publication_id = $1 AND operation = 'create_campaign'`,
       [first.publicationId],
     );
@@ -759,7 +1007,7 @@ describe("etappe 7 — launch", () => {
     // Mark later steps pending so the chain continues after the mutated campaign recreate.
     await db.pool.query(
       `UPDATE publication_step
-       SET status = 'pending', external_id = NULL
+       SET status = 'pending', external_id = NULL, dispatched_at = NULL
        WHERE publication_id = $1 AND operation <> 'create_campaign'`,
       [first.publicationId],
     );

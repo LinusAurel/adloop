@@ -181,3 +181,159 @@ export function attributionToMetaSpec(
   }
   return spec;
 }
+
+/** Labels as stored on conversion metrics / bindings (e.g. 1d_click). */
+export function attributionToLabels(
+  attribution: AdvertiserDefaults["adSet"]["attribution"],
+): string[] {
+  const labels: string[] = [];
+  labels.push(attribution.click);
+  if (attribution.view !== "none") labels.push(attribution.view);
+  if (attribution.engaged !== "none") labels.push(attribution.engaged);
+  return labels.sort();
+}
+
+/**
+ * Binding attribution_spec → Meta create payload. Binding wins over defaults.
+ */
+export function bindingAttributionToMetaSpec(
+  labels: readonly string[],
+): Array<{ event_type: string; window_days: number }> {
+  const spec: Array<{ event_type: string; window_days: number }> = [];
+  for (const label of labels) {
+    switch (label) {
+      case "1d_click":
+        spec.push({ event_type: "CLICK_THROUGH", window_days: 1 });
+        break;
+      case "7d_click":
+        spec.push({ event_type: "CLICK_THROUGH", window_days: 7 });
+        break;
+      case "1d_view":
+        spec.push({ event_type: "VIEW_THROUGH", window_days: 1 });
+        break;
+      case "1d_engaged":
+        spec.push({ event_type: "ENGAGED_VIDEO_VIEW", window_days: 1 });
+        break;
+      default:
+        break;
+    }
+  }
+  return spec;
+}
+
+export function sameLabelSet(a: readonly string[], b: readonly string[]): boolean {
+  if (a.length !== b.length) return false;
+  const left = [...a].sort();
+  const right = [...b].sort();
+  return left.every((v, i) => v === right[i]);
+}
+
+/**
+ * EU/EEA country codes that require DSA beneficiary + payor on ad sets
+ * (Meta error_subcode 3858081).
+ */
+export const DSA_REQUIRED_COUNTRIES = new Set([
+  "AT",
+  "BE",
+  "BG",
+  "HR",
+  "CY",
+  "CZ",
+  "DK",
+  "EE",
+  "FI",
+  "FR",
+  "DE",
+  "GR",
+  "HU",
+  "IE",
+  "IT",
+  "LV",
+  "LT",
+  "LU",
+  "MT",
+  "NL",
+  "PL",
+  "PT",
+  "RO",
+  "SK",
+  "SI",
+  "ES",
+  "SE",
+  "IS",
+  "LI",
+  "NO",
+]);
+
+export function targetingRequiresDsa(countries: readonly string[]): boolean {
+  return countries.some((c) => DSA_REQUIRED_COUNTRIES.has(c.toUpperCase()));
+}
+
+/**
+ * Convert a wall-clock date/time in `timeZone` to a UTC ISO string.
+ * Uses Intl so DST (e.g. Europe/Berlin CEST) is applied — no fixed offset.
+ */
+export function wallTimeInZoneToIso(
+  timeZone: string,
+  year: number,
+  month: number,
+  day: number,
+  hour: number,
+  minute: number,
+): string {
+  const asUtcMs = Date.UTC(year, month - 1, day, hour, minute, 0);
+  const offsetMs = zonedOffsetMs(new Date(asUtcMs), timeZone);
+  let utcMs = asUtcMs - offsetMs;
+  // Re-probe in case the first guess sat across a DST transition.
+  const corrected = zonedOffsetMs(new Date(utcMs), timeZone);
+  utcMs = asUtcMs - corrected;
+  return new Date(utcMs).toISOString();
+}
+
+function zonedOffsetMs(instant: Date, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(instant);
+  const num = (type: Intl.DateTimeFormatPartTypes): number =>
+    Number(parts.find((p) => p.type === type)?.value ?? "0");
+  const asIfUtc = Date.UTC(
+    num("year"),
+    num("month") - 1,
+    num("day"),
+    num("hour"),
+    num("minute"),
+    num("second"),
+  );
+  return asIfUtc - instant.getTime();
+}
+
+/** Calendar date (Y-M-D) in a timezone, plus optional day offset. */
+export function zonedCalendarDate(
+  now: Date,
+  timeZone: string,
+  offsetDays: number,
+): { year: number; month: number; day: number } {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(now);
+  const num = (type: Intl.DateTimeFormatPartTypes): number =>
+    Number(parts.find((p) => p.type === type)?.value ?? "0");
+  // Shift in UTC midnight space so month boundaries stay correct.
+  const base = Date.UTC(num("year"), num("month") - 1, num("day"));
+  const shifted = new Date(base + offsetDays * 86_400_000);
+  return {
+    year: shifted.getUTCFullYear(),
+    month: shifted.getUTCMonth() + 1,
+    day: shifted.getUTCDate(),
+  };
+}

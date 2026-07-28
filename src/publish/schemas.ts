@@ -186,7 +186,9 @@ export type PublishErrorCode =
   | "account_not_found"
   | "needs_human_review"
   | "idempotency_conflict"
-  | "validation_error";
+  | "validation_error"
+  | "dsa_details_required"
+  | "campaign_not_found";
 
 export class PublishError extends Error {
   constructor(

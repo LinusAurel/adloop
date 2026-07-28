@@ -26,8 +26,8 @@ services:
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     volumes:
       - minio_data:/data
-    # No host port either, same reasoning as db. Etappe 1 doesn't use MinIO
-    # yet (that starts in Etappe 6) — it only needs to run and be healthy.
+    # No host port either, same reasoning as db. Etappe 2 stores immutable
+    # raw Meta responses here; media assets are added in Etappe 6.
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 5s

@@ -1,0 +1,16 @@
+{
+  "data": [
+    {
+      "id": "act_000000000000001",
+      "name": "Synthetic account two",
+      "currency": "USD",
+      "timezone_name": "America/New_York",
+      "timezone_offset_hours_utc": -4,
+      "account_status": 1
+    }
+  ],
+  "paging": {
+    "next": "https://graph.facebook.com/v25.0/me/adaccounts?after=cursor-2",
+    "cursors": { "after": "cursor-2" }
+  }
+}

@@ -3,10 +3,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { uuidv7 } from "uuidv7";
 
-// Mirrors src/lib/constants.ts — kept literal here since this file ships to
-// the browser and must not pull in server-only modules.
-const SEED_TENANT_ID = "00000000-0000-0000-0000-000000000001";
-
 interface RunSummary {
   runId: string;
   status: string;
@@ -48,11 +44,11 @@ export default function Home() {
       const res = await fetch("/api/runs", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ runId, tenantId: SEED_TENANT_ID, family: "echo", input: { text } }),
+        body: JSON.stringify({ runId, family: "echo", input: { text } }),
       });
       if (!res.ok) {
-        const body = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
-        setErrorMsg(body?.error?.message ?? `request failed (${res.status})`);
+        const body = (await res.json().catch(() => null)) as { error?: string } | null;
+        setErrorMsg(body?.error ?? `request failed (${res.status})`);
         return;
       }
       await refresh();

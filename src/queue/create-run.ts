@@ -15,6 +15,7 @@ export type CreateRunResult =
   | { outcome: "created"; runId: string }
   | { outcome: "idempotent_replay"; runId: string }
   | { outcome: "conflict"; runId: string }
+  | { outcome: "concurrency_conflict" }
   | { outcome: "unknown_family" }
   | { outcome: "invalid_input"; message: string };
 
@@ -56,42 +57,59 @@ export async function createRun(db: Queryable, params: CreateRunInput): Promise<
     return { outcome: "invalid_input", message: parsedInput.error.message };
   }
 
-  const result = await withTransaction(db, async (client) => {
-    const inserted = await client.query(
-      `INSERT INTO run (id, tenant_id, kind, status, input, created_at, updated_at)
-       VALUES ($1, $2, $3, 'queued', $4::jsonb, now(), now())
-       ON CONFLICT (id) DO NOTHING
-       RETURNING *`,
-      [params.runId, params.tenantId, params.family, JSON.stringify(params.input)],
-    );
-
-    if (inserted.rows[0]) {
-      await client.query(
-        `INSERT INTO job (id, tenant_id, run_id, family, status, input, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, 'queued', $5::jsonb, now(), now())`,
-        [uuidv7(), params.tenantId, params.runId, params.family, JSON.stringify(parsedInput.data)],
+  let result: Exclude<CreateRunResult, { outcome: "unknown_family" | "invalid_input" }>;
+  try {
+    result = await withTransaction(db, async (client) => {
+      const inserted = await client.query(
+        `INSERT INTO run (id, tenant_id, kind, status, input, created_at, updated_at)
+         VALUES ($1, $2, $3, 'queued', $4::jsonb, now(), now())
+         ON CONFLICT (id) DO NOTHING
+         RETURNING *`,
+        [params.runId, params.tenantId, params.family, JSON.stringify(params.input)],
       );
-      return { outcome: "created", runId: params.runId } as const;
+
+      if (inserted.rows[0]) {
+        await client.query(
+          `INSERT INTO job (id, tenant_id, run_id, family, status, input, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, 'queued', $5::jsonb, now(), now())`,
+          [uuidv7(), params.tenantId, params.runId, params.family, JSON.stringify(parsedInput.data)],
+        );
+        return { outcome: "created", runId: params.runId } as const;
+      }
+
+      // Run already existed (either a genuine retry, or we lost a race to
+      // insert it — ON CONFLICT DO NOTHING blocks on the other transaction's
+      // commit, so by the time we get here the row is final either way).
+      const existing = await client.query(`SELECT * FROM run WHERE id = $1`, [params.runId]);
+      const existingRun = existing.rows[0] as
+        | { tenant_id: string; kind: string; input: unknown }
+        | undefined;
+      if (!existingRun) {
+        return { outcome: "conflict", runId: params.runId } as const;
+      }
+
+      const sameRequest =
+        existingRun.tenant_id === params.tenantId &&
+        existingRun.kind === params.family &&
+        canonical(existingRun.input) === canonical(params.input);
+
+      return sameRequest
+        ? ({ outcome: "idempotent_replay", runId: params.runId } as const)
+        : ({ outcome: "conflict", runId: params.runId } as const);
+    });
+  } catch (error) {
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      error.code === "23505" &&
+      "constraint" in error &&
+      error.constraint === "job_meta_sync_active_account_idx"
+    ) {
+      return { outcome: "concurrency_conflict" };
     }
-
-    // Run already existed (either a genuine retry, or we lost a race to
-    // insert it — ON CONFLICT DO NOTHING blocks on the other transaction's
-    // commit, so by the time we get here the row is final either way).
-    const existing = await client.query(`SELECT * FROM run WHERE id = $1`, [params.runId]);
-    const existingRun = existing.rows[0] as { tenant_id: string; kind: string; input: unknown } | undefined;
-    if (!existingRun) {
-      return { outcome: "conflict", runId: params.runId } as const;
-    }
-
-    const sameRequest =
-      existingRun.tenant_id === params.tenantId &&
-      existingRun.kind === params.family &&
-      canonical(existingRun.input) === canonical(params.input);
-
-    return sameRequest
-      ? ({ outcome: "idempotent_replay", runId: params.runId } as const)
-      : ({ outcome: "conflict", runId: params.runId } as const);
-  });
+    throw error;
+  }
 
   if (result.outcome === "created") {
     await db.query(`SELECT pg_notify('job_available', $1)`, [params.runId]);

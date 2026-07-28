@@ -279,3 +279,77 @@ What changed, and why:
   black-box HTTP test could pass by accident (bad timing happening to work
   out) in a way these can't, since case 5 and case 7 use an explicit
   barrier to force real concurrency rather than two sequential calls.
+
+## Etappe 2
+
+- **Sessions are stateless signed cookies containing only user id, tenant
+  id, issued-at, and expiry.** The signature uses a stable
+  `SESSION_SECRET`, so restarting the web container does not invalidate a
+  session and no bearer token is exposed to browser JavaScript.
+- **Email codes are only issued for existing users, expire after ten
+  minutes, allow five attempts, and are stored as HMAC hashes.** This keeps
+  Etappe 2 a login flow rather than silently adding open registration.
+- **Readiness and job progress contain stable codes and parameters, not
+  `userMessage` prose.** The examples in the Auftrag conflict with its
+  explicit §8.2 rule; the rule wins and the German UI owns wording.
+- **A retried page fetch continues the same `insight_sync_run`.** Page data
+  and the next cursor are checkpointed atomically, so resuming into a new
+  sync run cannot mark a partial observation complete.
+- **Current views are backed by explicit
+  `*_as_of(tenant_id, timestamptz)` functions.** A parameterless SQL view
+  cannot implement the specified historical `data_as_of` contract; each
+  view delegates to the tenant-scoped function with `now()`, while later
+  snapshot code can call the same function with its exact cutoff.
+- **Action completeness is scoped to the same `query_signature`.** A later
+  run with different fields or attribution windows must not zero a valid
+  action merely because that action was outside the later query.
+- **`advertiser.content_locale` defaults to `de-DE` until explicitly
+  overridden.** The Marketing API ad-account object has no content-language
+  field, so deriving it "from the language of the ad account" would require
+  an undocumented guess from currency or timezone; no such guess is made.
+- **Every Insights field in the sync is checked by
+  `pnpm test:meta-contract` against the real account.** The acceptance
+  correction removed the invalid `net_new_reach` provider field; the metric
+  is derived later from separately queried cumulative reach windows.
+- **A cumulative window is only marked available when the ad's first
+  delivered day can be proven inside Meta's 37-month Insights horizon.**
+  The sync discovers that day from daily impressions starting at the later
+  of ad creation and its optional schedule start. Older ads keep exact
+  30/90-day windows but deliberately produce `cumulative_reach_missing`
+  instead of a fabricated lifetime baseline.
+- **`AdsActionStats.value` is stored for `["1d_view","7d_click"]` only when
+  the same row reports `attribution_setting = "1d_view_7d_click"`.** Meta's
+  reference defines the per-window keys separately and, since June 2025,
+  defines `value` by the ad set's attribution setting. The live account uses
+  the combined setting, which supplies the required deduplicated total. The
+  sync requests and validates that setting; it never adds `1d_view` and
+  `7d_click`, and rejects a differently configured ad instead of attaching
+  the wrong label.
+- **A successful backfill writes zero observations for previously delivered
+  `(ad, date)` keys that disappear from the same account, query contract,
+  and requested window.** The expected set comes from prior successful
+  observations, not from every ad in the account, so ads that never
+  delivered do not acquire synthetic daily rows. The zero row uses the new
+  sync run and also tombstones every previously observed action type.
+
+## Known limitation: attribution_setting is asserted, not tolerated
+
+`MetaInsightRowSchema` declares `attribution_setting: z.literal("1d_view_7d_click")`.
+A row computed under any other setting fails validation and aborts the sync.
+
+This is deliberate. Meta returns per-window values in separate keys while `value`
+carries the account's default attribution; storing `value` under a requested window
+set would label a number with a window it did not come from. Asserting the setting
+is the only way to know the stored number matches its `attribution_spec` label.
+Fail-closed beats a plausible wrong number — the same reasoning as the inverted
+funnel formula and the non-existent `net_new_reach` field.
+
+**The limitation:** per Meta's reference, `attribution_setting` is a property of each
+ad set, not of the account. An account whose ad sets use mixed settings makes the
+sync abort entirely instead of degrading. Single-tenant operation on one account is
+unaffected; reading third-party accounts is not.
+
+The fix, when it is needed, is to label each row with the setting Meta actually
+reports rather than rejecting it — the `attribution_spec` column already carries
+that information per row. Not done now because it is out of scope for stage 2 and
+costs a build run that the current budget does not justify.

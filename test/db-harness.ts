@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
 import { Pool, type PoolClient } from "pg";
-import runMigrations from "node-pg-migrate";
+import { runner as runMigrations } from "node-pg-migrate";
 import { uuidv7 } from "uuidv7";
 import { clearRegistry, registerFamily } from "@/queue/registry";
 import { echoFamily } from "@/queue/families/echo";
@@ -24,8 +24,26 @@ export interface TestDb {
   stop(): Promise<void>;
 }
 
+async function startPostgresContainer(): Promise<StartedPostgreSqlContainer> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= 5; attempt += 1) {
+    try {
+      return await new PostgreSqlContainer("postgres:16-alpine").start();
+    } catch (error) {
+      lastError = error;
+      const transientPortRace =
+        error instanceof Error &&
+        (error.message.includes("No host port found") ||
+          error.message.includes("Expected Reaper to map exposed port"));
+      if (!transientPortRace || attempt === 5) throw error;
+      await new Promise((resolve) => setTimeout(resolve, attempt * 250));
+    }
+  }
+  throw lastError;
+}
+
 export async function startTestDb(): Promise<TestDb> {
-  const container: StartedPostgreSqlContainer = await new PostgreSqlContainer("postgres:16-alpine").start();
+  const container = await startPostgresContainer();
   const databaseUrl = container.getConnectionUri();
 
   await runMigrations({

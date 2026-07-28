@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getPool } from "@/db/pool";
 import { errorResponse } from "@/lib/api-error";
 import type { JobError, RunStatus } from "@/queue/types";
+import { authenticate, requireOwnedResource } from "@/auth/guard";
 
 interface RunRow {
   status: RunStatus;
@@ -13,16 +14,26 @@ const TERMINAL_ERROR_STATUSES: ReadonlySet<RunStatus> = new Set(["failed", "time
 
 /** §5 GET /api/runs/:id/result */
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
+  const auth = authenticate(req);
+  if (!auth.ok) return auth.response;
+
   const { id } = await params;
   const pool = getPool();
+  const ownershipError = await requireOwnedResource(pool, auth.session, "run", id);
+  if (ownershipError) return ownershipError;
 
-  const result = await pool.query<RunRow>(`SELECT status, result, error FROM run WHERE id = $1`, [id]);
+  const result = await pool.query<RunRow>(
+    `SELECT status, result, error
+     FROM run
+     WHERE id = $1 AND tenant_id = $2`,
+    [id, auth.session.tenantId],
+  );
   const run = result.rows[0];
   if (!run) {
-    return errorResponse(404, { code: "NOT_FOUND", message: "run not found", retryable: false });
+    return errorResponse(404, "not_found");
   }
 
   if (run.status === "completed") {
@@ -30,16 +41,7 @@ export async function GET(
   }
 
   if (TERMINAL_ERROR_STATUSES.has(run.status)) {
-    return NextResponse.json(
-      {
-        error: run.error ?? {
-          code: run.status.toUpperCase(),
-          message: `run ended as ${run.status}`,
-          retryable: false,
-        },
-      },
-      { status: 409 },
-    );
+    return errorResponse(409, run.error?.code.toLowerCase() ?? `run_${run.status}`);
   }
 
   return NextResponse.json({ status: run.status }, { status: 202 });

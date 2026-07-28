@@ -1,7 +1,15 @@
 import { NextResponse } from "next/server";
-import type { JobError } from "@/queue/types";
 
-/** §5: every API error uses this exact shape, unconditionally. */
-export function errorResponse(status: number, error: JobError): NextResponse {
-  return NextResponse.json({ error }, { status });
+export interface ApiErrorBody {
+  error: string;
+  params?: Readonly<Record<string, string | number | boolean>>;
+}
+
+/** SPEC §8.2: stable identifiers and parameters, never user-facing prose. */
+export function errorResponse(
+  status: number,
+  error: string,
+  params?: ApiErrorBody["params"],
+): NextResponse {
+  return NextResponse.json(params ? { error, params } : { error }, { status });
 }

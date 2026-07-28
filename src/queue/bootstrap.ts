@@ -1,5 +1,6 @@
 import { registerFamily, isFamilyRegistered } from "./registry";
 import { echoFamily } from "./families/echo";
+import { metaInsightSyncFamily } from "./families/meta-insight-sync";
 
 /**
  * The Next.js app process (API routes) needs the registry populated too —
@@ -14,5 +15,8 @@ import { echoFamily } from "./families/echo";
 export function ensureQueueBootstrapped(): void {
   if (!isFamilyRegistered(echoFamily.name)) {
     registerFamily(echoFamily);
+  }
+  if (!isFamilyRegistered(metaInsightSyncFamily.name)) {
+    registerFamily(metaInsightSyncFamily);
   }
 }

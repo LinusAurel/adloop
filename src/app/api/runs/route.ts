@@ -4,29 +4,35 @@ import { getPool } from "@/db/pool";
 import { createRun } from "@/queue/create-run";
 import { ensureQueueBootstrapped } from "@/queue/bootstrap";
 import { errorResponse } from "@/lib/api-error";
-import { SEED_TENANT_ID } from "@/lib/constants";
+import { authenticate } from "@/auth/guard";
 
 const BodySchema = z.object({
   runId: z.string().uuid(),
-  tenantId: z.string().uuid(),
   family: z.string().min(1),
   input: z.unknown(),
 });
 
 /** §5 POST /api/runs — idempotent on (runId, tenantId, family, input). */
 export async function POST(req: NextRequest): Promise<NextResponse> {
+  const auth = authenticate(req);
+  if (!auth.ok) return auth.response;
+
   ensureQueueBootstrapped();
   const json = await req.json().catch(() => null);
   const parsed = BodySchema.safeParse(json);
   if (!parsed.success) {
-    return errorResponse(400, {
-      code: "VALIDATION_ERROR",
-      message: parsed.error.message,
-      retryable: false,
+    return errorResponse(400, "validation_error");
+  }
+  if (parsed.data.family === "meta_insight_sync") {
+    return errorResponse(400, "family_requires_dedicated_endpoint", {
+      endpoint: "/api/meta/sync/refresh",
     });
   }
 
-  const result = await createRun(getPool(), parsed.data);
+  const result = await createRun(getPool(), {
+    ...parsed.data,
+    tenantId: auth.session.tenantId,
+  });
 
   switch (result.outcome) {
     case "created":
@@ -36,23 +42,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         { status: 201 },
       );
     case "conflict":
-      return errorResponse(409, {
-        code: "IDEMPOTENCY_CONFLICT",
-        message: "runId already used with a different request body",
-        retryable: false,
-      });
+      return errorResponse(409, "idempotency_conflict");
+    case "concurrency_conflict":
+      return errorResponse(409, "sync_in_progress");
     case "unknown_family":
-      return errorResponse(400, {
-        code: "UNKNOWN_FAMILY",
-        message: `no job family registered as "${parsed.data.family}"`,
-        retryable: false,
-      });
+      return errorResponse(400, "unknown_family", { family: parsed.data.family });
     case "invalid_input":
-      return errorResponse(400, {
-        code: "VALIDATION_ERROR",
-        message: result.message,
-        retryable: false,
-      });
+      return errorResponse(400, "validation_error");
   }
 }
 
@@ -70,6 +66,9 @@ interface RunListRow {
 
 /** §5 GET /api/runs?status=active — plus an unfiltered mode the UI uses to show recent history (extension, see DECISIONS.md). */
 export async function GET(req: NextRequest): Promise<NextResponse> {
+  const auth = authenticate(req);
+  if (!auth.ok) return auth.response;
+
   const status = req.nextUrl.searchParams.get("status");
   const pool = getPool();
 
@@ -83,7 +82,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
      WHERE r.tenant_id = $1 ${whereClause}
      ORDER BY r.created_at DESC
      LIMIT 50`,
-    [SEED_TENANT_ID],
+    [auth.session.tenantId],
   );
 
   return NextResponse.json({

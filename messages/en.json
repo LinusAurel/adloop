@@ -6,6 +6,7 @@
     "connectors": "Connectors",
     "metrics": "Metrics",
     "strategist": "Strategist",
+    "workshop": "Workshop",
     "playbooks": "Playbooks",
     "queueSmoke": "Queue",
     "newChat": "New chat",
@@ -99,6 +100,23 @@
     "copychief_review_request": "Run a copy review for ad {adName} over {since} to {until}.",
     "cro_review_request": "Run a funnel review for ad {adName} over {since} to {until}.",
     "variations_request": "Propose variations for ad {adName} based on {since} to {until}."
+  },
+  "workshop": {
+    "title": "Image workshop",
+    "subtitle": "Generate static ads with image and copy.",
+    "advertiser": "Advertiser",
+    "noAdvertiser": "No advertiser",
+    "prompt": "Prompt",
+    "aspectRatio": "Aspect ratio",
+    "count": "Count",
+    "generate": "Generate",
+    "library": "Library",
+    "allFormats": "All formats",
+    "selected": "Selected",
+    "status": "Status",
+    "needsHumanCheck": "Needs human check",
+    "costImage": "Image",
+    "costCopy": "Copy"
   },
   "progress": {
     "echo_step": "Step {step} of {total}",

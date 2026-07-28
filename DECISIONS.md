@@ -495,3 +495,87 @@ costs a build run that the current budget does not justify.
   - `userMessageId` / `assistantMessageId` — inserted with `tenant_id`; they are global
     PKs like `run.id`. Collisions abort the transaction; they are never looked up
     unscoped to decide success vs conflict.
+
+## Etappe 6 — Bild-Werkstatt
+
+- **Provider recovery is classified per adapter, not assumed.** The interface carries
+  `recovery: native_key | correlated_callback | lookup_by_correlation | unprotected`
+  instead of a boolean “has idempotency”. Spec §3.5’s “no provider without guarantee”
+  is satisfied by behaviour: unprotected adapters never auto-retry after a crash;
+  the run becomes `needs_human_check` with code `provider_unprotected_crash`. Prefer a
+  hung job over a second charge.
+- **Fal = `correlated_callback`.** Evidence: Fal Queue accepts `webhookUrl` /
+  `fal_webhook` on submit and posts the result; no client-set idempotency key in the
+  documented async flow ([Queue](https://fal.ai/docs/documentation/model-apis/inference/queue),
+  [Webhooks](https://fal.ai/docs/documentation/model-apis/inference/webhooks), Stand
+  28.07.2026). We embed our `correlationId` in
+  `https://<host>/api/webhooks/fal/<correlationId>` so a crash before persisting
+  `request_id` still correlates. The webhook handler is itself idempotent (Fal retries
+  ~10× / 2h).
+- **ElevenLabs Image & Video is not an API — do not build an adapter.** Checked with a
+  live key against `api.elevenlabs.io` on 28.07.2026: OpenAPI lists **282** paths; the
+  only path containing “image” or “video” is `/v1/music/video-to-music` (music *from*
+  video). Plausible image endpoints (`/v1/image-generation`, `/v1/images/generations`,
+  `/v1/image/generate`, …) all return **404**. The key itself is valid (`/v1/user`
+  returns the subscription). Image & Video is a Playground surface product, not an API
+  offer. No adapter, no invented fixtures.
+- **`openai-images` = `unprotected`.** Real second adapter for the unprotected class.
+  Checked 29.07.2026 against `POST https://api.openai.com/v1/images/generations`
+  (`gpt-image-1`): the API accepts `Idempotency-Key` without error but ignores it —
+  two calls with the same key and identical prompt returned two different images
+  (`created` 1785275998 / bild-sha `4e29446e6e3c0805`, then `created` 1785276027 /
+  bild-sha `f9ed52768e9b159b`). Response is synchronous (no queue, no `request_id`).
+  Reason string documents those hashes. Fixtures under
+  `test/fixtures/providers/openai-images/` are a full captured HTTP body
+  (`CAPTURE.json` provenance), not a hand-built stub. `cost_estimate.image` for this
+  provider uses `usage.total_tokens` (live capture ≈ 1077) × token rate.
+- **Stub adapter covers all four recovery kinds** so the layer is proven without API
+  keys. Fal / openai-images use recorded fixtures under `test/fixtures/providers/`.
+- **Crash window closes with a pre-submit marker.** Before the network call we write
+  `provider_job = { externalId: "pending", correlationId }`. A retry that sees
+  `in_flight` with a job (pending or real) goes to recover — never a blind second
+  submit. `native_key` with a real external id uses `fetchResult`; with `pending` it
+  resubmits the same correlation. Unprotected never auto-retries → `needs_human_check`.
+- **`generate_images` tool** (`costClass: expensive`, `sideEffect: external`) is the
+  only generation entry. Workshop UI and chat share it — no side door past Freigabe.
+  Cost estimate is `{ image, copy, currency: "USD" }` on the approval and in
+  `creative_generation.cost_estimate`.
+- **Copy in `advertiser.content_locale`** via Anthropic (`COPY_MODEL`, default
+  `claude-sonnet-5`), not `agent_locale`. Stub copy generator for tests / missing key.
+- **Object store** gained `putBytes`, `getObject`, `getSignedUrl`. Bucket stays private;
+  media is served only via signed URLs with expiry.
+- **`run.status` includes `needs_human_check`.** Job still finalizes `completed`;
+  `finalizeJob` accepts `runStatus: "needs_human_check"` so the run surfaces the
+  escalation without inventing a new job terminal state.
+- **Default `IMAGE_PROVIDER=fal`** — only provider with a closed crash window. Local
+  `.env.example` uses `stub` until keys exist. `PUBLIC_BASE_URL` required for fal
+  webhooks in live mode.
+- **`correlated_callback` never blind-resubmits (Review 14 / Finding 1).** Fal's
+  recover path is the webhook, not a lookup. After a crash with `externalId`
+  still `pending`, the layer enters `awaiting_callback` with deadline
+  `CALLBACK_GRACE_MS` (default 15m), reschedules the job, and waits. Timeout →
+  `needs_human_check` / `callback_timeout`. Mutation proof: replacing the wait
+  with `submitAndComplete` makes the F1 test fail (`awaiting_callback` → `result`).
+- **Fal webhook signature is mandatory (Review 14 / Finding 2).** Missing
+  `FAL_WEBHOOK_SECRET` → `503 webhook_not_configured`. `correlationId` routes;
+  it does not authorize. Mutation: optional-signature path accepts unsigned
+  body → F2 expects 503, gets 200.
+- **Webhook materializes Fal URL images by download** (not base64 of the URL
+  string); `content_type` preserved. Client `provider` is ignored unless on
+  `IMAGE_PROVIDER_REQUEST_ALLOWLIST`. Replay requires the expected creative
+  count. Bucket policy Put failure aborts when Get shows public-read.
+- **Submit right is compare-and-set (Review 15 / Finding 1).**
+  `UPDATE … SET provider_job = … WHERE provider_job IS NULL RETURNING` — the
+  loser never submits and reconciles. Reserve insert uses `ON CONFLICT DO
+  NOTHING`. Concurrent proof: two `PoolClient`s + `pg_backend_pid()` + barrier
+  before the CAS; mutation (check-then-set) yields `submitCount === 2`.
+- **Allowlist is test-only (Review 15).** Outside `NODE_ENV=test`, a mismatched
+  request provider → `provider_not_allowed`. Streaming download cancels past
+  15 MiB; MIME from Fal → HTTP → magic bytes. Assets use deterministic ids so
+  copy-retries do not orphan objects. Unverifiable bucket policy aborts
+  (`bucket_policy_unverifiable`); `s3:Get*` counts as public.
+- **Shared MIME + bounded download (Review 16).** `resolveImageMime` /
+  `downloadImageBytes` live under `src/images/` and are used by both the Fal
+  webhook and the polling adapter. Chunk size is checked before append;
+  `Content-Length` over the cap never opens a reader. `Allow`+`NotAction`
+  without excluding reads is treated as public.

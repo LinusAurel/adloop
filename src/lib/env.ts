@@ -39,6 +39,28 @@ const envSchema = z
 
   PLAYBOOK_DIR: z.string().min(1).optional(),
   ANTHROPIC_API_KEY: z.string().min(1).optional(),
+  /** Image provider id: stub | fal | openai-images. Default fal (closed crash window). */
+  IMAGE_PROVIDER: z.enum(["stub", "fal", "openai-images"]).default("fal"),
+  /** Anthropic model for ad copy (content_locale). */
+  COPY_MODEL: z.string().min(1).default("claude-sonnet-5"),
+  FAL_KEY: z.string().min(1).optional(),
+  FAL_BASE_URL: z.string().url().optional(),
+  OPENAI_API_KEY: z.string().min(1).optional(),
+  OPENAI_IMAGES_BASE_URL: z.string().url().optional(),
+  /** Public origin for fal webhook URLs. */
+  PUBLIC_BASE_URL: z.string().url().optional(),
+  FAL_WEBHOOK_SECRET: z.string().min(1).optional(),
+  /**
+   * Grace period before a correlated_callback crash escalates to
+   * needs_human_check / callback_timeout. Default 15 minutes.
+   */
+  CALLBACK_GRACE_MS: z.coerce.number().int().positive().default(15 * 60 * 1000),
+  /**
+   * Comma-separated provider ids the client may request. Empty (default) means
+   * the server IMAGE_PROVIDER always wins — a client must not pick who is billed.
+   * Tests set this explicitly (e.g. stub,fal,openai-images).
+   */
+  IMAGE_PROVIDER_REQUEST_ALLOWLIST: z.string().optional(),
 
   JOB_POLL_INTERVAL_MS: z.coerce.number().int().positive().default(1000),
   JOB_LEASE_MS: z.coerce.number().int().positive().default(30000),
@@ -114,3 +136,8 @@ export const env: Env = new Proxy({} as Env, {
     return getEnv()[prop as keyof Env];
   },
 }) as Env;
+
+/** Test-only: drop the cached parse so process.env changes take effect. */
+export function resetEnvCacheForTests(): void {
+  cached = undefined;
+}

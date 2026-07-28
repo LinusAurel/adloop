@@ -20,6 +20,8 @@ const OWNED_RESOURCE_TABLES = {
   metaConnection: "meta_connection",
   metaAdAccount: "meta_ad_account",
   advertiser: "advertiser",
+  asset: "asset",
+  creative: "creative",
 } as const;
 
 export type OwnedResource = keyof typeof OWNED_RESOURCE_TABLES;

@@ -107,6 +107,7 @@ export async function runJob(deps: RunJobDeps): Promise<void> {
   const ctx: JobContext<unknown> = {
     input: parsedInput.data,
     tenantId: job.tenant_id,
+    runId: job.run_id,
     signal: controller.signal,
     isCancelled: () => controller.signal.aborted,
     progress: async (p: JobProgress) => {
@@ -219,11 +220,21 @@ export async function runJob(deps: RunJobDeps): Promise<void> {
     // Fenced: if a concurrent cancel already won (status moved to
     // cancel_requested), this affects zero rows and the result is
     // discarded — see sql/finalize.ts.
+    const resultData = parsedResult.data;
+    const needsHuman =
+      typeof resultData === "object" &&
+      resultData !== null &&
+      "status" in resultData &&
+      (resultData as { status: unknown }).status === "needs_human_check";
     await finalizeJob(pool, {
       jobId: job.id,
       leaseToken,
       fromStatus: "claimed",
-      outcome: { toStatus: "completed", result: parsedResult.data },
+      outcome: {
+        toStatus: "completed",
+        result: resultData,
+        ...(needsHuman ? { runStatus: "needs_human_check" as const } : {}),
+      },
     });
     return;
   }

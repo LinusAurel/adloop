@@ -307,13 +307,21 @@ export async function executeToolCall(
     );
 
     if (params.requestApproval) {
+      const costFromPayload =
+        typeof resolvedPayload === "object" &&
+        resolvedPayload !== null &&
+        "costEstimate" in resolvedPayload
+          ? JSON.stringify(
+              (resolvedPayload as { costEstimate: unknown }).costEstimate,
+            )
+          : tool.costClass;
       const pending = await createPendingApproval(db, {
         tenantId: params.ctx.tenantId,
         runId: params.ctx.runId,
         toolName: tool.name,
         toolVersion: tool.version,
         resolvedPayload,
-        costEstimate: tool.costClass,
+        costEstimate: costFromPayload,
       });
       return { outcome: "needs_approval", approval: pending };
     }

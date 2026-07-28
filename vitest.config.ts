@@ -19,6 +19,10 @@ export default defineConfig({
       DATABASE_URL: "postgres://test:test@127.0.0.1:1/test",
       SESSION_SECRET: "test-session-secret-at-least-32-characters",
       TESTCONTAINERS_RYUK_DISABLED: "true",
+      // Clients may request a provider only via this allowlist (Finding 4).
+      IMAGE_PROVIDER_REQUEST_ALLOWLIST: "stub,fal,openai-images",
+      // Workshop / fal webhook tests set a real secret when needed.
+      FAL_WEBHOOK_SECRET: "test-fal-webhook-secret",
     },
   },
   resolve: {

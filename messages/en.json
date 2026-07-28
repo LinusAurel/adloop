@@ -89,7 +89,13 @@
       "croPreview": "Funnel review (preview)",
       "cro": "Funnel review",
       "variations": "Variations"
-    }
+    },
+    "copychief_review_title": "Copy review · {adName}",
+    "cro_review_title": "Funnel review · {adName}",
+    "variations_title": "Variations · {adName}",
+    "copychief_review_request": "Run a copy review for ad {adName} over {since} to {until}.",
+    "cro_review_request": "Run a funnel review for ad {adName} over {since} to {until}.",
+    "variations_request": "Propose variations for ad {adName} based on {since} to {until}."
   },
   "progress": {
     "echo_step": "Step {step} of {total}",

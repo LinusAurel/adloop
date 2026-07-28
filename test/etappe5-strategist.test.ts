@@ -15,7 +15,12 @@ import {
   type AdReviewRequest,
 } from "@/strategist/ad-review";
 import { adTableArtifact } from "@/strategist/artifacts";
-import { type TestDb, startTestDb } from "./db-harness";
+import {
+  acquireTwoDistinctClients,
+  createBarrier,
+  type TestDb,
+  startTestDb,
+} from "./db-harness";
 import {
   buildPassingPopulation,
   seedAccountWindow,
@@ -180,6 +185,7 @@ describe("etappe 5 — creative strategist", () => {
       runId: overrides.runId ?? uuidv7(),
       userMessageId: overrides.userMessageId ?? uuidv7(),
       assistantMessageId: overrides.assistantMessageId ?? uuidv7(),
+      chatId: overrides.chatId,
       analysisWindow: overrides.analysisWindow ?? {
         since: windowStart,
         until: windowEnd,
@@ -661,21 +667,14 @@ describe("etappe 5 — creative strategist", () => {
       expect(packet!).toContain(resolved.metricDefinition.label);
       expect(packet!).toContain(`Funnel snapshot id: ${snapshotId}`);
 
-      // Persist packet into creative_strategy_run evidence for verification §8.4.
-      await db.pool.query(
-        `UPDATE creative_strategy_run
-         SET payload = payload || jsonb_build_object(
-           'evidence', coalesce(payload->'evidence', '{}'::jsonb) || jsonb_build_object(
-             'inputPacketMarkdown', $2::text
-           )
-         )
-         WHERE id = $1`,
-        [created.creativeStrategyRunId, packet],
-      );
-      const stored = await db.pool.query<{ payload: { evidence?: { inputPacketMarkdown?: string } } }>(
-        `SELECT payload FROM creative_strategy_run WHERE id = $1`,
-        [created.creativeStrategyRunId],
-      );
+      // Evidence must already be on the mapping row from the production path
+      // (agent/turn.ts) — do not UPDATE it here; that would greenwash a regression.
+      const stored = await db.pool.query<{
+        payload: { evidence?: { inputPacketMarkdown?: string } };
+      }>(`SELECT payload FROM creative_strategy_run WHERE id = $1`, [
+        created.creativeStrategyRunId,
+      ]);
+      expect(stored.rows[0]!.payload.evidence?.inputPacketMarkdown).toBe(packet);
       process.stdout.write(
         "=== verification step 4: context packet ===\n" +
           (stored.rows[0]!.payload.evidence?.inputPacketMarkdown ?? "") +
@@ -701,6 +700,289 @@ describe("etappe 5 — creative strategist", () => {
       request: baseRequest({ adId, mode: "copychief", runId: uuidv7() }),
     });
     expect(second.outcome).toBe("concurrency_conflict");
+  });
+
+  it("P0 — foreign chatId does not create run, message, or mapping", async () => {
+    const otherTenantId = uuidv7();
+    await db.pool.query(`INSERT INTO tenant (id, name) VALUES ($1, 'other-tenant')`, [
+      otherTenantId,
+    ]);
+    const foreignChatId = uuidv7();
+    await db.pool.query(
+      `INSERT INTO chat (id, tenant_id, name) VALUES ($1, $2, 'foreign')`,
+      [foreignChatId, otherTenantId],
+    );
+
+    const beforeRuns = await db.pool.query<{ c: string }>(
+      `SELECT count(*)::text AS c FROM run WHERE tenant_id = $1`,
+      [db.tenantId],
+    );
+    const beforeMessages = await db.pool.query<{ c: string }>(
+      `SELECT count(*)::text AS c FROM message WHERE tenant_id = $1`,
+      [db.tenantId],
+    );
+    const beforeMaps = await db.pool.query<{ c: string }>(
+      `SELECT count(*)::text AS c FROM creative_strategy_run WHERE tenant_id = $1`,
+      [db.tenantId],
+    );
+    const beforeForeignMessages = await db.pool.query<{ c: string }>(
+      `SELECT count(*)::text AS c FROM message WHERE chat_id = $1`,
+      [foreignChatId],
+    );
+
+    const result = await executeAdReview(db.pool, {
+      tenantId: db.tenantId,
+      userId,
+      request: baseRequest({
+        adId: "100000000000000",
+        mode: "variations",
+        chatId: foreignChatId,
+      }),
+    });
+    expect(result.outcome).toBe("not_found");
+
+    const afterRuns = await db.pool.query<{ c: string }>(
+      `SELECT count(*)::text AS c FROM run WHERE tenant_id = $1`,
+      [db.tenantId],
+    );
+    const afterMessages = await db.pool.query<{ c: string }>(
+      `SELECT count(*)::text AS c FROM message WHERE tenant_id = $1`,
+      [db.tenantId],
+    );
+    const afterMaps = await db.pool.query<{ c: string }>(
+      `SELECT count(*)::text AS c FROM creative_strategy_run WHERE tenant_id = $1`,
+      [db.tenantId],
+    );
+    const afterForeignMessages = await db.pool.query<{ c: string }>(
+      `SELECT count(*)::text AS c FROM message WHERE chat_id = $1`,
+      [foreignChatId],
+    );
+    const crossTenantRuns = await db.pool.query<{ c: string }>(
+      `SELECT count(*)::text AS c FROM run WHERE chat_id = $1`,
+      [foreignChatId],
+    );
+
+    expect(afterRuns.rows[0]!.c).toBe(beforeRuns.rows[0]!.c);
+    expect(afterMessages.rows[0]!.c).toBe(beforeMessages.rows[0]!.c);
+    expect(afterMaps.rows[0]!.c).toBe(beforeMaps.rows[0]!.c);
+    expect(afterForeignMessages.rows[0]!.c).toBe(beforeForeignMessages.rows[0]!.c);
+    expect(crossTenantRuns.rows[0]!.c).toBe("0");
+  });
+
+  it("P1 — retry without chatId replays the existing run (no orphan chat)", async () => {
+    const adId = "100000000000002";
+    const runId = uuidv7();
+    const userMessageId = uuidv7();
+    const assistantMessageId = uuidv7();
+    const first = await executeAdReview(db.pool, {
+      tenantId: db.tenantId,
+      userId,
+      request: baseRequest({
+        adId,
+        mode: "variations",
+        runId,
+        userMessageId,
+        assistantMessageId,
+      }),
+    });
+    expect(first.outcome).toBe("created");
+    if (first.outcome !== "created") return;
+
+    const chatsBefore = await db.pool.query<{ c: string }>(
+      `SELECT count(*)::text AS c FROM chat WHERE tenant_id = $1`,
+      [db.tenantId],
+    );
+
+    const retry = await executeAdReview(db.pool, {
+      tenantId: db.tenantId,
+      userId,
+      request: baseRequest({
+        adId,
+        mode: "variations",
+        runId,
+        userMessageId,
+        assistantMessageId,
+        // chatId intentionally omitted — client lost it after a timeout
+      }),
+    });
+    expect(retry.outcome).toBe("idempotent_replay");
+    if (retry.outcome !== "idempotent_replay") return;
+    expect(retry.chatId).toBe(first.chatId);
+    expect(retry.creativeStrategyRunId).toBe(first.creativeStrategyRunId);
+
+    const chatsAfter = await db.pool.query<{ c: string }>(
+      `SELECT count(*)::text AS c FROM chat WHERE tenant_id = $1`,
+      [db.tenantId],
+    );
+    expect(chatsAfter.rows[0]!.c).toBe(chatsBefore.rows[0]!.c);
+  });
+
+  it("P1 — truly concurrent reviews of same ad+type: one wins, one already_running", async () => {
+    const adId = "100000000000003";
+    const { clientA, pidA, clientB, pidB, release } = await acquireTwoDistinctClients(
+      db.pool,
+    );
+    expect(pidA).not.toBe(pidB);
+
+    let a: Awaited<ReturnType<typeof executeAdReview>>;
+    let b: Awaited<ReturnType<typeof executeAdReview>>;
+    try {
+      const barrier = createBarrier(2);
+      [a, b] = await Promise.all([
+        (async () => {
+          await barrier.arrive();
+          return executeAdReview(clientA, {
+            tenantId: db.tenantId,
+            userId,
+            request: baseRequest({
+              adId,
+              mode: "copychief",
+              runId: uuidv7(),
+            }),
+          });
+        })(),
+        (async () => {
+          await barrier.arrive();
+          return executeAdReview(clientB, {
+            tenantId: db.tenantId,
+            userId,
+            request: baseRequest({
+              adId,
+              mode: "copychief",
+              runId: uuidv7(),
+            }),
+          });
+        })(),
+      ]);
+    } finally {
+      release();
+    }
+
+    const outcomes = [a.outcome, b.outcome].sort();
+    expect(outcomes).toEqual(["concurrency_conflict", "created"]);
+
+    const activeJobs = await db.pool.query<{ c: string }>(
+      `SELECT count(*)::text AS c FROM job
+       WHERE tenant_id = $1
+         AND family = 'copychief_review'
+         AND input->>'metaAdId' = $2
+         AND status IN ('queued', 'claimed', 'retry_scheduled', 'cancel_requested')`,
+      [db.tenantId, adId],
+    );
+    expect(activeJobs.rows[0]!.c).toBe("1");
+  });
+
+  it("P1 — snapshot data_as_of mismatch is rejected", async () => {
+    const adId = "100000000000000";
+    const snap = await db.pool.query<{ id: string; data_as_of: string }>(
+      `SELECT id, data_as_of::text FROM metric_snapshot
+       WHERE tenant_id = $1 AND subject_id = $2 AND formula_version = 'funnel_position_v1'
+         AND window_start = $3::date AND window_end = $4::date
+       ORDER BY computed_at DESC LIMIT 1`,
+      [db.tenantId, adId, windowStart, windowEnd],
+    );
+    expect(snap.rows[0]).toBeTruthy();
+
+    const result = await executeAdReview(db.pool, {
+      tenantId: db.tenantId,
+      userId,
+      request: baseRequest({
+        adId,
+        mode: "cro",
+        snapshotId: snap.rows[0]!.id,
+        analysisWindow: {
+          since: windowStart,
+          until: windowEnd,
+          label: "Last 30 days",
+          // Same window, different data stand — must not accept T1 snapshot with T2 asOf.
+          dataAsOf: "2026-07-21T12:00:00.000Z",
+        },
+      }),
+    });
+    expect(result.outcome).toBe("snapshot_mismatch");
+  });
+
+  it("P1 — ad from another account without snapshot is not_found", async () => {
+    const otherAccount = await seedMetaAccount(db.pool, db.tenantId);
+    const otherSync = await seedSucceededSync(db.pool, {
+      tenantId: db.tenantId,
+      accountId: otherAccount.accountId,
+      windowStart: "2026-01-01",
+      windowEnd,
+      finishedAt,
+    });
+    const foreignAdId = "900000000000099";
+    await seedMetaAd(db.pool, {
+      tenantId: db.tenantId,
+      accountId: otherAccount.accountId,
+      syncRunId: otherSync,
+      metaAdId: foreignAdId,
+      name: "Foreign account ad",
+      observedAt: finishedAt,
+    });
+
+    const result = await executeAdReview(db.pool, {
+      tenantId: db.tenantId,
+      userId,
+      request: baseRequest({
+        adId: foreignAdId,
+        // account.accountId is A; ad lives on otherAccount B — no snapshotId.
+        mode: "cro",
+      }),
+    });
+    expect(result.outcome).toBe("not_found");
+
+    const maps = await db.pool.query<{ c: string }>(
+      `SELECT count(*)::text AS c FROM creative_strategy_run
+       WHERE tenant_id = $1 AND meta_ad_id = $2`,
+      [db.tenantId, foreignAdId],
+    );
+    expect(maps.rows[0]!.c).toBe("0");
+  });
+
+  it("P1 — review request is stored as code+params, not English prose", async () => {
+    const adId = "100000000000000";
+    const created = await executeAdReview(db.pool, {
+      tenantId: db.tenantId,
+      userId,
+      request: baseRequest({ adId, mode: "cro", runId: uuidv7() }),
+    });
+    expect(created.outcome).toBe("created");
+    if (created.outcome !== "created") return;
+
+    expect(created.titleCode).toBe("strategist.cro_review_title");
+    expect(created.titleParams.adName).toContain("Fixture Ad");
+
+    const message = await db.pool.query<{
+      content: string;
+      content_code: string | null;
+      content_params: { adName?: string; since?: string; until?: string } | null;
+    }>(
+      `SELECT content, content_code, content_params
+       FROM message WHERE id = $1`,
+      // userMessageId was generated inside baseRequest — load via chat
+      [
+        (
+          await db.pool.query<{ id: string }>(
+            `SELECT id FROM message
+             WHERE chat_id = $1 AND role = 'user' LIMIT 1`,
+            [created.chatId],
+          )
+        ).rows[0]!.id,
+      ],
+    );
+    expect(message.rows[0]!.content).toBe("");
+    expect(message.rows[0]!.content_code).toBe("strategist.cro_review_request");
+    expect(message.rows[0]!.content_params?.adName).toBeTruthy();
+    expect(message.rows[0]!.content).not.toMatch(/Run a CRO/i);
+
+    const chat = await db.pool.query<{
+      name: string;
+      name_code: string | null;
+      name_params: { adName?: string } | null;
+    }>(`SELECT name, name_code, name_params FROM chat WHERE id = $1`, [created.chatId]);
+    expect(chat.rows[0]!.name_code).toBe("strategist.cro_review_title");
+    expect(chat.rows[0]!.name).toBe("");
   });
 
   it("snapshot_mismatch — snapshot from another ad is rejected", async () => {

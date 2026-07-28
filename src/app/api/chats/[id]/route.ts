@@ -12,13 +12,13 @@ export async function GET(
   const { id } = await context.params;
   const pool = getPool();
   const chat = await pool.query(
-    `SELECT id, project_id, name, summary, archived, pinned, awaiting_clarify
+    `SELECT id, project_id, name, name_code, name_params, summary, archived, pinned, awaiting_clarify
      FROM chat WHERE id = $1 AND tenant_id = $2`,
     [id, auth.session.tenantId],
   );
   if (!chat.rows[0]) return errorResponse(404, "not_found");
   const messages = await pool.query(
-    `SELECT id, role, content, tool_invocations, render_artifacts, run_id, created_at
+    `SELECT id, role, content, content_code, content_params, tool_invocations, render_artifacts, run_id, created_at
      FROM message WHERE chat_id = $1 AND tenant_id = $2
      ORDER BY created_at ASC`,
     [id, auth.session.tenantId],

@@ -58,8 +58,16 @@ export const MODE_TO_PLAYBOOK = {
   variations: "variations",
 } as const;
 
-export const MODE_TITLE_PREFIX = {
-  copychief: "CopyChief Review",
-  cro: "CRO Funnel Review",
-  variations: "Variations",
+/** i18n keys for system-generated chat titles (UI translates; no prose here). */
+export const MODE_TITLE_CODE = {
+  copychief: "strategist.copychief_review_title",
+  cro: "strategist.cro_review_title",
+  variations: "strategist.variations_title",
+} as const;
+
+/** i18n keys for the visible user message that starts a review. */
+export const MODE_REQUEST_CODE = {
+  copychief: "strategist.copychief_review_request",
+  cro: "strategist.cro_review_request",
+  variations: "strategist.variations_request",
 } as const;

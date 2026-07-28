@@ -89,7 +89,13 @@
       "croPreview": "Funnel-Review (Vorschau)",
       "cro": "Funnel-Review",
       "variations": "Varianten"
-    }
+    },
+    "copychief_review_title": "Copy-Review · {adName}",
+    "cro_review_title": "Funnel-Review · {adName}",
+    "variations_title": "Varianten · {adName}",
+    "copychief_review_request": "Copy-Review für Anzeige {adName} vom {since} bis {until} starten.",
+    "cro_review_request": "Funnel-Review für Anzeige {adName} vom {since} bis {until} starten.",
+    "variations_request": "Varianten für Anzeige {adName} auf Basis von {since} bis {until} vorschlagen."
   },
   "progress": {
     "echo_step": "Schritt {step} von {total}",

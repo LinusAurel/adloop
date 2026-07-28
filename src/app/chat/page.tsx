@@ -14,12 +14,16 @@ interface Chat {
   id: string;
   project_id: string | null;
   name: string;
+  name_code: string | null;
+  name_params: Record<string, string> | null;
 }
 
 interface ChatMessage {
   id: string;
   role: string;
   content: string;
+  content_code: string | null;
+  content_params: Record<string, string> | null;
   render_artifacts: unknown;
   run_id: string | null;
 }
@@ -193,11 +197,21 @@ export default function ChatPage() {
       setDraft("");
       setMessages((prev) => [
         ...prev,
-        { id: userMessageId, role: "user", content: message, render_artifacts: null, run_id: runId },
+        {
+          id: userMessageId,
+          role: "user",
+          content: message,
+          content_code: null,
+          content_params: null,
+          render_artifacts: null,
+          run_id: runId,
+        },
         {
           id: assistantMessageId,
           role: "assistant",
           content: "",
+          content_code: null,
+          content_params: null,
           render_artifacts: null,
           run_id: runId,
         },
@@ -280,7 +294,9 @@ export default function ChatPage() {
                       cursor: "pointer",
                     }}
                   >
-                    {c.name || c.id.slice(0, 8)}
+                    {c.name_code
+                      ? t(c.name_code as never, (c.name_params ?? {}) as never)
+                      : c.name || c.id.slice(0, 8)}
                   </button>
                 ))}
             </div>
@@ -318,7 +334,9 @@ export default function ChatPage() {
                 <div style={{ whiteSpace: "pre-wrap" }}>
                   {m.role === "assistant" && !m.content && streaming
                     ? streaming
-                    : m.content}
+                    : m.content_code
+                      ? t(m.content_code as never, (m.content_params ?? {}) as never)
+                      : m.content}
                 </div>
               </div>
             ))}

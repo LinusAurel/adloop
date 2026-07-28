@@ -36,7 +36,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     if (preview.outcome === "snapshot_mismatch") {
       return errorResponse(409, "snapshot_mismatch");
     }
-    if (preview.outcome === "account_not_found") {
+    if (preview.outcome === "not_found") {
       return errorResponse(404, "not_found");
     }
     return NextResponse.json(preview);
@@ -58,7 +58,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           chatId: result.chatId,
           creativeStrategyRunId: result.creativeStrategyRunId,
           ...(result.outcome === "created"
-            ? { runType: result.runType, title: result.title }
+            ? {
+                runType: result.runType,
+                titleCode: result.titleCode,
+                titleParams: result.titleParams,
+              }
             : {}),
         },
         { status: 201 },
@@ -72,7 +76,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       });
     case "snapshot_mismatch":
       return errorResponse(409, "snapshot_mismatch");
-    case "account_not_found":
+    case "not_found":
       return errorResponse(404, "not_found");
   }
 }

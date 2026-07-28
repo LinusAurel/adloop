@@ -13,6 +13,7 @@ import {
   triggerMetaSyncTool,
 } from "./builtins";
 import { generateImagesTool } from "./generate-images";
+import { publishAdsTool } from "./publish-ads";
 
 export function ensureToolsBootstrapped(): void {
   const tools: AnyToolDefinition[] = [
@@ -23,6 +24,7 @@ export function ensureToolsBootstrapped(): void {
     getJobStatusTool as AnyToolDefinition,
     getJobResultTool as AnyToolDefinition,
     generateImagesTool as AnyToolDefinition,
+    publishAdsTool as AnyToolDefinition,
   ];
   for (const tool of tools) {
     if (!isToolRegistered(tool.name)) {

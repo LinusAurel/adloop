@@ -31,6 +31,8 @@ const ALLOWED_FILES = new Set([
   // (tool_approval.run_id FK); the job itself is created via createRun.
   "src/app/api/workshop/generate/route.ts",
   "src/app/api/creatives/variants/route.ts",
+  // Etappe 7: publish creates a shell run for Freigabe; job via createRun.
+  "src/app/api/meta/publish/route.ts",
 ]);
 const ALLOWED_DIR_PREFIX = "src/queue/sql/";
 

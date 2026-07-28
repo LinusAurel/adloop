@@ -306,6 +306,40 @@ describe("insight observation read contract", () => {
     expect(current.rows.map((row) => Number(row.spend))).toEqual([10]);
   });
 
+  it("labels only the deduplicated combined-attribution value", async () => {
+    const syncRunId = uuidv7();
+    await executeInsightSync(options(syncRunId, graphFrom([firstPageOnly])));
+
+    const action = await db.pool.query<{
+      attribution_spec: string[];
+      count: string;
+      value: string;
+    }>(
+      `SELECT attribution_spec, count::text, value::text
+       FROM insight_action_daily_current
+       WHERE tenant_id = $1
+         AND meta_ad_id = '000000000000000001'
+         AND action_type = 'offsite_conversion.fb_pixel_lead'`,
+      [db.tenantId],
+    );
+    expect(action.rows).toEqual([
+      {
+        attribution_spec: ["1d_view", "7d_click"],
+        count: "4",
+        value: "400",
+      },
+    ]);
+  });
+
+  it("rejects an action value from a different ad-set attribution setting", async () => {
+    const mismatched = structuredClone(firstPageOnly);
+    mismatched.data[0]!.attribution_setting = "1d_view_1d_click";
+
+    await expect(
+      executeInsightSync(options(uuidv7(), graphFrom([mismatched]))),
+    ).rejects.toThrow("Meta response failed schema validation");
+  });
+
   it("stores exact comparison and cumulative windows and derives net-new reach", async () => {
     const syncRunId = uuidv7();
     await executeInsightSync(options(syncRunId, graphFrom([firstPageOnly])));
@@ -391,7 +425,7 @@ describe("insight observation read contract", () => {
          AND action_type = 'offsite_conversion.fb_pixel_lead'`,
       [db.tenantId, cutoff.rows[0]!.finished_at],
     );
-    expect(historicalActions.rows).toEqual([{ count: "3" }]);
+    expect(historicalActions.rows).toEqual([{ count: "4" }]);
 
     const historicalWindows = await db.pool.query<{ count: string }>(
       `SELECT count(*)::text AS count

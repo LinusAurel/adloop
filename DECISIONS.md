@@ -317,3 +317,11 @@ What changed, and why:
   of ad creation and its optional schedule start. Older ads keep exact
   30/90-day windows but deliberately produce `cumulative_reach_missing`
   instead of a fabricated lifetime baseline.
+- **`AdsActionStats.value` is stored for `["1d_view","7d_click"]` only when
+  the same row reports `attribution_setting = "1d_view_7d_click"`.** Meta's
+  reference defines the per-window keys separately and, since June 2025,
+  defines `value` by the ad set's attribution setting. The live account uses
+  the combined setting, which supplies the required deduplicated total. The
+  sync requests and validates that setting; it never adds `1d_view` and
+  `7d_click`, and rejects a differently configured ad instead of attaching
+  the wrong label.

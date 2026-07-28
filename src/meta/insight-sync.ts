@@ -23,6 +23,8 @@ const ActionValueSchema = z
   .object({
     action_type: z.string().min(1),
     value: NumericString,
+    "1d_view": NumericString.optional(),
+    "7d_click": NumericString.optional(),
   })
   .passthrough();
 
@@ -43,6 +45,7 @@ export const MetaInsightRowSchema = z.object({
   inline_link_clicks: NumericString,
   reach: NumericString,
   frequency: NumericString,
+  attribution_setting: z.literal("1d_view_7d_click"),
   actions: z.array(ActionValueSchema).optional(),
   action_values: z.array(ActionValueSchema).optional(),
   video_play_actions: z.array(VideoActionSchema).optional(),
@@ -125,6 +128,7 @@ export const META_INSIGHT_FIELDS = [
   "inline_link_clicks",
   "reach",
   "frequency",
+  "attribution_setting",
   "actions",
   "action_values",
   "video_play_actions",
@@ -153,6 +157,7 @@ const QUERY_CONTRACT = {
     timeIncrement: 1,
     fields: META_INSIGHT_FIELDS,
     attributionSpec: ATTRIBUTION_SPEC,
+    attributionSetting: "1d_view_7d_click",
   },
   windows: {
     fields: META_WINDOW_FIELDS,
@@ -250,6 +255,10 @@ interface NormalizedAction {
 }
 
 function normalizedActions(row: MetaInsightRow): NormalizedAction[] {
+  // Meta's `value` belongs to the row's ad-set attribution setting, not to
+  // `action_attribution_windows`. MetaInsightRowSchema only admits the exact
+  // combined setting represented by ATTRIBUTION_SPEC, so this value is
+  // deduplicated and correctly labelled. Never sum the per-window keys.
   const result = new Map<string, NormalizedAction>();
   for (const action of row.actions ?? []) {
     result.set(action.action_type, {

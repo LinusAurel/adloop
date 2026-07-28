@@ -9,7 +9,8 @@
       "clicks": "120",
       "inline_link_clicks": "100",
       "reach": "2200",
-      "frequency": "1.36"
+      "frequency": "1.36",
+      "attribution_setting": "1d_view_7d_click"
     }
   ]
 }

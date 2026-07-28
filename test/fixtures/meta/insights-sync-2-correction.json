@@ -10,8 +10,14 @@
       "inline_link_clicks": "42",
       "reach": "820",
       "frequency": "1.28",
+      "attribution_setting": "1d_view_7d_click",
       "actions": [
-        { "action_type": "landing_page_view", "value": "31" }
+        {
+          "action_type": "landing_page_view",
+          "value": "31",
+          "1d_view": "11",
+          "7d_click": "26"
+        }
       ]
     }
   ]

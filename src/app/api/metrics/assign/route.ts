@@ -39,14 +39,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     if (error instanceof MetricConfigError) {
       return errorResponse(404, error.code);
     }
-    if (
-      typeof error === "object" &&
-      error !== null &&
-      "code" in error &&
-      error.code === "23P01"
-    ) {
-      return errorResponse(409, "assignment_overlap");
-    }
     throw error;
   }
 }

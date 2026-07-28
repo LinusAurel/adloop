@@ -16,7 +16,10 @@ export type GateReason =
   | "attribution_not_synced"
   | "window_too_short"
   | "no_spend"
-  | "currency_mismatch";
+  | "currency_mismatch"
+  | "window_incomplete"
+  | "no_snapshot"
+  | "missing_observations";
 
 export type GateStatus = "ok" | "insufficient_data";
 

@@ -8,6 +8,8 @@ import { metricSnapshotComputeFamily } from "./families/metric-snapshot-compute"
  * createRun() looks families up to validate input at submission time. Only
  * production families here: `always_fails` / `sleeps_forever` are test-only
  * and must never be reachable from the public API (see families/*.ts).
+ * `metric_snapshot_compute` is registered so the sync handler can enqueue it,
+ * but POST /api/runs rejects that family as internal-only.
  *
  * Guarded by isFamilyRegistered instead of a module-level call because
  * Next.js can reload route modules (dev mode, or repeated cold invocations

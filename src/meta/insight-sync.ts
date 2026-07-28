@@ -117,6 +117,19 @@ const MetaWindowPageSchema = z.object({
   data: z.array(MetaWindowRowSchema).max(1),
 });
 
+const MetaAccountWindowRowSchema = z.object({
+  date_start: z.string().date(),
+  date_stop: z.string().date(),
+  reach: NumericString,
+  frequency: NumericString,
+  impressions: NumericString,
+  spend: NumericString,
+});
+
+const MetaAccountWindowPageSchema = z.object({
+  data: z.array(MetaAccountWindowRowSchema).max(1),
+});
+
 const ATTRIBUTION_SPEC = ["1d_view", "7d_click"] as const;
 export const META_INSIGHT_FIELDS = [
   "ad_id",
@@ -167,6 +180,13 @@ const QUERY_CONTRACT = {
     includeHalves: true,
     windowSplit: 0.5,
     cumulativeFromDeliveryStart: true,
+  },
+  /** Account-level reach/frequency — never derived by summing ads. */
+  accountWindows: {
+    level: "account",
+    fields: ["reach", "frequency", "impressions", "spend"] as const,
+    periods: [30, 90],
+    includePrevious: true,
   },
 };
 
@@ -550,13 +570,12 @@ async function writeWindowObservation(
        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, clock_timestamp()
      )
      ON CONFLICT (
-       tenant_id, meta_ad_id, window_start, window_end, sync_run_id
+       tenant_id, meta_ad_id, window_start, window_end, is_cumulative, sync_run_id
      ) DO UPDATE SET
        reach = EXCLUDED.reach,
        frequency = EXCLUDED.frequency,
        impressions = EXCLUDED.impressions,
        spend = EXCLUDED.spend,
-       is_cumulative = EXCLUDED.is_cumulative,
        observed_at = EXCLUDED.observed_at`,
     [
       options.tenantId,
@@ -613,6 +632,104 @@ async function syncInsightWindows(
     deliveryHistory,
     reports,
   };
+}
+
+async function fetchAccountWindowObservation(
+  options: ExecuteInsightSyncOptions,
+  window: SyncWindow,
+): Promise<{
+  observation: {
+    start: string;
+    end: string;
+    reach: number;
+    frequency: number;
+    impressions: number;
+    spend: number;
+  };
+  raw: unknown;
+}> {
+  const params = new URLSearchParams({
+    fields: QUERY_CONTRACT.accountWindows.fields.join(","),
+    time_increment: "all_days",
+    time_range: JSON.stringify({ since: window.start, until: window.end }),
+    limit: "1",
+  });
+  const response = await options.graph.request(
+    `/${options.externalAdAccountId}/insights?${params.toString()}`,
+    MetaAccountWindowPageSchema,
+    { signal: options.signal },
+  );
+  const row = response.data.data[0];
+  if (row && (row.date_start !== window.start || row.date_stop !== window.end)) {
+    throw new Error("meta_account_window_range_mismatch");
+  }
+  return {
+    observation: {
+      ...window,
+      reach: row?.reach ?? 0,
+      frequency: row?.frequency ?? 0,
+      impressions: row?.impressions ?? 0,
+      spend: row?.spend ?? 0,
+    },
+    raw: response.raw,
+  };
+}
+
+async function writeAccountWindowObservation(
+  client: PoolClient,
+  options: ExecuteInsightSyncOptions,
+  observation: {
+    start: string;
+    end: string;
+    reach: number;
+    frequency: number;
+    impressions: number;
+    spend: number;
+  },
+): Promise<void> {
+  await client.query(
+    `INSERT INTO insight_account_window (
+       tenant_id, meta_ad_account_id, window_start, window_end,
+       reach, frequency, impressions, spend, sync_run_id, observed_at
+     ) VALUES (
+       $1, $2, $3, $4, $5, $6, $7, $8, $9, clock_timestamp()
+     )
+     ON CONFLICT (
+       tenant_id, meta_ad_account_id, window_start, window_end, sync_run_id
+     ) DO UPDATE SET
+       reach = EXCLUDED.reach,
+       frequency = EXCLUDED.frequency,
+       impressions = EXCLUDED.impressions,
+       spend = EXCLUDED.spend,
+       observed_at = EXCLUDED.observed_at`,
+    [
+      options.tenantId,
+      options.internalAdAccountId,
+      observation.start,
+      observation.end,
+      observation.reach,
+      observation.frequency,
+      observation.impressions,
+      observation.spend,
+      options.syncRunId,
+    ],
+  );
+}
+
+/** Dedicated account-level Meta windows — reach/frequency are non-additive. */
+async function syncAccountWindows(
+  options: ExecuteInsightSyncOptions,
+): Promise<unknown> {
+  const reports: unknown[] = [];
+  for (const window of insightComparisonWindows(options.window.end)) {
+    const result = await fetchAccountWindowObservation(options, window);
+    const written = await options.withLease((client) =>
+      writeAccountWindowObservation(client, options, result.observation),
+    );
+    if (!written.acquired) throw new JobCancelledError();
+    reports.push({ kind: "account_comparison", window, response: result.raw });
+  }
+  return { reports };
 }
 
 async function writeInsightRow(
@@ -690,14 +807,12 @@ async function writeInsightRow(
          AND a.meta_ad_id = $2
          AND a.date = $3
          AND r.meta_ad_account_id = $4
-         AND r.query_signature = $5
          AND r.status = 'succeeded'`,
       [
         options.tenantId,
         row.ad_id,
         row.date_start,
         options.internalAdAccountId,
-        INSIGHT_QUERY_SIGNATURE,
       ],
     );
     const current = new Map(actions.map((action) => [action.actionType, action]));
@@ -776,22 +891,20 @@ async function reconcileMissingInsightRows(
       AND r.tenant_id = d.tenant_id
      WHERE d.tenant_id = $1
        AND r.meta_ad_account_id = $2
-       AND r.query_signature = $3
        AND r.status = 'succeeded'
-       AND d.date BETWEEN $4 AND $5
+       AND d.date BETWEEN $3 AND $4
        AND NOT EXISTS (
          SELECT 1
          FROM insight_daily current_observation
          WHERE current_observation.tenant_id = d.tenant_id
            AND current_observation.meta_ad_id = d.meta_ad_id
            AND current_observation.date = d.date
-           AND current_observation.sync_run_id = $6
+           AND current_observation.sync_run_id = $5
        )
      ORDER BY d.meta_ad_id, d.date, d.observed_at DESC`,
     [
       options.tenantId,
       options.internalAdAccountId,
-      INSIGHT_QUERY_SIGNATURE,
       options.window.start,
       options.window.end,
       options.syncRunId,
@@ -994,6 +1107,7 @@ export async function executeInsightSync(
 
     await reconcileMissingInsightRows(options);
     const windowResponses = await syncInsightWindows(options);
+    const accountWindowResponses = await syncAccountWindows(options);
     const rawPages = await options.pool.query<{ raw_response: unknown }>(
       `SELECT raw_response
        FROM insight_sync_page
@@ -1008,6 +1122,7 @@ export async function executeInsightSync(
       {
         pages: rawPages.rows.map((row) => row.raw_response),
         windows: windowResponses,
+        accountWindows: accountWindowResponses,
       },
       options.signal,
     );

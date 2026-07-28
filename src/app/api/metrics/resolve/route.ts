@@ -6,12 +6,26 @@ import { errorResponse } from "@/lib/api-error";
 import { computeCreativeStrain } from "@/metrics/creative-strain";
 import { computeFunnelPosition } from "@/metrics/funnel-position";
 import { resolveMetrics } from "@/metrics/resolve";
+import {
+  computeAndPersistSnapshots,
+  dataAsOfIsLatestSync,
+  latestSyncDataAsOf,
+  readScoreSnapshots,
+} from "@/metrics/snapshots";
+import {
+  CREATIVE_STRAIN_FORMULA_VERSION,
+  FUNNEL_POSITION_FORMULA_VERSION,
+  type FunnelBand,
+  type GateReason,
+  type GateStatus,
+} from "@/metrics/types";
 
 const QuerySchema = z.object({
   metaAdAccountId: z.string().uuid(),
   windowStart: z.string().date(),
   windowEnd: z.string().date(),
-  dataAsOf: z.string().datetime({ offset: true }).optional(),
+  // Keep as raw string — parsing through Date drops microseconds.
+  dataAsOf: z.string().min(1).optional(),
 });
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
@@ -38,9 +52,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   );
   if (ownershipError) return ownershipError;
 
-  const dataAsOf = parsed.data.dataAsOf
-    ? new Date(parsed.data.dataAsOf)
-    : new Date();
+  const latest = await latestSyncDataAsOf(
+    pool,
+    auth.session.tenantId,
+    parsed.data.metaAdAccountId,
+  );
+  const dataAsOf = parsed.data.dataAsOf ?? latest ?? new Date().toISOString();
+  const live = await dataAsOfIsLatestSync(pool, dataAsOf, latest);
 
   const resolved = await resolveMetrics({
     pool,
@@ -51,24 +69,162 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     dataAsOf,
   });
 
-  const funnel = computeFunnelPosition({
-    rows: resolved.rows,
-    metricDefinition: resolved.metricDefinition,
-    accountCurrency: resolved.accountCurrency,
-  });
+  let funnel: {
+    formulaVersion: string;
+    scoreConfigVersion: string;
+    populationSize: number | null;
+    gateStatus: GateStatus;
+    gateReasons: GateReason[];
+    minSpend: number | null;
+    accountCurrency: string;
+  };
+  let funnelByAd: Map<
+    string,
+    {
+      gateStatus: GateStatus;
+      gateReasons: GateReason[];
+      score: number | null;
+      band: FunnelBand | null;
+    }
+  >;
+  let strainByAd: Map<
+    string,
+    {
+      gateStatus: GateStatus;
+      gateReasons: GateReason[];
+      value: number | null;
+    }
+  >;
 
-  const strain = await computeCreativeStrain({
-    pool,
-    tenantId: auth.session.tenantId,
-    adAccountId: parsed.data.metaAdAccountId,
-    windowStart: parsed.data.windowStart,
-    windowEnd: parsed.data.windowEnd,
-    dataAsOf,
-    metaAdIds: resolved.rows.map((row) => row.metaAdId),
-  });
+  if (live) {
+    const funnelLive = computeFunnelPosition({
+      rows: resolved.rows,
+      metricDefinition: resolved.metricDefinition,
+      accountCurrency: resolved.accountCurrency,
+    });
+    const strainLive = await computeCreativeStrain({
+      pool,
+      tenantId: auth.session.tenantId,
+      adAccountId: parsed.data.metaAdAccountId,
+      windowStart: parsed.data.windowStart,
+      windowEnd: parsed.data.windowEnd,
+      dataAsOf,
+      metaAdIds: resolved.rows.map((row) => row.metaAdId),
+    });
+    // Latest sync: live compute and persist (append-only).
+    await computeAndPersistSnapshots({
+      pool,
+      tenantId: auth.session.tenantId,
+      adAccountId: parsed.data.metaAdAccountId,
+      windowStart: parsed.data.windowStart,
+      windowEnd: parsed.data.windowEnd,
+      dataAsOf,
+      sourceSyncRunIds: [
+        ...new Set(resolved.rows.flatMap((row) => row.syncRunIds)),
+      ],
+    });
+    funnel = {
+      formulaVersion: funnelLive.formulaVersion,
+      scoreConfigVersion: funnelLive.scoreConfigVersion,
+      populationSize: funnelLive.populationSize,
+      gateStatus: funnelLive.gateStatus,
+      gateReasons: funnelLive.gateReasons,
+      minSpend: funnelLive.minSpend,
+      accountCurrency: funnelLive.accountCurrency,
+    };
+    funnelByAd = new Map(
+      funnelLive.ads.map((ad) => [
+        ad.metaAdId,
+        {
+          gateStatus: ad.gateStatus,
+          gateReasons: ad.gateReasons,
+          score: ad.score,
+          band: ad.band,
+        },
+      ]),
+    );
+    strainByAd = new Map(
+      strainLive.ads.map((ad) => [
+        ad.metaAdId,
+        {
+          gateStatus: ad.gateStatus,
+          gateReasons: ad.gateReasons,
+          value: ad.value,
+        },
+      ]),
+    );
+  } else {
+    // Historical dataAsOf: scores are facts from snapshots, not recomputed.
+    const [funnelSnaps, strainSnaps] = await Promise.all([
+      readScoreSnapshots({
+        pool,
+        tenantId: auth.session.tenantId,
+        adAccountId: parsed.data.metaAdAccountId,
+        windowStart: parsed.data.windowStart,
+        windowEnd: parsed.data.windowEnd,
+        dataAsOf,
+        formulaVersion: FUNNEL_POSITION_FORMULA_VERSION,
+        subjectIds: resolved.rows.map((row) => row.metaAdId),
+      }),
+      readScoreSnapshots({
+        pool,
+        tenantId: auth.session.tenantId,
+        adAccountId: parsed.data.metaAdAccountId,
+        windowStart: parsed.data.windowStart,
+        windowEnd: parsed.data.windowEnd,
+        dataAsOf,
+        formulaVersion: CREATIVE_STRAIN_FORMULA_VERSION,
+        subjectIds: resolved.rows.map((row) => row.metaAdId),
+      }),
+    ]);
 
-  const strainByAd = new Map(strain.ads.map((ad) => [ad.metaAdId, ad]));
-  const funnelByAd = new Map(funnel.ads.map((ad) => [ad.metaAdId, ad]));
+    const anyFunnel = [...funnelSnaps.values()][0];
+    funnel = {
+      formulaVersion: FUNNEL_POSITION_FORMULA_VERSION,
+      scoreConfigVersion: anyFunnel?.scoreConfigVersion ?? "unknown",
+      populationSize: anyFunnel?.populationSize ?? null,
+      gateStatus: anyFunnel ? "ok" : "insufficient_data",
+      gateReasons: anyFunnel ? [] : ["no_snapshot"],
+      minSpend: null,
+      accountCurrency: resolved.accountCurrency,
+    };
+    funnelByAd = new Map();
+    strainByAd = new Map();
+    for (const row of resolved.rows) {
+      const snap = funnelSnaps.get(row.metaAdId);
+      funnelByAd.set(
+        row.metaAdId,
+        snap
+          ? {
+              gateStatus: snap.gateStatus,
+              gateReasons: snap.gateReasons,
+              score: snap.value,
+              band: (snap.band as FunnelBand | null | undefined) ?? null,
+            }
+          : {
+              gateStatus: "insufficient_data",
+              gateReasons: ["no_snapshot"],
+              score: null,
+              band: null,
+            },
+      );
+      const strain = strainSnaps.get(row.metaAdId);
+      strainByAd.set(
+        row.metaAdId,
+        strain
+          ? {
+              gateStatus: strain.gateStatus,
+              gateReasons: strain.gateReasons,
+              value: strain.value,
+            }
+          : {
+              gateStatus: "insufficient_data",
+              gateReasons: ["no_snapshot"],
+              value: null,
+            },
+      );
+    }
+  }
 
   return NextResponse.json({
     metricDefinition: resolved.metricDefinition,
@@ -77,16 +233,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     resolveGate: {
       gateStatus: resolved.gateStatus,
       gateReasons: resolved.gateReasons,
+      missingDateRange: resolved.missingDateRange,
     },
-    funnel: {
-      formulaVersion: funnel.formulaVersion,
-      scoreConfigVersion: funnel.scoreConfigVersion,
-      populationSize: funnel.populationSize,
-      gateStatus: funnel.gateStatus,
-      gateReasons: funnel.gateReasons,
-      minSpend: funnel.minSpend,
-      accountCurrency: funnel.accountCurrency,
-    },
+    dataAsOf,
+    scoresFromSnapshot: !live,
+    funnel,
     ads: resolved.rows.map((row) => {
       const funnelAd = funnelByAd.get(row.metaAdId);
       const strainAd = strainByAd.get(row.metaAdId);

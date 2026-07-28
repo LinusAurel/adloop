@@ -1,5 +1,6 @@
 import type { Pool } from "pg";
 import { creativeStrainV1 } from "./score-config/creative-strain-v1";
+import { dataAsOfCutoff, type DataAsOf } from "./data-as-of";
 import { CREATIVE_STRAIN_FORMULA_VERSION, type GateReason, type GateStatus } from "./types";
 
 export interface CreativeStrainAdScore {
@@ -51,6 +52,11 @@ function clipToUnit(value: number): number {
   return (clipped + 1) / 2;
 }
 
+/** Exported for tests that must exercise the production clipping path. */
+export function clipRelativeChange(value: number): number {
+  return clipToUnit(value);
+}
+
 interface HalfWindowRow {
   meta_ad_id: string;
   reach: string;
@@ -77,18 +83,18 @@ async function loadHalfWindows(
   tenantId: string,
   adAccountId: string,
   half: { start: string; end: string },
-  dataAsOf: Date,
+  dataAsOf: DataAsOf,
 ): Promise<Map<string, { reach: number; frequency: number; impressions: number }>> {
   const result = await pool.query<HalfWindowRow>(
     `SELECT w.meta_ad_id, w.reach::text, w.frequency::text, w.impressions::text
-     FROM insight_window_as_of($1, $2) w
+     FROM insight_window_as_of($1, $2::timestamptz) w
      JOIN insight_sync_run r
        ON r.id = w.sync_run_id AND r.tenant_id = $1
      WHERE r.meta_ad_account_id = $3
        AND w.window_start = $4::date
        AND w.window_end = $5::date
        AND w.is_cumulative = false`,
-    [tenantId, dataAsOf.toISOString(), adAccountId, half.start, half.end],
+    [tenantId, dataAsOfCutoff(dataAsOf), adAccountId, half.start, half.end],
   );
   return new Map(
     result.rows.map((row) => [
@@ -107,7 +113,7 @@ async function loadHalfCtr(
   tenantId: string,
   adAccountId: string,
   half: { start: string; end: string },
-  dataAsOf: Date,
+  dataAsOf: DataAsOf,
 ): Promise<Map<string, { ctr: number | null; deliveryDays: number }>> {
   const result = await pool.query<DailyHalfRow>(
     `SELECT
@@ -115,13 +121,13 @@ async function loadHalfCtr(
        SUM(d.clicks)::text AS clicks,
        SUM(d.impressions)::text AS impressions,
        COUNT(*) FILTER (WHERE d.impressions > 0)::text AS delivery_days
-     FROM insight_daily_as_of($1, $2) d
+     FROM insight_daily_as_of($1, $2::timestamptz) d
      JOIN insight_sync_run r
        ON r.id = d.sync_run_id AND r.tenant_id = $1
      WHERE r.meta_ad_account_id = $3
        AND d.date BETWEEN $4::date AND $5::date
      GROUP BY d.meta_ad_id`,
-    [tenantId, dataAsOf.toISOString(), adAccountId, half.start, half.end],
+    [tenantId, dataAsOfCutoff(dataAsOf), adAccountId, half.start, half.end],
   );
   return new Map(
     result.rows.map((row) => {
@@ -142,7 +148,7 @@ async function loadHalfNetNew(
   pool: Pool,
   tenantId: string,
   half: { start: string; end: string },
-  dataAsOf: Date,
+  dataAsOf: DataAsOf,
   adIds: readonly string[],
 ): Promise<Map<string, { netNewReach: number | null; reason: GateReason | null }>> {
   const result = new Map<
@@ -152,8 +158,8 @@ async function loadHalfNetNew(
   for (const metaAdId of adIds) {
     const row = await pool.query<NetNewHalfRow>(
       `SELECT status, reason, net_new_reach::text
-       FROM net_new_reach_as_of($1, $2, $3::date, $4::date, $5)`,
-      [tenantId, metaAdId, half.start, half.end, dataAsOf.toISOString()],
+       FROM net_new_reach_as_of($1, $2, $3::date, $4::date, $5::timestamptz)`,
+      [tenantId, metaAdId, half.start, half.end, dataAsOfCutoff(dataAsOf)],
     );
     const first = row.rows[0];
     result.set(metaAdId, {
@@ -176,7 +182,7 @@ export async function computeCreativeStrain(params: {
   adAccountId: string;
   windowStart: string;
   windowEnd: string;
-  dataAsOf: Date;
+  dataAsOf: DataAsOf;
   metaAdIds: readonly string[];
 }): Promise<CreativeStrainResult> {
   const { halfA, halfB } = splitWindowHalves(

@@ -17,10 +17,10 @@ import {
 import { splitWindowHalves } from "@/metrics/creative-strain";
 import { creativeStrainV1 } from "@/metrics/score-config/creative-strain-v1";
 import { FALLBACK_PURCHASE_METRIC } from "@/metrics/definition";
-import { clipRelativeForTest } from "./metrics-strain-helpers";
 import type { TestDb } from "./db-harness";
 import { startTestDb } from "./db-harness";
 import {
+  backdateMetricCreatedAt,
   buildPassingPopulation,
   seedDailyRows,
   seedFunnelPopulation,
@@ -132,19 +132,116 @@ describe("stage 3 metric model", () => {
     expect(result.reason).toBe("currency_mismatch");
   });
 
-  it("creative strain: clips extreme changes and renormalizes weights", () => {
-    expect(clipRelativeForTest(3)).toBe(1);
-    expect(clipRelativeForTest(-3)).toBe(0);
-    const available = [
-      { weight: 0.4, value: 0.5 },
-      { weight: 0.4, value: 1 },
-    ];
-    const weightSum = available.reduce((sum, part) => sum + part.weight, 0);
-    const strain =
-      100 *
-      available.reduce((sum, part) => sum + part.weight * part.value, 0) /
-      weightSum;
-    expect(strain).toBeCloseTo(75, 5);
+  it("creative strain: clips extreme changes and renormalizes weights via production path", async () => {
+    const { clipRelativeChange, computeCreativeStrain } = await import(
+      "@/metrics/creative-strain"
+    );
+    expect(clipRelativeChange(3)).toBe(1);
+    expect(clipRelativeChange(-3)).toBe(0);
+
+    const syncRunId = await seedSucceededSync(db.pool, {
+      tenantId: db.tenantId,
+      accountId: account.accountId,
+      windowStart: "2026-06-20",
+      windowEnd: "2026-07-19",
+      finishedAt: new Date("2026-07-20T12:00:00.000Z"),
+    });
+    const observedAt = new Date("2026-07-20T12:00:00.000Z");
+    // Identical CTR both halves (ctrDecay=0 → clip 0.5). Extreme frequency
+    // jump (1→5 → relative 4 → clip 1). Half-A net-new share is 0 so
+    // reach-decay is null and remaining weights renormalize to 75.
+    for (const date of [
+      "2026-06-20",
+      "2026-06-21",
+      "2026-06-22",
+      "2026-07-05",
+      "2026-07-06",
+      "2026-07-07",
+    ]) {
+      await seedDailyRows(db.pool, {
+        tenantId: db.tenantId,
+        syncRunId,
+        observedAt,
+        rows: [
+          {
+            metaAdId: "strain-clip",
+            date,
+            spend: 20,
+            impressions: 1000,
+            clicks: 50,
+          },
+        ],
+      });
+    }
+    await seedWindow(db.pool, {
+      tenantId: db.tenantId,
+      syncRunId,
+      metaAdId: "strain-clip",
+      windowStart: "2026-06-20",
+      windowEnd: "2026-07-04",
+      reach: 1000,
+      frequency: 1,
+      observedAt,
+    });
+    await seedWindow(db.pool, {
+      tenantId: db.tenantId,
+      syncRunId,
+      metaAdId: "strain-clip",
+      windowStart: "2026-07-05",
+      windowEnd: "2026-07-19",
+      reach: 1000,
+      frequency: 5,
+      observedAt,
+    });
+    // Cumulative: half A net-new = 0; half B has positive net-new.
+    await seedWindow(db.pool, {
+      tenantId: db.tenantId,
+      syncRunId,
+      metaAdId: "strain-clip",
+      windowStart: "2026-01-01",
+      windowEnd: "2026-06-19",
+      reach: 4000,
+      frequency: 1.5,
+      isCumulative: true,
+      observedAt,
+    });
+    await seedWindow(db.pool, {
+      tenantId: db.tenantId,
+      syncRunId,
+      metaAdId: "strain-clip",
+      windowStart: "2026-01-01",
+      windowEnd: "2026-07-04",
+      reach: 4000, // net-new half A = 0
+      frequency: 1.6,
+      isCumulative: true,
+      observedAt,
+    });
+    await seedWindow(db.pool, {
+      tenantId: db.tenantId,
+      syncRunId,
+      metaAdId: "strain-clip",
+      windowStart: "2026-01-01",
+      windowEnd: "2026-07-19",
+      reach: 4500,
+      frequency: 2,
+      isCumulative: true,
+      observedAt,
+    });
+
+    const result = await computeCreativeStrain({
+      pool: db.pool,
+      tenantId: db.tenantId,
+      adAccountId: account.accountId,
+      windowStart: "2026-06-20",
+      windowEnd: "2026-07-19",
+      dataAsOf: "2026-07-20T12:00:00.000Z",
+      metaAdIds: ["strain-clip"],
+    });
+    expect(result.ads[0]?.gateStatus).toBe("ok");
+    expect(result.ads[0]?.components.frequencyTrend).toBe(4);
+    expect(result.ads[0]?.components.ctrDecay).toBeCloseTo(0, 10);
+    expect(result.ads[0]?.components.netNewReachDecay).toBeNull();
+    expect(result.ads[0]?.value).toBeCloseTo(75, 5);
   });
 
   it("creative strain: half-window split is stable", () => {
@@ -282,6 +379,11 @@ describe("stage 3 metric model", () => {
       conversionMetricId: metric.id,
       effectiveFrom: "2026-01-01T00:00:00.000Z",
     });
+    await backdateMetricCreatedAt(db.pool, {
+      metricIds: [metric.id],
+      metaAdAccountId: account.accountId,
+      createdAt: "2026-01-01T00:00:00.000Z",
+    });
 
     const resolved = await resolveMetrics({
       pool: db.pool,
@@ -325,6 +427,11 @@ describe("stage 3 metric model", () => {
       conversionMetricId: purchase.id,
       effectiveFrom: "2026-01-01T00:00:00.000Z",
     });
+    await backdateMetricCreatedAt(db.pool, {
+      metricIds: [purchase.id],
+      metaAdAccountId: account.accountId,
+      createdAt: "2026-01-01T00:00:00.000Z",
+    });
 
     const beforeSwitch = await resolveMetrics({
       pool: db.pool,
@@ -356,6 +463,11 @@ describe("stage 3 metric model", () => {
       metaAdAccountId: account.accountId,
       conversionMetricId: lead.id,
       effectiveFrom: switchAt,
+    });
+    await backdateMetricCreatedAt(db.pool, {
+      metricIds: [lead.id],
+      metaAdAccountId: account.accountId,
+      createdAt: switchAt,
     });
 
     // Raw action rows unchanged.
@@ -481,7 +593,7 @@ describe("stage 3 metric model", () => {
     const syncRunId = await seedSucceededSync(db.pool, {
       tenantId: db.tenantId,
       accountId: account.accountId,
-      windowStart: "2026-06-20",
+      windowStart: "2026-07-19",
       windowEnd: "2026-07-19",
       finishedAt: new Date("2026-07-10T12:00:00.000Z"),
     });
@@ -510,7 +622,7 @@ describe("stage 3 metric model", () => {
       tenantId: db.tenantId,
       syncRunId,
       metaAdId: "9001",
-      windowStart: "2026-06-20",
+      windowStart: "2026-07-19",
       windowEnd: "2026-07-19",
       reach: 1000,
       frequency: 1.5,
@@ -534,12 +646,17 @@ describe("stage 3 metric model", () => {
       conversionMetricId: metric.id,
       effectiveFrom: "2026-01-01T00:00:00.000Z",
     });
+    await backdateMetricCreatedAt(db.pool, {
+      metricIds: [metric.id],
+      metaAdAccountId: account.accountId,
+      createdAt: "2026-01-01T00:00:00.000Z",
+    });
 
     const resolved = await resolveMetrics({
       pool: db.pool,
       tenantId: db.tenantId,
       adAccountId: account.accountId,
-      windowStart: "2026-06-20",
+      windowStart: "2026-07-19",
       windowEnd: "2026-07-19",
       dataAsOf: new Date("2026-07-21T00:00:00.000Z"),
     });
@@ -603,6 +720,11 @@ describe("stage 3 metric model", () => {
       metaAdAccountId: account.accountId,
       conversionMetricId: metric.id,
       effectiveFrom: "2026-01-01T00:00:00.000Z",
+    });
+    await backdateMetricCreatedAt(db.pool, {
+      metricIds: [metric.id],
+      metaAdAccountId: account.accountId,
+      createdAt: "2026-01-01T00:00:00.000Z",
     });
     const resolved = await resolveMetrics({
       pool: db.pool,
@@ -775,6 +897,8 @@ function syntheticPopulation(
         reason: "value_source_none",
       },
       syncRunIds: [uuidv7()],
+      windowComplete: true,
+      missingDateRange: null,
     };
   });
 }

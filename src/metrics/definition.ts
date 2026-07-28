@@ -53,6 +53,16 @@ export const CreateConversionMetricSchema = z
     effectiveFrom: z.string().datetime({ offset: true }).optional(),
   })
   .superRefine((value, ctx) => {
+    if (
+      new Set(value.numeratorActionTypes).size !==
+      value.numeratorActionTypes.length
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "duplicate_action_types",
+        path: ["numeratorActionTypes"],
+      });
+    }
     if (value.numeratorAggregation === "sum_disjoint") {
       try {
         assertSumDisjointAllowed(value.numeratorActionTypes);

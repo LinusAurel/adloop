@@ -57,6 +57,9 @@ function adGateReasons(
   accountCurrency: string,
 ): GateReason[] {
   const reasons: GateReason[] = [];
+  if (!row.windowComplete) {
+    reasons.push("window_incomplete");
+  }
   if (!row.windowSynced || row.reach === null) {
     reasons.push("window_not_synced");
   }

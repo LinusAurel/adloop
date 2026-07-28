@@ -30,11 +30,11 @@ export async function seedMetaAccount(
        id, tenant_id, meta_user_id, token_encrypted, token_expires_at,
        scopes, status
      ) VALUES (
-       $1, $2, '000000000000000', 'encrypted-fixture',
+       $1, $2, $3, 'encrypted-fixture',
        now() + interval '60 days',
        ARRAY['ads_read'], 'ready'
      )`,
-    [connectionId, tenantId],
+    [connectionId, tenantId, `user-${connectionId.replace(/-/g, "").slice(0, 15)}`],
   );
   await pool.query(
     `INSERT INTO meta_ad_account (
@@ -42,10 +42,17 @@ export async function seedMetaAccount(
        name, currency, timezone_name, timezone_offset_hours,
        account_status, selected, readiness
      ) VALUES (
-       $1, $2, $3, $4, 'act_000000000000000', 'Synthetic account', $5,
+       $1, $2, $3, $4, $5, 'Synthetic account', $6,
        'Europe/Berlin', 2, 1, true, '{}'::jsonb
      )`,
-    [accountId, tenantId, connectionId, advertiserId, currency],
+    [
+      accountId,
+      tenantId,
+      connectionId,
+      advertiserId,
+      `act_${accountId.replace(/-/g, "").slice(0, 15)}`,
+      currency,
+    ],
   );
   return { tenantId, advertiserId, connectionId, accountId, currency };
 }
@@ -256,16 +263,23 @@ export async function seedFunnelPopulation(
   observedAt = new Date("2026-07-10T12:00:00.000Z"),
 ): Promise<void> {
   const { windowStart, windowEnd, ads } = population;
+  const start = new Date(`${windowStart}T00:00:00.000Z`);
+  const end = new Date(`${windowEnd}T00:00:00.000Z`);
+  const dayCount =
+    Math.round((end.getTime() - start.getTime()) / 86_400_000) + 1;
+
   for (const ad of ads) {
-    // One aggregated daily row covering the window (summed by resolve).
-    await seedDailyRows(pool, {
-      tenantId: account.tenantId,
-      syncRunId,
-      observedAt,
-      rows: [
-        {
+    // Gapless daily coverage: zero rows for every day, totals on windowEnd so
+    // window sums stay equal to the designed population values.
+    const dailyRows: SeedAdDay[] = [];
+    for (let offset = 0; offset < dayCount; offset += 1) {
+      const day = new Date(start);
+      day.setUTCDate(day.getUTCDate() + offset);
+      const date = day.toISOString().slice(0, 10);
+      if (date === windowEnd) {
+        dailyRows.push({
           metaAdId: ad.metaAdId,
-          date: windowEnd,
+          date,
           spend: ad.spend,
           impressions: ad.impressions,
           clicks: ad.linkClicks + 10,
@@ -280,8 +294,26 @@ export async function seedFunnelPopulation(
               value: ad.value,
             },
           ],
-        },
-      ],
+        });
+      } else {
+        dailyRows.push({
+          metaAdId: ad.metaAdId,
+          date,
+          spend: 0,
+          impressions: 0,
+          clicks: 0,
+          linkClicks: 0,
+          landingPageViews: 0,
+          reach: 0,
+          frequency: 0,
+        });
+      }
+    }
+    await seedDailyRows(pool, {
+      tenantId: account.tenantId,
+      syncRunId,
+      observedAt,
+      rows: dailyRows,
     });
     await seedWindow(pool, {
       tenantId: account.tenantId,
@@ -321,5 +353,66 @@ export async function seedFunnelPopulation(
       isCumulative: true,
       observedAt,
     });
+  }
+}
+
+export async function seedAccountWindow(
+  pool: Pool,
+  params: {
+    tenantId: string;
+    accountId: string;
+    syncRunId: string;
+    windowStart: string;
+    windowEnd: string;
+    reach: number;
+    frequency: number;
+    impressions?: number;
+    spend?: number;
+    observedAt?: Date;
+  },
+): Promise<void> {
+  await pool.query(
+    `INSERT INTO insight_account_window (
+       tenant_id, meta_ad_account_id, window_start, window_end,
+       reach, frequency, impressions, spend, sync_run_id, observed_at
+     ) VALUES (
+       $1, $2, $3::date, $4::date, $5, $6, $7, $8, $9, $10
+     )`,
+    [
+      params.tenantId,
+      params.accountId,
+      params.windowStart,
+      params.windowEnd,
+      params.reach,
+      params.frequency,
+      params.impressions ?? 0,
+      params.spend ?? 0,
+      params.syncRunId,
+      (params.observedAt ?? new Date("2026-07-10T12:00:00.000Z")).toISOString(),
+    ],
+  );
+}
+
+/** Make metric/assignment rows known at a historical dataAsOf. */
+export async function backdateMetricCreatedAt(
+  pool: Pool,
+  params: {
+    metricIds: string[];
+    metaAdAccountId?: string;
+    createdAt: string;
+  },
+): Promise<void> {
+  await pool.query(
+    `UPDATE conversion_metric SET created_at = $1::timestamptz WHERE id = ANY($2::uuid[])`,
+    [params.createdAt, params.metricIds],
+  );
+  if (params.metaAdAccountId) {
+    await pool.query(
+      `UPDATE ad_account_metric_assignment
+       SET created_at = $1::timestamptz
+       WHERE meta_ad_account_id = $2
+         AND conversion_metric_id = ANY($3::uuid[])`,
+      [params.createdAt, params.metaAdAccountId, params.metricIds],
+    );
   }
 }

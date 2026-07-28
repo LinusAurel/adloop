@@ -5,6 +5,13 @@ import {
   type MetricDefinitionInfo,
   type StoredMetricRow,
 } from "./definition";
+import {
+  dataAsOfCutoff,
+  eachDateInclusive,
+  firstMissingDateRange,
+  type DataAsOf,
+  type MissingDateRange,
+} from "./data-as-of";
 import { aggregateNumerator, type ActionObservation } from "./numerator";
 import {
   computeExpectedValueRoas,
@@ -21,7 +28,7 @@ export interface ResolveMetricsParams {
   adAccountId: string;
   windowStart: string;
   windowEnd: string;
-  dataAsOf: Date;
+  dataAsOf: DataAsOf;
 }
 
 export interface PerAdBaseMetrics {
@@ -47,6 +54,9 @@ export interface PerAdBaseMetrics {
   expectedValueRoas: RoasResult;
   realizedValueRoas: RoasResult;
   syncRunIds: string[];
+  /** Per-ad day coverage for the requested window. */
+  windowComplete: boolean;
+  missingDateRange: MissingDateRange | null;
 }
 
 export interface AccountTotals {
@@ -55,10 +65,12 @@ export interface AccountTotals {
   clicks: number;
   linkClicks: number;
   landingPageViews: number;
-  /** Not derived from ad-level reach — account reach needs its own Meta query. */
-  reach: null;
-  frequency: null;
+  /** From insight_account_window — never summed from ads. */
+  reach: number | null;
+  frequency: number | null;
   numerator: number | null;
+  /** Set when numerator is null because at least one ad lacks observations. */
+  numeratorReason: GateReason | null;
   denominator: number | null;
   cvr: number | null;
   cpa: number | null;
@@ -74,6 +86,8 @@ export interface ResolveMetricsResult {
   accountCurrency: string;
   gateStatus: GateStatus;
   gateReasons: GateReason[];
+  /** Present when gateReasons includes window_incomplete. */
+  missingDateRange: MissingDateRange | null;
 }
 
 interface DailyAggRow {
@@ -84,6 +98,11 @@ interface DailyAggRow {
   link_clicks: string;
   landing_page_views: string;
   sync_run_ids: string[];
+}
+
+interface DailyDateRow {
+  meta_ad_id: string;
+  date: string;
 }
 
 interface WindowRow {
@@ -108,6 +127,11 @@ interface NetNewRow {
   net_new_reach: string | null;
 }
 
+interface AccountWindowRow {
+  reach: string;
+  frequency: string;
+}
+
 function denominatorValue(
   field: DenominatorField | null,
   row: {
@@ -130,12 +154,18 @@ function denominatorValue(
   }
 }
 
+/**
+ * Leitmetrik at windowEnd, but only rows that existed at dataAsOf.
+ * Backdated assignments created later must not rewrite past evaluations.
+ */
 async function loadMetricDefinition(
   pool: Pool,
   tenantId: string,
   adAccountId: string,
-  at: Date,
+  windowEnd: Date,
+  dataAsOf: DataAsOf,
 ): Promise<MetricDefinitionInfo> {
+  const asOf = dataAsOfCutoff(dataAsOf);
   const assigned = await pool.query<StoredMetricRow & { assignment_id: string }>(
     `SELECT
        m.id,
@@ -155,13 +185,37 @@ async function loadMetricDefinition(
       AND m.tenant_id = a.tenant_id
      WHERE a.tenant_id = $1
        AND a.meta_ad_account_id = $2
+       AND a.created_at <= $4::timestamptz
        AND a.effective_from <= $3
-       AND (a.effective_to IS NULL OR a.effective_to > $3)
+       AND m.created_at <= $4::timestamptz
        AND m.effective_from <= $3
-       AND (m.effective_to IS NULL OR m.effective_to > $3)
-     ORDER BY m.version DESC
+       AND NOT EXISTS (
+         SELECT 1
+         FROM conversion_metric newer
+         WHERE newer.tenant_id = m.tenant_id
+           AND newer.id = m.id
+           AND newer.version > m.version
+           AND newer.created_at <= $4::timestamptz
+           AND newer.effective_from <= $3
+       )
+       AND NOT EXISTS (
+         SELECT 1
+         FROM ad_account_metric_assignment newer_a
+         WHERE newer_a.tenant_id = a.tenant_id
+           AND newer_a.meta_ad_account_id = a.meta_ad_account_id
+           AND newer_a.created_at <= $4::timestamptz
+           AND newer_a.effective_from <= $3
+           AND (
+             newer_a.effective_from > a.effective_from
+             OR (
+               newer_a.effective_from = a.effective_from
+               AND newer_a.created_at > a.created_at
+             )
+           )
+       )
+     ORDER BY a.effective_from DESC, a.created_at DESC, m.version DESC
      LIMIT 1`,
-    [tenantId, adAccountId, at.toISOString()],
+    [tenantId, adAccountId, windowEnd.toISOString(), asOf],
   );
   if (assigned.rows[0]) {
     return toMetricDefinitionInfo(assigned.rows[0], "user");
@@ -174,6 +228,7 @@ export async function resolveMetrics(
 ): Promise<ResolveMetricsResult> {
   const { pool, tenantId, adAccountId, windowStart, windowEnd, dataAsOf } =
     params;
+  const asOf = dataAsOfCutoff(dataAsOf);
 
   const account = await pool.query<{ currency: string }>(
     `SELECT currency FROM meta_ad_account WHERE id = $1 AND tenant_id = $2`,
@@ -190,22 +245,24 @@ export async function resolveMetrics(
     adAccountId,
     // Leitmetrik is resolved at windowEnd, not "today".
     new Date(`${windowEnd}T23:59:59.999Z`),
+    dataAsOf,
   );
+
+  const emptyRoas = {
+    spend: 0,
+    metaValue: null as number | null,
+    numeratorCount: null as number | null,
+    valueSource: metricDefinition.valueSource,
+    fixedValue: metricDefinition.fixedValue,
+    fixedCurrency: metricDefinition.currency,
+    accountCurrency,
+    attributionSpec: metricDefinition.attributionSpec,
+    dataAsOf: typeof dataAsOf === "string" ? new Date(dataAsOf) : dataAsOf,
+  };
 
   const gateReasons: GateReason[] = [];
   if (!attributionIsSynced(metricDefinition.attributionSpec)) {
     gateReasons.push("attribution_not_synced");
-    const emptyRoas = {
-      spend: 0,
-      metaValue: null as number | null,
-      numeratorCount: null as number | null,
-      valueSource: metricDefinition.valueSource,
-      fixedValue: metricDefinition.fixedValue,
-      fixedCurrency: metricDefinition.currency,
-      accountCurrency,
-      attributionSpec: metricDefinition.attributionSpec,
-      dataAsOf,
-    };
     return {
       rows: [],
       accountTotals: {
@@ -217,6 +274,7 @@ export async function resolveMetrics(
         reach: null,
         frequency: null,
         numerator: null,
+        numeratorReason: null,
         denominator: null,
         cvr: null,
         cpa: null,
@@ -228,6 +286,7 @@ export async function resolveMetrics(
       accountCurrency,
       gateStatus: "insufficient_data",
       gateReasons,
+      missingDateRange: null,
     };
   }
 
@@ -240,7 +299,7 @@ export async function resolveMetrics(
        SUM(d.link_clicks)::text AS link_clicks,
        SUM(d.landing_page_views)::text AS landing_page_views,
        ARRAY_AGG(DISTINCT d.sync_run_id::text) AS sync_run_ids
-     FROM insight_daily_as_of($1, $2) d
+     FROM insight_daily_as_of($1, $2::timestamptz) d
      WHERE d.date BETWEEN $3::date AND $4::date
        AND EXISTS (
          SELECT 1
@@ -251,12 +310,33 @@ export async function resolveMetrics(
        )
      GROUP BY d.meta_ad_id
      ORDER BY d.meta_ad_id`,
-    [tenantId, dataAsOf.toISOString(), windowStart, windowEnd, adAccountId],
+    [tenantId, asOf, windowStart, windowEnd, adAccountId],
   );
+
+  const dailyDates = await pool.query<DailyDateRow>(
+    `SELECT d.meta_ad_id, d.date::text AS date
+     FROM insight_daily_as_of($1, $2::timestamptz) d
+     WHERE d.date BETWEEN $3::date AND $4::date
+       AND EXISTS (
+         SELECT 1
+         FROM insight_sync_run r
+         WHERE r.id = d.sync_run_id
+           AND r.tenant_id = $1
+           AND r.meta_ad_account_id = $5
+       )`,
+    [tenantId, asOf, windowStart, windowEnd, adAccountId],
+  );
+  const datesByAd = new Map<string, Set<string>>();
+  for (const row of dailyDates.rows) {
+    const set = datesByAd.get(row.meta_ad_id) ?? new Set<string>();
+    set.add(row.date);
+    datesByAd.set(row.meta_ad_id, set);
+  }
+  const expectedDates = eachDateInclusive(windowStart, windowEnd);
 
   const windows = await pool.query<WindowRow>(
     `SELECT w.meta_ad_id, w.reach::text, w.frequency::text, w.sync_run_id::text
-     FROM insight_window_as_of($1, $2) w
+     FROM insight_window_as_of($1, $2::timestamptz) w
      JOIN insight_sync_run r
        ON r.id = w.sync_run_id
       AND r.tenant_id = $1
@@ -264,9 +344,19 @@ export async function resolveMetrics(
        AND w.window_start = $4::date
        AND w.window_end = $5::date
        AND w.is_cumulative = false`,
-    [tenantId, dataAsOf.toISOString(), adAccountId, windowStart, windowEnd],
+    [tenantId, asOf, adAccountId, windowStart, windowEnd],
   );
   const windowByAd = new Map(windows.rows.map((row) => [row.meta_ad_id, row]));
+
+  const accountWindow = await pool.query<AccountWindowRow>(
+    `SELECT w.reach::text, w.frequency::text
+     FROM insight_account_window_as_of($1, $2::timestamptz) w
+     WHERE w.meta_ad_account_id = $3
+       AND w.window_start = $4::date
+       AND w.window_end = $5::date
+     LIMIT 1`,
+    [tenantId, asOf, adAccountId, windowStart, windowEnd],
+  );
 
   const actions = await pool.query<ActionRow>(
     `SELECT
@@ -282,7 +372,7 @@ export async function resolveMetrics(
          ELSE SUM(a.value)::text
        END AS value,
        (ARRAY_AGG(a.sync_run_id::text ORDER BY a.date))[1] AS sync_run_id
-     FROM insight_action_daily_as_of($1, $2) a
+     FROM insight_action_daily_as_of($1, $2::timestamptz) a
      JOIN insight_sync_run r
        ON r.id = a.sync_run_id
       AND r.tenant_id = $1
@@ -293,7 +383,7 @@ export async function resolveMetrics(
      GROUP BY a.meta_ad_id, a.action_type`,
     [
       tenantId,
-      dataAsOf.toISOString(),
+      asOf,
       adAccountId,
       windowStart,
       windowEnd,
@@ -320,17 +410,26 @@ export async function resolveMetrics(
        n.status,
        n.reason,
        n.net_new_reach::text
-     FROM (SELECT DISTINCT meta_ad_id FROM insight_daily_as_of($1, $2)
+     FROM (SELECT DISTINCT meta_ad_id FROM insight_daily_as_of($1, $2::timestamptz)
            WHERE date BETWEEN $3::date AND $4::date) d
      CROSS JOIN LATERAL net_new_reach_as_of(
-       $1, d.meta_ad_id, $3::date, $4::date, $2
+       $1, d.meta_ad_id, $3::date, $4::date, $2::timestamptz
      ) n`,
-    [tenantId, dataAsOf.toISOString(), windowStart, windowEnd],
+    [tenantId, asOf, windowStart, windowEnd],
   );
   const netNewByAd = new Map(netNew.rows.map((row) => [row.meta_ad_id, row]));
 
   const rows: PerAdBaseMetrics[] = [];
+  let accountMissingRange: MissingDateRange | null = null;
+
   for (const day of daily.rows) {
+    const present = datesByAd.get(day.meta_ad_id) ?? new Set<string>();
+    const missingDateRange = firstMissingDateRange(expectedDates, present);
+    const windowComplete = missingDateRange === null;
+    if (!windowComplete && accountMissingRange === null) {
+      accountMissingRange = missingDateRange;
+    }
+
     const spend = Number(day.spend);
     const impressions = Number(day.impressions);
     const clicks = Number(day.clicks);
@@ -360,8 +459,10 @@ export async function resolveMetrics(
       linkClicks,
       landingPageViews,
     });
+    // Incomplete windows must not look like full-window rates.
+    const usable = windowComplete;
     const cvr =
-      denominator === null
+      !usable || denominator === null
         ? null
         : aggregated.count === null
           ? null
@@ -369,14 +470,18 @@ export async function resolveMetrics(
             ? aggregated.count / denominator
             : null;
     const cpa =
-      aggregated.count !== null && aggregated.count > 0 && spend > 0
+      usable &&
+      aggregated.count !== null &&
+      aggregated.count > 0 &&
+      spend > 0
         ? spend / aggregated.count
         : null;
 
     let resolvedValue: number | null = null;
-    if (metricDefinition.valueSource === "meta_value") {
+    if (usable && metricDefinition.valueSource === "meta_value") {
       resolvedValue = aggregated.value;
     } else if (
+      usable &&
       metricDefinition.valueSource === "fixed" &&
       metricDefinition.fixedValue !== null &&
       aggregated.count !== null
@@ -385,20 +490,20 @@ export async function resolveMetrics(
     }
 
     const valuePerImpression =
-      resolvedValue === null || impressions <= 0
+      !usable || resolvedValue === null || impressions <= 0
         ? null
         : resolvedValue / impressions;
 
     const roasInput = {
-      spend,
-      metaValue: aggregated.value,
-      numeratorCount: aggregated.count,
+      spend: usable ? spend : 0,
+      metaValue: usable ? aggregated.value : null,
+      numeratorCount: usable ? aggregated.count : null,
       valueSource: metricDefinition.valueSource,
       fixedValue: metricDefinition.fixedValue,
       fixedCurrency: metricDefinition.currency,
       accountCurrency,
       attributionSpec: metricDefinition.attributionSpec,
-      dataAsOf,
+      dataAsOf: typeof dataAsOf === "string" ? new Date(dataAsOf) : dataAsOf,
     };
 
     const syncRunIds = [
@@ -420,9 +525,9 @@ export async function resolveMetrics(
       windowSynced: Boolean(windowRow),
       netNewReach,
       netNewReachReason,
-      numerator: aggregated.count,
-      metaValue: aggregated.value,
-      denominator,
+      numerator: usable ? aggregated.count : null,
+      metaValue: usable ? aggregated.value : null,
+      denominator: usable ? denominator : null,
       cvr,
       cpa,
       valuePerImpression,
@@ -430,19 +535,49 @@ export async function resolveMetrics(
       expectedValueRoas: computeExpectedValueRoas(roasInput),
       realizedValueRoas: realizedValueRoasPlaceholder(roasInput),
       syncRunIds,
+      windowComplete,
+      missingDateRange,
     });
   }
 
-  const accountSpend = rows.reduce((sum, row) => sum + row.spend, 0);
-  const accountImpressions = rows.reduce((sum, row) => sum + row.impressions, 0);
-  const accountClicks = rows.reduce((sum, row) => sum + row.clicks, 0);
-  const accountLinkClicks = rows.reduce((sum, row) => sum + row.linkClicks, 0);
-  const accountLpv = rows.reduce((sum, row) => sum + row.landingPageViews, 0);
-  const accountNumerator = rows.every((row) => row.numerator === null)
-    ? null
-    : rows.reduce((sum, row) => sum + (row.numerator ?? 0), 0);
+  if (accountMissingRange !== null) {
+    gateReasons.push("window_incomplete");
+  }
+
+  const completeRows = rows.filter((row) => row.windowComplete);
+  const accountSpend = completeRows.reduce((sum, row) => sum + row.spend, 0);
+  const accountImpressions = completeRows.reduce(
+    (sum, row) => sum + row.impressions,
+    0,
+  );
+  const accountClicks = completeRows.reduce((sum, row) => sum + row.clicks, 0);
+  const accountLinkClicks = completeRows.reduce(
+    (sum, row) => sum + row.linkClicks,
+    0,
+  );
+  const accountLpv = completeRows.reduce(
+    (sum, row) => sum + row.landingPageViews,
+    0,
+  );
+
+  // Finding 9: a missing observation makes the account total unknown, not zero.
+  let accountNumerator: number | null = null;
+  let numeratorReason: GateReason | null = null;
+  if (completeRows.length === 0) {
+    accountNumerator = null;
+  } else if (completeRows.some((row) => row.numerator === null)) {
+    accountNumerator = null;
+    numeratorReason = "missing_observations";
+    gateReasons.push("missing_observations");
+  } else {
+    accountNumerator = completeRows.reduce(
+      (sum, row) => sum + (row.numerator as number),
+      0,
+    );
+  }
+
   const accountDenominator =
-    metricDefinition.denominator === null
+    metricDefinition.denominator === null || completeRows.length === 0
       ? null
       : denominatorValue(metricDefinition.denominator, {
           impressions: accountImpressions,
@@ -450,11 +585,21 @@ export async function resolveMetrics(
           linkClicks: accountLinkClicks,
           landingPageViews: accountLpv,
         });
-  const accountMetaValue = rows.every((row) => row.metaValue === null)
-    ? null
-    : rows.some((row) => row.metaValue === null)
+  const accountMetaValue =
+    completeRows.length === 0
       ? null
-      : rows.reduce((sum, row) => sum + (row.metaValue ?? 0), 0);
+      : completeRows.some((row) => row.metaValue === null)
+        ? null
+        : completeRows.reduce((sum, row) => sum + (row.metaValue as number), 0);
+
+  const accountReach =
+    accountWindow.rows[0] !== undefined
+      ? Number(accountWindow.rows[0].reach)
+      : null;
+  const accountFrequency =
+    accountWindow.rows[0] !== undefined
+      ? Number(accountWindow.rows[0].frequency)
+      : null;
 
   const accountRoasInput = {
     spend: accountSpend,
@@ -465,8 +610,11 @@ export async function resolveMetrics(
     fixedCurrency: metricDefinition.currency,
     accountCurrency,
     attributionSpec: metricDefinition.attributionSpec,
-    dataAsOf,
+    dataAsOf: typeof dataAsOf === "string" ? new Date(dataAsOf) : dataAsOf,
   };
+
+  const gateStatus: GateStatus =
+    gateReasons.length > 0 ? "insufficient_data" : "ok";
 
   return {
     rows,
@@ -476,9 +624,10 @@ export async function resolveMetrics(
       clicks: accountClicks,
       linkClicks: accountLinkClicks,
       landingPageViews: accountLpv,
-      reach: null,
-      frequency: null,
+      reach: accountReach,
+      frequency: accountFrequency,
       numerator: accountNumerator,
+      numeratorReason,
       denominator: accountDenominator,
       cvr:
         accountDenominator === null ||
@@ -496,7 +645,8 @@ export async function resolveMetrics(
     },
     metricDefinition,
     accountCurrency,
-    gateStatus: "ok",
-    gateReasons,
+    gateStatus,
+    gateReasons: [...new Set(gateReasons)],
+    missingDateRange: accountMissingRange,
   };
 }

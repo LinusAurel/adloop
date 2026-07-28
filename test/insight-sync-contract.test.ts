@@ -138,6 +138,27 @@ describe("insight observation read contract", () => {
             })),
           });
         }
+        if (
+          /\/act_\d+\/insights$/.test(url.pathname) &&
+          url.searchParams.get("time_increment") === "all_days"
+        ) {
+          const range = JSON.parse(url.searchParams.get("time_range")!) as {
+            since: string;
+            until: string;
+          };
+          return jsonResponse({
+            data: [
+              {
+                date_start: range.since,
+                date_stop: range.until,
+                reach: "10000",
+                frequency: "2.1",
+                impressions: "21000",
+                spend: "150",
+              },
+            ],
+          });
+        }
         if (/\/\d+\/insights$/.test(url.pathname)) {
           const range = JSON.parse(url.searchParams.get("time_range")!) as {
             since: string;

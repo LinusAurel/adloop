@@ -70,9 +70,9 @@ export async function createConversionMetric(
 }
 
 /**
- * Append a new version of an existing metric. Closes the previous version's
- * effective_to. Never mutates prior rows — snapshots keep pointing at the
- * old (id, version).
+ * Append a new version of an existing metric. Never mutates prior rows —
+ * snapshots keep pointing at the old (id, version). Supersession is resolved
+ * at read time via created_at <= dataAsOf (and effective_from <= windowEnd).
  */
 export async function createConversionMetricVersion(
   pool: Pool,
@@ -105,15 +105,6 @@ export async function createConversionMetricVersion(
       throw new MetricConfigError("metric_not_found", "conversion metric not found");
     }
     const nextVersion = current.rows[0].version + 1;
-    await client.query(
-      `UPDATE conversion_metric
-       SET effective_to = $1
-       WHERE tenant_id = $2
-         AND id = $3
-         AND version = $4
-         AND effective_to IS NULL`,
-      [effectiveFrom, params.tenantId, params.metricId, current.rows[0].version],
-    );
     await client.query(
       `INSERT INTO conversion_metric (
          id, tenant_id, label, version,
@@ -187,38 +178,22 @@ export async function assignMetricToAdAccount(
 
   const effectiveFrom = params.effectiveFrom ?? new Date().toISOString();
   const assignmentId = uuidv7();
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
-    await client.query(
-      `UPDATE ad_account_metric_assignment
-       SET effective_to = $1
-       WHERE tenant_id = $2
-         AND meta_ad_account_id = $3
-         AND effective_to IS NULL`,
-      [effectiveFrom, params.tenantId, params.metaAdAccountId],
-    );
-    await client.query(
-      `INSERT INTO ad_account_metric_assignment (
-         id, tenant_id, meta_ad_account_id, conversion_metric_id,
-         effective_from, effective_to
-       ) VALUES ($1, $2, $3, $4, $5, NULL)`,
-      [
-        assignmentId,
-        params.tenantId,
-        params.metaAdAccountId,
-        params.conversionMetricId,
-        effectiveFrom,
-      ],
-    );
-    await client.query("COMMIT");
-    return { assignmentId };
-  } catch (error) {
-    await client.query("ROLLBACK");
-    throw error;
-  } finally {
-    client.release();
-  }
+  // Append-only: never UPDATE prior assignments. Resolve picks the assignment
+  // known at dataAsOf (created_at <= dataAsOf) with the latest effective_from.
+  await pool.query(
+    `INSERT INTO ad_account_metric_assignment (
+       id, tenant_id, meta_ad_account_id, conversion_metric_id,
+       effective_from, effective_to
+     ) VALUES ($1, $2, $3, $4, $5, NULL)`,
+    [
+      assignmentId,
+      params.tenantId,
+      params.metaAdAccountId,
+      params.conversionMetricId,
+      effectiveFrom,
+    ],
+  );
+  return { assignmentId };
 }
 
 export async function listConversionMetrics(

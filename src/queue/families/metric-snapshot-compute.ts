@@ -25,6 +25,8 @@ type Result = z.infer<typeof ResultSchema>;
  * snapshots for the standard comparison windows ending at the sync's
  * window_end. Idempotent under at-least-once delivery: each run inserts new
  * snapshot rows; readers take the newest for a given data_as_of.
+ *
+ * Not publicly startable via POST /api/runs — internal job family only.
  */
 export const metricSnapshotComputeFamily: JobFamilyDefinition<Input, Result> = {
   name: "metric_snapshot_compute",
@@ -35,12 +37,15 @@ export const metricSnapshotComputeFamily: JobFamilyDefinition<Input, Result> = {
 
   async handler(ctx) {
     const pool = getPool();
+    // finished_at::text keeps Postgres microsecond precision. A JS Date would
+    // truncate to ms and make *_as_of exclude this exact sync (Review-6 #1).
     const sync = await pool.query<{
-      finished_at: Date | null;
+      finished_at: string | null;
       status: string;
       tenant_id: string;
+      meta_ad_account_id: string;
     }>(
-      `SELECT finished_at, status, tenant_id
+      `SELECT finished_at::text AS finished_at, status, tenant_id, meta_ad_account_id
        FROM insight_sync_run
        WHERE id = $1 AND tenant_id = $2`,
       [ctx.input.syncRunId, ctx.tenantId],
@@ -51,6 +56,13 @@ export const metricSnapshotComputeFamily: JobFamilyDefinition<Input, Result> = {
         "SYNC_NOT_READY",
         "sync_not_ready_for_snapshots",
         true,
+      );
+    }
+    if (row.meta_ad_account_id !== ctx.input.metaAdAccountId) {
+      throw new HandlerError(
+        "SYNC_ACCOUNT_MISMATCH",
+        "sync_account_mismatch",
+        false,
       );
     }
 

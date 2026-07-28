@@ -1,5 +1,0 @@
-minimumReleaseAge: 0
-onlyBuiltDependencies:
-  - lefthook
-  - sharp
-  - unrs-resolver

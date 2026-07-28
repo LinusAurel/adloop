@@ -7,6 +7,7 @@ import { z } from "zod";
 import type { Pool } from "pg";
 import type { Session } from "@/auth/session";
 import { withTransaction } from "@/db/queryable";
+import { DEFAULT_CONTENT_LOCALE } from "@/lib/content-locale";
 import { env } from "@/lib/env";
 import { MetaGraphClient, type PageResult } from "./graph-client";
 import { encryptToken } from "./token-crypto";
@@ -208,8 +209,13 @@ async function persistAdAccounts(
       if (!existing.rows[0]) {
         await client.query(
           `INSERT INTO advertiser (id, tenant_id, name, content_locale)
-           VALUES ($1, $2, $3, 'de-DE')`,
-          [advertiserId, session.tenantId, account.name],
+           VALUES ($1, $2, $3, $4)`,
+          [
+            advertiserId,
+            session.tenantId,
+            account.name,
+            DEFAULT_CONTENT_LOCALE,
+          ],
         );
       }
 

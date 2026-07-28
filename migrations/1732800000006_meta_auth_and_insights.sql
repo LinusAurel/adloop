@@ -5,11 +5,14 @@ CREATE TABLE advertiser (
   tenant_id uuid NOT NULL REFERENCES tenant (id),
   name text NOT NULL,
   content_locale text NOT NULL DEFAULT 'de-DE'
-    CHECK (content_locale ~ '^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$'),
+    CHECK (content_locale ~ '^[A-Za-z]{2,8}(-[A-Za-z0-9]{1,8})*$'),
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE (id, tenant_id)
 );
+
+COMMENT ON COLUMN advertiser.content_locale IS
+  'BCP-47 language tag for generated advertising copy. This is independent from every user-interface locale.';
 
 CREATE TABLE login_code (
   id uuid PRIMARY KEY,

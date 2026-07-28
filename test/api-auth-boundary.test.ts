@@ -33,4 +33,28 @@ describe("API authentication boundary", () => {
 
     expect(missing).toEqual([]);
   });
+
+  it("exposes backend errors only as stable English identifiers and parameters", async () => {
+    const root = join(__dirname, "..", "src", "app", "api");
+    const violations: string[] = [];
+
+    for (const file of await routeFiles(root)) {
+      const name = relative(root, file);
+      const body = await readFile(file, "utf8");
+      const literalCodes = [
+        ...body.matchAll(/errorResponse\(\s*\d+\s*,\s*"([^"]+)"/g),
+      ].map((match) => match[1]!);
+      if (literalCodes.some((code) => !/^[a-z][a-z0-9_]*$/.test(code))) {
+        violations.push(`${name}: unstable error identifier`);
+      }
+      if (/NextResponse\.json\(\s*\{\s*error\s*:/.test(body)) {
+        violations.push(`${name}: bypasses errorResponse`);
+      }
+      if (/\b(?:userMessage|error_user_msg)\b|\bmessage[ \t]*:/.test(body)) {
+        violations.push(`${name}: exposes backend prose`);
+      }
+    }
+
+    expect(violations).toEqual([]);
+  });
 });

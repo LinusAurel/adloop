@@ -1,7 +1,7 @@
 import { env } from "@/lib/env";
 import type { ImageProvider } from "./provider";
-import { ElevenLabsImageProvider } from "./providers/elevenlabs";
 import { FalImageProvider } from "./providers/fal";
+import { OpenAiImagesProvider } from "./providers/openai-images";
 import { StubImageProvider } from "./providers/stub";
 
 let override: ImageProvider | null = null;
@@ -23,14 +23,14 @@ export function getImageProvider(providerId?: string): ImageProvider {
       }
       return new FalImageProvider({ apiKey: key, baseUrl: env.FAL_BASE_URL });
     }
-    case "elevenlabs": {
-      const key = env.ELEVENLABS_API_KEY;
+    case "openai-images": {
+      const key = env.OPENAI_API_KEY;
       if (!key) {
-        throw new Error("ELEVENLABS_API_KEY is required when IMAGE_PROVIDER=elevenlabs");
+        throw new Error("OPENAI_API_KEY is required when IMAGE_PROVIDER=openai-images");
       }
-      return new ElevenLabsImageProvider({
+      return new OpenAiImagesProvider({
         apiKey: key,
-        baseUrl: env.ELEVENLABS_BASE_URL,
+        baseUrl: env.OPENAI_IMAGES_BASE_URL,
       });
     }
     default:

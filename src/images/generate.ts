@@ -31,7 +31,7 @@ export const GenerationInputsSchema = z.object({
   aspectRatio: AspectRatioSchema.optional(),
   count: z.number().int().min(1).max(10).optional(),
   model: z.string().min(1).optional(),
-  provider: z.enum(["stub", "fal", "elevenlabs"]).optional(),
+  provider: z.enum(["stub", "fal", "openai-images"]).optional(),
   /** Stable client identity for the idempotency key (not the run id). */
   clientRequestId: z.string().min(1),
   parentCreativeId: z.string().uuid().optional(),
@@ -46,7 +46,7 @@ export const ResolvedGenerationInputsSchema = z.object({
   aspectRatio: AspectRatioSchema,
   count: z.number().int().min(1).max(10),
   model: z.string().min(1),
-  provider: z.enum(["stub", "fal", "elevenlabs"]),
+  provider: z.enum(["stub", "fal", "openai-images"]),
   clientRequestId: z.string().min(1),
   contentLocale: z.string().min(2),
   playbookVersion: z.string().nullable(),
@@ -100,8 +100,8 @@ export async function resolveGenerationInputs(
     raw.model ??
     (provider === "fal"
       ? "fal-ai/flux/schnell"
-      : provider === "elevenlabs"
-        ? "nanobanana"
+      : provider === "openai-images"
+        ? "gpt-image-1"
         : "stub-v1");
 
   const resolvedPrompt = `${prompt.trim()}\n\n${DEFAULT_PLAYBOOK_SUFFIX}\nProduct: ${productContext}`;

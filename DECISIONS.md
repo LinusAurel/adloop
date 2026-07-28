@@ -512,18 +512,30 @@ costs a build run that the current budget does not justify.
   `https://<host>/api/webhooks/fal/<correlationId>` so a crash before persisting
   `request_id` still correlates. The webhook handler is itself idempotent (Fal retries
   ~10× / 2h).
-- **ElevenLabs = `unprotected`.** Evidence: as of 28.07.2026 no public Image & Video
-  API contract with submit + client idempotency key or result lookup could be verified
-  ([Image & Video overview](https://elevenlabs.io/docs/overview/capabilities/image-video)).
-  Adapter is still built and fixture-tested; classification flips once a real contract
-  exists. Reason string: `API-Vertrag nicht belegt, Stand 28.07.2026`.
+- **ElevenLabs Image & Video is not an API — do not build an adapter.** Checked with a
+  live key against `api.elevenlabs.io` on 28.07.2026: OpenAPI lists **282** paths; the
+  only path containing “image” or “video” is `/v1/music/video-to-music` (music *from*
+  video). Plausible image endpoints (`/v1/image-generation`, `/v1/images/generations`,
+  `/v1/image/generate`, …) all return **404**. The key itself is valid (`/v1/user`
+  returns the subscription). Image & Video is a Playground surface product, not an API
+  offer. No adapter, no invented fixtures.
+- **`openai-images` = `unprotected`.** Real second adapter for the unprotected class.
+  Checked 29.07.2026 against `POST https://api.openai.com/v1/images/generations`
+  (`gpt-image-1`): the API accepts `Idempotency-Key` without error but ignores it —
+  two calls with the same key and identical prompt returned two different images
+  (`created` 1785275998 / bild-sha `4e29446e6e3c0805`, then `created` 1785276027 /
+  bild-sha `f9ed52768e9b159b`). Response is synchronous (no queue, no `request_id`).
+  Reason string documents those hashes. Fixtures under
+  `test/fixtures/providers/openai-images/` are a full captured HTTP body
+  (`CAPTURE.json` provenance), not a hand-built stub. `cost_estimate.image` for this
+  provider uses `usage.total_tokens` (live capture ≈ 1077) × token rate.
 - **Stub adapter covers all four recovery kinds** so the layer is proven without API
-  keys. Fal / ElevenLabs use recorded fixtures under `test/fixtures/providers/`.
+  keys. Fal / openai-images use recorded fixtures under `test/fixtures/providers/`.
 - **Crash window closes with a pre-submit marker.** Before the network call we write
   `provider_job = { externalId: "pending", correlationId }`. A retry that sees
   `in_flight` with a job (pending or real) goes to recover — never a blind second
   submit. `native_key` with a real external id uses `fetchResult`; with `pending` it
-  resubmits the same correlation.
+  resubmits the same correlation. Unprotected never auto-retries → `needs_human_check`.
 - **`generate_images` tool** (`costClass: expensive`, `sideEffect: external`) is the
   only generation entry. Workshop UI and chat share it — no side door past Freigabe.
   Cost estimate is `{ image, copy, currency: "USD" }` on the approval and in
@@ -535,5 +547,6 @@ costs a build run that the current budget does not justify.
 - **`run.status` includes `needs_human_check`.** Job still finalizes `completed`;
   `finalizeJob` accepts `runStatus: "needs_human_check"` so the run surfaces the
   escalation without inventing a new job terminal state.
-- **Default `IMAGE_PROVIDER=elevenlabs`** per auftrag; local `.env.example` uses `stub`
-  until keys exist. `PUBLIC_BASE_URL` required for fal webhooks in live mode.
+- **Default `IMAGE_PROVIDER=fal`** — only provider with a closed crash window. Local
+  `.env.example` uses `stub` until keys exist. `PUBLIC_BASE_URL` required for fal
+  webhooks in live mode.

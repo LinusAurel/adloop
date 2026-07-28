@@ -1,6 +1,10 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import { env } from "@/lib/env";
+import {
+  OPENAI_IMAGES_TOKEN_ESTIMATE,
+  OPENAI_IMAGES_USD_PER_TOKEN,
+} from "./providers/openai-images";
 
 export const AdCopySchema = z.object({
   primary_text: z.string().min(1),
@@ -117,7 +121,13 @@ export function estimateCopyCostUsd(count: number): number {
 }
 
 export function estimateImageCostUsd(count: number, provider: string): number {
-  // Placeholder unit prices until live keys give real quotes.
-  const unit = provider === "fal" ? 0.003 : provider === "elevenlabs" ? 0.04 : 0;
-  return Math.round(count * unit * 1000) / 1000;
+  if (provider === "fal") {
+    return Math.round(count * 0.003 * 1000) / 1000;
+  }
+  if (provider === "openai-images") {
+    // Based on live usage.total_tokens for gpt-image-1 medium 1024 (CAPTURE.json).
+    const unit = OPENAI_IMAGES_TOKEN_ESTIMATE * OPENAI_IMAGES_USD_PER_TOKEN;
+    return Math.round(count * unit * 1000) / 1000;
+  }
+  return 0;
 }

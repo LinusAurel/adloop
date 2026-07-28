@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { uuidv7 } from "uuidv7";
@@ -13,7 +14,10 @@ import {
 } from "@/images/registry";
 import { StubImageProvider } from "@/images/providers/stub";
 import { FalImageProvider } from "@/images/providers/fal";
-import { ElevenLabsImageProvider } from "@/images/providers/elevenlabs";
+import {
+  OpenAiImagesProvider,
+  OPENAI_IMAGES_UNPROTECTED_REASON,
+} from "@/images/providers/openai-images";
 import {
   setCopyGeneratorForTests,
   StubCopyGenerator,
@@ -405,18 +409,45 @@ describe("etappe 6 — bild-werkstatt", () => {
     expect(row.rows[0]!.cost_estimate).toEqual(estimate);
   });
 
-  it("9 — provider switch: stub/fal/elevenlabs yield same data shape", async () => {
+  it("9 — provider switch: stub/fal/openai-images yield same data shape", async () => {
     const falSubmit = JSON.parse(
       readFileSync(join(__dirname, "fixtures/providers/fal/submit.json"), "utf8"),
     ) as { request_id: string };
     const falResult = JSON.parse(
       readFileSync(join(__dirname, "fixtures/providers/fal/result.json"), "utf8"),
     ) as GenerationResult;
-    const elSubmit = JSON.parse(
-      readFileSync(join(__dirname, "fixtures/providers/elevenlabs/submit.json"), "utf8"),
-    ) as { job_id: string };
-    const elResult = JSON.parse(
-      readFileSync(join(__dirname, "fixtures/providers/elevenlabs/result.json"), "utf8"),
+    const openaiEnvelope = JSON.parse(
+      readFileSync(join(__dirname, "fixtures/providers/openai-images/result.json"), "utf8"),
+    ) as {
+      created: number;
+      data: Array<{ b64_json: string }>;
+      usage: { total_tokens: number };
+      background?: string;
+      output_format?: string;
+      quality?: string;
+      size?: string;
+    };
+    const openaiPng = readFileSync(
+      join(__dirname, "fixtures/providers/openai-images/image.png"),
+    );
+    // Rehydrate the live response: envelope + captured PNG bytes as b64_json.
+    const openaiCaptured = {
+      ...openaiEnvelope,
+      data: [{ b64_json: openaiPng.toString("base64") }],
+    };
+    const openaiCaptureMeta = JSON.parse(
+      readFileSync(join(__dirname, "fixtures/providers/openai-images/CAPTURE.json"), "utf8"),
+    ) as {
+      response: { created: number; image_sha256_16: string; png_magic: string; usage: { total_tokens: number } };
+    };
+
+    // Prove the openai-images fixture is a live capture, not a hand-built stub.
+    expect(openaiCaptured.created).toBe(openaiCaptureMeta.response.created);
+    expect(openaiCaptured.usage.total_tokens).toBe(openaiCaptureMeta.response.usage.total_tokens);
+    expect(openaiPng.subarray(0, 8).toString("hex")).toBe(openaiCaptureMeta.response.png_magic);
+    expect(openaiPng.subarray(0, 8).toString("hex")).toBe("89504e470d0a1a0a");
+    expect(createHash("sha256").update(openaiPng).digest("hex").slice(0, 16)).toBe(
+      openaiCaptureMeta.response.image_sha256_16,
     );
 
     const shapes: Array<{ imageCount: number; mimes: string[] }> = [];
@@ -491,27 +522,24 @@ describe("etappe 6 — bild-werkstatt", () => {
       }
     }
 
-    // elevenlabs via fixtures
+    // openai-images via live-captured fixture (sync POST body)
     {
-      const fixtureResults = new Map<string, unknown>([[elSubmit.job_id, elResult]]);
-      const el = new ElevenLabsImageProvider({
+      const openai = new OpenAiImagesProvider({
         apiKey: "test-key",
         http: {
-          async fetch(url, init) {
-            if (init?.method === "POST") {
-              return new Response(JSON.stringify(elSubmit), { status: 200 });
-            }
-            void url;
-            return new Response(JSON.stringify(elResult), { status: 200 });
+          async fetch(_url, init) {
+            expect(init?.method).toBe("POST");
+            const headers = new Headers(init?.headers);
+            expect(headers.get("Idempotency-Key")).toBeTruthy();
+            return new Response(JSON.stringify(openaiCaptured), { status: 200 });
           },
         },
-        fixtureResults,
       });
-      setImageProviderForTests(el);
+      setImageProviderForTests(openai);
       const { inputs, resolved, runId } = await prepare({
         count: 1,
-        provider: "elevenlabs",
-        model: "nanobanana",
+        provider: "openai-images",
+        model: "gpt-image-1",
         clientRequestId: uuidv7(),
       });
       const out = await runImageGeneration(db.pool, {
@@ -527,7 +555,8 @@ describe("etappe 6 — bild-werkstatt", () => {
           `SELECT provider, model FROM creative_generation WHERE id = $1`,
           [out.generationId],
         );
-        expect(gen.rows[0]!.provider).toBe("elevenlabs");
+        expect(gen.rows[0]!.provider).toBe("openai-images");
+        expect(gen.rows[0]!.model).toBe("gpt-image-1");
         shapes.push({ imageCount: out.creativeIds.length, mimes: ["image/png"] });
       }
     }
@@ -663,7 +692,7 @@ describe("etappe 6 — bild-werkstatt", () => {
       const provider = new StubImageProvider({
         recovery: {
           kind: "unprotected",
-          reason: "API-Vertrag nicht belegt, Stand 28.07.2026",
+          reason: OPENAI_IMAGES_UNPROTECTED_REASON,
         },
       });
       const request: GenerationRequest = {
@@ -704,7 +733,7 @@ describe("etappe 6 — bild-werkstatt", () => {
       expect(escalated).toEqual({
         kind: "needs_human_check",
         code: "provider_unprotected_crash",
-        reason: "API-Vertrag nicht belegt, Stand 28.07.2026",
+        reason: OPENAI_IMAGES_UNPROTECTED_REASON,
       });
       expect(provider.getSubmitCount()).toBe(submits);
     }
@@ -713,8 +742,11 @@ describe("etappe 6 — bild-werkstatt", () => {
   it("provider adapters expose classified recovery", () => {
     const fal = new FalImageProvider({ apiKey: "x" });
     expect(fal.recovery).toEqual({ kind: "correlated_callback" });
-    const el = new ElevenLabsImageProvider({ apiKey: "x" });
-    expect(el.recovery.kind).toBe("unprotected");
+    const openai = new OpenAiImagesProvider({ apiKey: "x" });
+    expect(openai.recovery).toEqual({
+      kind: "unprotected",
+      reason: OPENAI_IMAGES_UNPROTECTED_REASON,
+    });
   });
 
   it("normalizeGenerationResultShape is stable across fixture results", () => {

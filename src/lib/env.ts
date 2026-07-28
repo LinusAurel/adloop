@@ -39,14 +39,14 @@ const envSchema = z
 
   PLAYBOOK_DIR: z.string().min(1).optional(),
   ANTHROPIC_API_KEY: z.string().min(1).optional(),
-  /** Image provider id: stub | fal | elevenlabs. Default elevenlabs per auftrag. */
-  IMAGE_PROVIDER: z.enum(["stub", "fal", "elevenlabs"]).default("elevenlabs"),
+  /** Image provider id: stub | fal | openai-images. Default fal (closed crash window). */
+  IMAGE_PROVIDER: z.enum(["stub", "fal", "openai-images"]).default("fal"),
   /** Anthropic model for ad copy (content_locale). */
   COPY_MODEL: z.string().min(1).default("claude-sonnet-5"),
   FAL_KEY: z.string().min(1).optional(),
   FAL_BASE_URL: z.string().url().optional(),
-  ELEVENLABS_API_KEY: z.string().min(1).optional(),
-  ELEVENLABS_BASE_URL: z.string().url().optional(),
+  OPENAI_API_KEY: z.string().min(1).optional(),
+  OPENAI_IMAGES_BASE_URL: z.string().url().optional(),
   /** Public origin for fal webhook URLs. */
   PUBLIC_BASE_URL: z.string().url().optional(),
   FAL_WEBHOOK_SECRET: z.string().min(1).optional(),

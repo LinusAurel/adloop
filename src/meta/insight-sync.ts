@@ -71,6 +71,49 @@ export const MetaInsightPageSchema: z.ZodType<
     .optional(),
 });
 
+const MetaDateTime = z.string().refine((value) => Number.isFinite(Date.parse(value)));
+
+const MetaAdSchema = z.object({
+  id: z.string().regex(/^\d+$/),
+  created_time: MetaDateTime,
+  ad_schedule_start_time: MetaDateTime.optional(),
+});
+
+const DeliveryDaySchema = z.object({
+  ad_id: z.string().regex(/^\d+$/),
+  date_start: z.string().date(),
+  date_stop: z.string().date(),
+  impressions: NumericString,
+});
+
+const DeliveryDayPageSchema: z.ZodType<
+  PageResult<z.infer<typeof DeliveryDaySchema>>,
+  z.ZodTypeDef,
+  unknown
+> = z.object({
+  data: z.array(DeliveryDaySchema),
+  paging: z
+    .object({
+      next: z.string().url().optional(),
+      cursors: z.object({ after: z.string().optional() }).optional(),
+    })
+    .optional(),
+});
+
+const MetaWindowRowSchema = z.object({
+  ad_id: z.string().regex(/^\d+$/),
+  date_start: z.string().date(),
+  date_stop: z.string().date(),
+  reach: NumericString,
+  frequency: NumericString,
+  impressions: NumericString,
+  spend: NumericString,
+});
+
+const MetaWindowPageSchema = z.object({
+  data: z.array(MetaWindowRowSchema).max(1),
+});
+
 const ATTRIBUTION_SPEC = ["1d_view", "7d_click"] as const;
 export const META_INSIGHT_FIELDS = [
   "ad_id",
@@ -94,11 +137,29 @@ export const META_INSIGHT_FIELDS = [
   "video_avg_time_watched_actions",
 ] as const;
 
+const META_WINDOW_FIELDS = [
+  "ad_id",
+  "date_start",
+  "date_stop",
+  "reach",
+  "frequency",
+  "impressions",
+  "spend",
+] as const satisfies readonly (typeof META_INSIGHT_FIELDS)[number][];
+
 const QUERY_CONTRACT = {
-  level: "ad",
-  timeIncrement: 1,
-  fields: META_INSIGHT_FIELDS,
-  attributionSpec: ATTRIBUTION_SPEC,
+  daily: {
+    level: "ad",
+    timeIncrement: 1,
+    fields: META_INSIGHT_FIELDS,
+    attributionSpec: ATTRIBUTION_SPEC,
+  },
+  windows: {
+    fields: META_WINDOW_FIELDS,
+    periods: [30, 90],
+    includePrevious: true,
+    cumulativeFromDeliveryStart: true,
+  },
 };
 
 export const INSIGHT_QUERY_SIGNATURE = createHash("sha256")
@@ -130,6 +191,18 @@ function addDays(date: string, days: number): string {
   return value.toISOString().slice(0, 10);
 }
 
+function addMonths(date: string, months: number): string {
+  const value = new Date(`${date}T00:00:00.000Z`);
+  const day = value.getUTCDate();
+  value.setUTCDate(1);
+  value.setUTCMonth(value.getUTCMonth() + months);
+  const lastDay = new Date(
+    Date.UTC(value.getUTCFullYear(), value.getUTCMonth() + 1, 0),
+  ).getUTCDate();
+  value.setUTCDate(Math.min(day, lastDay));
+  return value.toISOString().slice(0, 10);
+}
+
 function daysInclusive(window: SyncWindow): number {
   const start = Date.parse(`${window.start}T00:00:00.000Z`);
   const end = Date.parse(`${window.end}T00:00:00.000Z`);
@@ -144,6 +217,15 @@ export function defaultSyncWindow(
   const today = zonedDate(now, timeZone);
   const end = addDays(today, -1);
   return { start: addDays(end, -(backfillDays - 1)), end };
+}
+
+export function insightComparisonWindows(end: string): SyncWindow[] {
+  return [
+    { start: addDays(end, -29), end },
+    { start: addDays(end, -59), end: addDays(end, -30) },
+    { start: addDays(end, -89), end },
+    { start: addDays(end, -179), end: addDays(end, -90) },
+  ];
 }
 
 function actionValue(
@@ -264,6 +346,214 @@ function insightPath(externalAdAccountId: string, window: SyncWindow): string {
     limit: "500",
   });
   return `/${externalAdAccountId}/insights?${params.toString()}`;
+}
+
+interface WindowObservation extends SyncWindow {
+  adId: string;
+  reach: number;
+  frequency: number;
+  impressions: number;
+  spend: number;
+  isCumulative: boolean;
+}
+
+function aggregateInsightPath(
+  adId: string,
+  window: SyncWindow,
+  fields: readonly string[],
+  timeIncrement: "1" | "all_days",
+): string {
+  const params = new URLSearchParams({
+    fields: fields.join(","),
+    time_increment: timeIncrement,
+    time_range: JSON.stringify({ since: window.start, until: window.end }),
+    limit: "500",
+  });
+  return `/${adId}/insights?${params.toString()}`;
+}
+
+function metaDate(value: string): string {
+  return new Date(value).toISOString().slice(0, 10);
+}
+
+async function listAds(
+  options: ExecuteInsightSyncOptions,
+): Promise<{ ads: z.infer<typeof MetaAdSchema>[]; raw: unknown[] }> {
+  const ads: z.infer<typeof MetaAdSchema>[] = [];
+  const raw: unknown[] = [];
+  const pageSchema: z.ZodType<
+    PageResult<z.infer<typeof MetaAdSchema>>,
+    z.ZodTypeDef,
+    unknown
+  > = z.object({
+    data: z.array(MetaAdSchema),
+    paging: z
+      .object({
+        next: z.string().url().optional(),
+        cursors: z.object({ after: z.string().optional() }).optional(),
+      })
+      .optional(),
+  });
+  await options.graph.paginate({
+    path:
+      `/${options.externalAdAccountId}/ads` +
+      "?fields=id%2Ccreated_time%2Cad_schedule_start_time&limit=500",
+    pageSchema,
+    signal: options.signal,
+    onPage: async (page) => {
+      ads.push(...page.data);
+      raw.push(page.raw);
+    },
+  });
+  return { ads, raw };
+}
+
+async function discoverDeliveryStart(
+  options: ExecuteInsightSyncOptions,
+  ad: z.infer<typeof MetaAdSchema>,
+): Promise<{ date: string | null; raw: unknown[] }> {
+  const earliestPossible = [metaDate(ad.created_time), ad.ad_schedule_start_time]
+    .filter((value): value is string => Boolean(value))
+    .map((value) => (value.includes("T") ? metaDate(value) : value))
+    .sort()
+    .at(-1)!;
+  if (earliestPossible > options.window.end) return { date: null, raw: [] };
+
+  // Meta rejects Insights ranges beginning more than 37 months ago. If the
+  // earliest possible delivery predates that boundary, a true cumulative
+  // reach value cannot be established and must remain unavailable.
+  const supportedHistoryStart = addDays(addMonths(options.window.end, -37), 1);
+  if (earliestPossible < supportedHistoryStart) return { date: null, raw: [] };
+
+  let firstDelivery: string | null = null;
+  const raw: unknown[] = [];
+  await options.graph.paginate({
+    path: aggregateInsightPath(
+      ad.id,
+      { start: earliestPossible, end: options.window.end },
+      ["ad_id", "date_start", "date_stop", "impressions"],
+      "1",
+    ),
+    pageSchema: DeliveryDayPageSchema,
+    signal: options.signal,
+    onPage: async (page) => {
+      raw.push(page.raw);
+      for (const day of page.data) {
+        if (day.impressions > 0 && (firstDelivery === null || day.date_start < firstDelivery)) {
+          firstDelivery = day.date_start;
+        }
+      }
+    },
+  });
+  return { date: firstDelivery, raw };
+}
+
+async function fetchWindowObservation(
+  options: ExecuteInsightSyncOptions,
+  adId: string,
+  window: SyncWindow,
+  isCumulative: boolean,
+): Promise<{ observation: WindowObservation; raw: unknown }> {
+  const response = await options.graph.request(
+    aggregateInsightPath(adId, window, META_WINDOW_FIELDS, "all_days"),
+    MetaWindowPageSchema,
+    { signal: options.signal },
+  );
+  const row = response.data.data[0];
+  if (row && (row.date_start !== window.start || row.date_stop !== window.end)) {
+    throw new Error("meta_window_range_mismatch");
+  }
+  return {
+    observation: {
+      adId,
+      ...window,
+      reach: row?.reach ?? 0,
+      frequency: row?.frequency ?? 0,
+      impressions: row?.impressions ?? 0,
+      spend: row?.spend ?? 0,
+      isCumulative,
+    },
+    raw: response.raw,
+  };
+}
+
+async function writeWindowObservation(
+  client: PoolClient,
+  options: ExecuteInsightSyncOptions,
+  observation: WindowObservation,
+): Promise<void> {
+  await client.query(
+    `INSERT INTO insight_window (
+       tenant_id, meta_ad_id, window_start, window_end,
+       reach, frequency, impressions, spend, is_cumulative,
+       sync_run_id, observed_at
+     ) VALUES (
+       $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, clock_timestamp()
+     )
+     ON CONFLICT (
+       tenant_id, meta_ad_id, window_start, window_end, sync_run_id
+     ) DO UPDATE SET
+       reach = EXCLUDED.reach,
+       frequency = EXCLUDED.frequency,
+       impressions = EXCLUDED.impressions,
+       spend = EXCLUDED.spend,
+       is_cumulative = EXCLUDED.is_cumulative,
+       observed_at = EXCLUDED.observed_at`,
+    [
+      options.tenantId,
+      observation.adId,
+      observation.start,
+      observation.end,
+      observation.reach,
+      observation.frequency,
+      observation.impressions,
+      observation.spend,
+      observation.isCumulative,
+      options.syncRunId,
+    ],
+  );
+}
+
+async function syncInsightWindows(
+  options: ExecuteInsightSyncOptions,
+): Promise<unknown> {
+  const listed = await listAds(options);
+  const reports: unknown[] = [];
+  const deliveryHistory: unknown[] = [];
+  for (const ad of listed.ads) {
+    for (const window of insightComparisonWindows(options.window.end)) {
+      const result = await fetchWindowObservation(options, ad.id, window, false);
+      const written = await options.withLease((client) =>
+        writeWindowObservation(client, options, result.observation),
+      );
+      if (!written.acquired) throw new JobCancelledError();
+      reports.push({ kind: "comparison", window, response: result.raw });
+    }
+
+    const delivery = await discoverDeliveryStart(options, ad);
+    deliveryHistory.push({ adId: ad.id, responses: delivery.raw });
+    if (!delivery.date) continue;
+    const boundaries = new Set<string>();
+    for (const window of insightComparisonWindows(options.window.end)) {
+      boundaries.add(window.end);
+      boundaries.add(addDays(window.start, -1));
+    }
+    for (const boundary of [...boundaries].sort()) {
+      if (boundary < delivery.date) continue;
+      const window = { start: delivery.date, end: boundary };
+      const result = await fetchWindowObservation(options, ad.id, window, true);
+      const written = await options.withLease((client) =>
+        writeWindowObservation(client, options, result.observation),
+      );
+      if (!written.acquired) throw new JobCancelledError();
+      reports.push({ kind: "cumulative", window, response: result.raw });
+    }
+  }
+  return {
+    ads: listed.raw,
+    deliveryHistory,
+    reports,
+  };
 }
 
 async function writeInsightRow(
@@ -575,6 +865,7 @@ export async function executeInsightSync(
       });
     }
 
+    const windowResponses = await syncInsightWindows(options);
     const rawPages = await options.pool.query<{ raw_response: unknown }>(
       `SELECT raw_response
        FROM insight_sync_page
@@ -586,7 +877,10 @@ export async function executeInsightSync(
       `meta-insights/${options.tenantId}/${options.syncRunId}.json`;
     await options.objectStore.putJson(
       rawResponseKey,
-      { pages: rawPages.rows.map((row) => row.raw_response) },
+      {
+        pages: rawPages.rows.map((row) => row.raw_response),
+        windows: windowResponses,
+      },
       options.signal,
     );
 

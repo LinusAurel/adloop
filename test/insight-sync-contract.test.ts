@@ -109,11 +109,74 @@ describe("insight observation read contract", () => {
     requested: string[] = [],
   ): MetaGraphClient {
     const queue = [...responses];
+    const adIds = [
+      ...new Set(
+        responses.flatMap((response) => {
+          if (!response || typeof response !== "object" || !("data" in response)) return [];
+          const data = (response as { data?: unknown }).data;
+          if (!Array.isArray(data)) return [];
+          return data.flatMap((row) =>
+            row && typeof row === "object" && "ad_id" in row
+              ? [String(row.ad_id)]
+              : [],
+          );
+        }),
+      ),
+    ];
     return new MetaGraphClient({
       accessToken: "synthetic-access-token",
       apiVersion: "v25.0",
       fetchImpl: async (input) => {
-        requested.push(String(input));
+        const url = new URL(String(input));
+        requested.push(url.toString());
+        if (url.pathname.endsWith("/ads")) {
+          return jsonResponse({
+            data: adIds.map((id) => ({
+              id,
+              created_time: "2026-01-01T00:00:00+0000",
+            })),
+          });
+        }
+        if (/\/\d+\/insights$/.test(url.pathname)) {
+          const range = JSON.parse(url.searchParams.get("time_range")!) as {
+            since: string;
+            until: string;
+          };
+          if (url.searchParams.get("time_increment") === "1") {
+            return jsonResponse({
+              data: [
+                {
+                  ad_id: url.pathname.split("/").at(-2),
+                  date_start: "2026-01-01",
+                  date_stop: "2026-01-01",
+                  impressions: "1",
+                },
+              ],
+            });
+          }
+          const elapsedDays = Math.max(
+            0,
+            Math.round(
+              (Date.parse(`${range.until}T00:00:00Z`) -
+                Date.parse("2026-01-01T00:00:00Z")) /
+                86_400_000,
+            ),
+          );
+          const reach = elapsedDays * 10;
+          return jsonResponse({
+            data: [
+              {
+                ad_id: url.pathname.split("/").at(-2),
+                date_start: range.since,
+                date_stop: range.until,
+                reach: String(reach),
+                frequency: reach === 0 ? "0" : "1.25",
+                impressions: String(Math.round(reach * 1.25)),
+                spend: String(reach / 100),
+              },
+            ],
+          });
+        }
         const next = queue.shift();
         if (!next) throw new Error("synthetic_transport_failure");
         return jsonResponse(next);
@@ -243,6 +306,102 @@ describe("insight observation read contract", () => {
     expect(current.rows.map((row) => Number(row.spend))).toEqual([10]);
   });
 
+  it("stores exact comparison and cumulative windows and derives net-new reach", async () => {
+    const syncRunId = uuidv7();
+    await executeInsightSync(options(syncRunId, graphFrom([firstPageOnly])));
+
+    const windows = await db.pool.query<{
+      window_start: string;
+      window_end: string;
+      is_cumulative: boolean;
+    }>(
+      `SELECT window_start::text, window_end::text, is_cumulative
+       FROM insight_window_current
+       WHERE tenant_id = $1 AND meta_ad_id = '000000000000000001'
+       ORDER BY is_cumulative, window_start, window_end`,
+      [db.tenantId],
+    );
+    expect(windows.rows.filter((row) => !row.is_cumulative)).toHaveLength(4);
+    expect(windows.rows.filter((row) => row.is_cumulative)).toHaveLength(5);
+
+    const derived = await db.pool.query<{
+      status: string;
+      reason: string | null;
+      net_new_reach: string | null;
+    }>(
+      `SELECT status, reason, net_new_reach::text
+       FROM net_new_reach_as_of($1, $2, $3, $4, now())`,
+      [
+        db.tenantId,
+        "000000000000000001",
+        "2026-06-21",
+        "2026-07-20",
+      ],
+    );
+    expect(derived.rows[0]).toEqual({
+      status: "available",
+      reason: null,
+      net_new_reach: "300",
+    });
+
+    const missing = await db.pool.query<{
+      status: string;
+      reason: string;
+      net_new_reach: string | null;
+    }>(
+      `SELECT status, reason, net_new_reach::text
+       FROM net_new_reach_as_of($1, $2, $3, $4, now())`,
+      [
+        db.tenantId,
+        "000000000000000001",
+        "2026-06-19",
+        "2026-07-20",
+      ],
+    );
+    expect(missing.rows[0]).toEqual({
+      status: "insufficient_data",
+      reason: "cumulative_reach_missing",
+      net_new_reach: null,
+    });
+  });
+
+  it("reconstructs all three observation tables at an exact data_as_of", async () => {
+    const firstSyncRun = uuidv7();
+    await executeInsightSync(options(firstSyncRun, graphFrom([firstPageOnly])));
+    const cutoff = await db.pool.query<{ finished_at: string }>(
+      "SELECT finished_at::text FROM insight_sync_run WHERE id = $1",
+      [firstSyncRun],
+    );
+
+    const secondSyncRun = uuidv7();
+    await executeInsightSync(options(secondSyncRun, graphFrom([correction])));
+
+    const historicalDaily = await db.pool.query<{ spend: string }>(
+      `SELECT spend::text
+       FROM insight_daily_as_of($1, $2)
+       WHERE meta_ad_id = '000000000000000001'`,
+      [db.tenantId, cutoff.rows[0]!.finished_at],
+    );
+    expect(historicalDaily.rows).toEqual([{ spend: "10" }]);
+
+    const historicalActions = await db.pool.query<{ count: string }>(
+      `SELECT count::text
+       FROM insight_action_daily_as_of($1, $2)
+       WHERE meta_ad_id = '000000000000000001'
+         AND action_type = 'offsite_conversion.fb_pixel_lead'`,
+      [db.tenantId, cutoff.rows[0]!.finished_at],
+    );
+    expect(historicalActions.rows).toEqual([{ count: "3" }]);
+
+    const historicalWindows = await db.pool.query<{ count: string }>(
+      `SELECT count(*)::text AS count
+       FROM insight_window_as_of($1, $2)
+       WHERE meta_ad_id = '000000000000000001'`,
+      [db.tenantId, cutoff.rows[0]!.finished_at],
+    );
+    expect(historicalWindows.rows).toEqual([{ count: "9" }]);
+  });
+
   it("persists all three pages and reports pages_fetched = 3", async () => {
     const syncRunId = uuidv7();
     const result = await executeInsightSync(
@@ -259,8 +418,9 @@ describe("insight observation read contract", () => {
       [syncRunId],
     );
     expect(rows.rows[0]).toEqual({ count: "3", pages_fetched: 3 });
-    expect(store.values.get(result.rawResponseKey)).toEqual({
+    expect(store.values.get(result.rawResponseKey)).toMatchObject({
       pages: [firstPage, secondPage, thirdPage],
+      windows: { reports: expect.any(Array) },
     });
   });
 

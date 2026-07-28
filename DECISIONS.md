@@ -295,10 +295,11 @@ What changed, and why:
 - **A retried page fetch continues the same `insight_sync_run`.** Page data
   and the next cursor are checkpointed atomically, so resuming into a new
   sync run cannot mark a partial observation complete.
-- **Current views are backed by explicit `*_as_of(timestamptz)` functions.**
-  A parameterless SQL view cannot implement the specified historical
-  `data_as_of` contract; the view is the current-time convenience reader,
-  while later snapshot code can call the function with its exact cutoff.
+- **Current views are backed by explicit
+  `*_as_of(tenant_id, timestamptz)` functions.** A parameterless SQL view
+  cannot implement the specified historical `data_as_of` contract; each
+  view delegates to the tenant-scoped function with `now()`, while later
+  snapshot code can call the same function with its exact cutoff.
 - **Action completeness is scoped to the same `query_signature`.** A later
   run with different fields or attribution windows must not zero a valid
   action merely because that action was outside the later query.
@@ -310,3 +311,9 @@ What changed, and why:
   `pnpm test:meta-contract` against the real account.** The acceptance
   correction removed the invalid `net_new_reach` provider field; the metric
   is derived later from separately queried cumulative reach windows.
+- **A cumulative window is only marked available when the ad's first
+  delivered day can be proven inside Meta's 37-month Insights horizon.**
+  The sync discovers that day from daily impressions starting at the later
+  of ad creation and its optional schedule start. Older ads keep exact
+  30/90-day windows but deliberately produce `cumulative_reach_missing`
+  instead of a fabricated lifetime baseline.

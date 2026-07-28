@@ -175,7 +175,33 @@ CREATE TABLE insight_action_daily (
 COMMENT ON TABLE insight_action_daily IS
   'Append-only observations. Never sum this table directly; use insight_action_daily_current or insight_action_daily_as_of() to avoid counting every backfill again.';
 
-CREATE FUNCTION insight_daily_as_of(p_data_as_of timestamptz)
+CREATE TABLE insight_window (
+  tenant_id uuid NOT NULL REFERENCES tenant (id),
+  meta_ad_id text NOT NULL,
+  window_start date NOT NULL,
+  window_end date NOT NULL,
+  reach bigint NOT NULL,
+  frequency numeric NOT NULL,
+  impressions bigint NOT NULL,
+  spend numeric NOT NULL,
+  is_cumulative boolean NOT NULL,
+  sync_run_id uuid NOT NULL,
+  observed_at timestamptz NOT NULL,
+  PRIMARY KEY (
+    tenant_id, meta_ad_id, window_start, window_end, sync_run_id
+  ),
+  FOREIGN KEY (sync_run_id, tenant_id)
+    REFERENCES insight_sync_run (id, tenant_id) ON DELETE CASCADE,
+  CHECK (window_start <= window_end)
+);
+
+COMMENT ON TABLE insight_window IS
+  'Append-only observations of individually queried Meta windows. Reach is non-additive: never sum reach across dates or windows; use exact windows and cumulative differences.';
+
+CREATE FUNCTION insight_daily_as_of(
+  p_tenant uuid,
+  p_data_as_of timestamptz
+)
 RETURNS SETOF insight_daily
 LANGUAGE sql
 STABLE
@@ -186,7 +212,8 @@ AS $$
     ON r.id = d.sync_run_id
    AND r.tenant_id = d.tenant_id
    AND r.status = 'succeeded'
-  WHERE d.observed_at <= p_data_as_of
+  WHERE d.tenant_id = p_tenant
+    AND d.observed_at <= p_data_as_of
     AND r.finished_at <= p_data_as_of
   ORDER BY
     d.tenant_id,
@@ -197,7 +224,10 @@ AS $$
     r.id DESC;
 $$;
 
-CREATE FUNCTION insight_action_daily_as_of(p_data_as_of timestamptz)
+CREATE FUNCTION insight_action_daily_as_of(
+  p_tenant uuid,
+  p_data_as_of timestamptz
+)
 RETURNS SETOF insight_action_daily
 LANGUAGE sql
 STABLE
@@ -214,7 +244,8 @@ AS $$
     ON r.id = a.sync_run_id
    AND r.tenant_id = a.tenant_id
    AND r.status = 'succeeded'
-  WHERE a.observed_at <= p_data_as_of
+  WHERE a.tenant_id = p_tenant
+    AND a.observed_at <= p_data_as_of
     AND r.finished_at <= p_data_as_of
   ORDER BY
     a.tenant_id,
@@ -227,11 +258,110 @@ AS $$
     r.id DESC;
 $$;
 
+CREATE FUNCTION insight_window_as_of(
+  p_tenant uuid,
+  p_data_as_of timestamptz
+)
+RETURNS SETOF insight_window
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT DISTINCT ON (
+    w.tenant_id,
+    w.meta_ad_id,
+    w.window_start,
+    w.window_end
+  ) w.*
+  FROM insight_window w
+  JOIN insight_sync_run r
+    ON r.id = w.sync_run_id
+   AND r.tenant_id = w.tenant_id
+   AND r.status = 'succeeded'
+  WHERE w.tenant_id = p_tenant
+    AND w.observed_at <= p_data_as_of
+    AND r.finished_at <= p_data_as_of
+  ORDER BY
+    w.tenant_id,
+    w.meta_ad_id,
+    w.window_start,
+    w.window_end,
+    w.observed_at DESC,
+    r.finished_at DESC,
+    r.id DESC;
+$$;
+
+CREATE FUNCTION net_new_reach_as_of(
+  p_tenant uuid,
+  p_meta_ad_id text,
+  p_window_start date,
+  p_window_end date,
+  p_data_as_of timestamptz
+)
+RETURNS TABLE (
+  status text,
+  reason text,
+  net_new_reach bigint
+)
+LANGUAGE sql
+STABLE
+AS $$
+  WITH cumulative_end AS (
+    SELECT w.*
+    FROM insight_window_as_of(p_tenant, p_data_as_of) w
+    WHERE w.meta_ad_id = p_meta_ad_id
+      AND w.is_cumulative
+      AND w.window_end = p_window_end
+    ORDER BY w.observed_at DESC
+    LIMIT 1
+  ),
+  cumulative_before AS (
+    SELECT w.*
+    FROM insight_window_as_of(p_tenant, p_data_as_of) w
+    JOIN cumulative_end e ON e.window_start = w.window_start
+    WHERE w.meta_ad_id = p_meta_ad_id
+      AND w.is_cumulative
+      AND w.window_end = p_window_start - 1
+    ORDER BY w.observed_at DESC
+    LIMIT 1
+  )
+  SELECT
+    CASE
+      WHEN e.reach IS NULL THEN 'insufficient_data'
+      WHEN p_window_start > e.window_start AND b.reach IS NULL
+        THEN 'insufficient_data'
+      ELSE 'available'
+    END,
+    CASE
+      WHEN e.reach IS NULL
+        OR (p_window_start > e.window_start AND b.reach IS NULL)
+        THEN 'cumulative_reach_missing'
+      ELSE NULL
+    END,
+    CASE
+      WHEN e.reach IS NULL
+        OR (p_window_start > e.window_start AND b.reach IS NULL)
+        THEN NULL
+      ELSE e.reach - COALESCE(b.reach, 0)
+    END
+  FROM (SELECT 1) singleton
+  LEFT JOIN cumulative_end e ON true
+  LEFT JOIN cumulative_before b ON true;
+$$;
+
 CREATE VIEW insight_daily_current AS
-  SELECT * FROM insight_daily_as_of(now());
+  SELECT current_row.*
+  FROM tenant t
+  CROSS JOIN LATERAL insight_daily_as_of(t.id, now()) current_row;
 
 CREATE VIEW insight_action_daily_current AS
-  SELECT * FROM insight_action_daily_as_of(now());
+  SELECT current_row.*
+  FROM tenant t
+  CROSS JOIN LATERAL insight_action_daily_as_of(t.id, now()) current_row;
+
+CREATE VIEW insight_window_current AS
+  SELECT current_row.*
+  FROM tenant t
+  CROSS JOIN LATERAL insight_window_as_of(t.id, now()) current_row;
 
 -- Reject a second active sync for the same internal ad-account id at the
 -- database boundary, including jobs claimed by distinct worker processes.

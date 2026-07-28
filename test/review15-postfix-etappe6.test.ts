@@ -36,8 +36,10 @@ import {
 import type { GenerationRequest } from "@/images/provider";
 import {
   downloadImageBytes,
+} from "@/images/image-download";
+import { mimeFromMagicBytes } from "@/images/image-mime";
+import {
   materializeWebhookResult,
-  mimeFromMagicBytes,
 } from "@/app/api/webhooks/fal/[correlationId]/route";
 import { resetEnvCacheForTests } from "@/lib/env";
 import { uuidv7 } from "uuidv7";

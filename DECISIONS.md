@@ -574,3 +574,8 @@ costs a build run that the current budget does not justify.
   15 MiB; MIME from Fal → HTTP → magic bytes. Assets use deterministic ids so
   copy-retries do not orphan objects. Unverifiable bucket policy aborts
   (`bucket_policy_unverifiable`); `s3:Get*` counts as public.
+- **Shared MIME + bounded download (Review 16).** `resolveImageMime` /
+  `downloadImageBytes` live under `src/images/` and are used by both the Fal
+  webhook and the polling adapter. Chunk size is checked before append;
+  `Content-Length` over the cap never opens a reader. `Allow`+`NotAction`
+  without excluding reads is treated as public.

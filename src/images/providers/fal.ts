@@ -9,6 +9,8 @@ import {
   ProviderError,
   ASPECT_DIMENSIONS,
 } from "../provider";
+import { downloadImageBytes } from "../image-download";
+import { resolveImageMime } from "../image-mime";
 
 const FalSubmitResponseSchema = z.object({
   request_id: z.string().min(1),
@@ -177,9 +179,14 @@ export class FalImageProvider implements ImageProvider {
     const images: GeneratedImage[] = [];
     for (const img of source) {
       if (img.bytesBase64) {
+        const bytes = Buffer.from(img.bytesBase64, "base64");
+        const mime = resolveImageMime(img.content_type, null, bytes);
+        if (!mime) {
+          throw new ProviderError("fal_image_mime_unknown", "cannot resolve image mime");
+        }
         images.push({
           bytesBase64: img.bytesBase64,
-          mime: img.content_type ?? "image/png",
+          mime,
           width: img.width ?? 1080,
           height: img.height ?? 1350,
         });
@@ -188,14 +195,24 @@ export class FalImageProvider implements ImageProvider {
       if (!img.url) {
         throw new ProviderError("fal_image_url_missing", "image has neither url nor bytes");
       }
-      const dl = await this.http.fetch(img.url, { signal });
-      if (!dl.ok) {
-        throw new ProviderError("fal_image_download_failed", `HTTP ${dl.status}`);
+      let downloaded: { bytes: Buffer; contentType: string | null };
+      try {
+        downloaded = await downloadImageBytes(img.url, this.http, signal);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "download_failed";
+        throw new ProviderError("fal_image_download_failed", message);
       }
-      const buf = Buffer.from(await dl.arrayBuffer());
+      const mime = resolveImageMime(
+        img.content_type,
+        downloaded.contentType,
+        downloaded.bytes,
+      );
+      if (!mime) {
+        throw new ProviderError("fal_image_mime_unknown", "cannot resolve image mime");
+      }
       images.push({
-        bytesBase64: buf.toString("base64"),
-        mime: img.content_type ?? dl.headers.get("content-type") ?? "image/png",
+        bytesBase64: downloaded.bytes.toString("base64"),
+        mime,
         width: img.width ?? 1080,
         height: img.height ?? 1350,
       });

@@ -223,11 +223,19 @@ export function policyAllowsPublicRead(policyJson: string | undefined): boolean 
       Effect?: unknown;
       Principal?: unknown;
       Action?: unknown;
+      NotAction?: unknown;
     };
     if (s.Effect !== "Allow") continue;
     if (!principalIsWildcard(s.Principal)) continue;
-    if (!actionIncludesGetObject(s.Action)) continue;
-    return true;
+    if (s.NotAction !== undefined) {
+      // Allow + NotAction grants everything except listed actions.
+      // Public unless NotAction carves out read access.
+      if (!notActionExcludesReads(s.NotAction)) {
+        return true;
+      }
+      continue;
+    }
+    if (actionIncludesGetObject(s.Action)) return true;
   }
   return false;
 }
@@ -253,6 +261,11 @@ function actionIncludesGetObject(action: unknown): boolean {
       normalized === "*"
     );
   });
+}
+
+/** True when NotAction lists read actions — those are then not granted by Allow. */
+function notActionExcludesReads(notAction: unknown): boolean {
+  return actionIncludesGetObject(notAction);
 }
 
 /** True when GetBucketPolicy failed because no policy exists (private default). */

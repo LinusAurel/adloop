@@ -14,6 +14,8 @@ import {
 } from "@/images/provider";
 import { getImageProvider } from "@/images/registry";
 import { FalImageProvider } from "@/images/providers/fal";
+import { downloadImageBytes } from "@/images/image-download";
+import { resolveImageMime } from "@/images/image-mime";
 
 const ParamsSchema = z.object({
   correlationId: z.string().uuid(),
@@ -33,9 +35,6 @@ const FalWebhookBodySchema = z.object({
   payload: z.unknown().optional(),
   images: z.array(FalImageSchema).optional(),
 });
-
-const DOWNLOAD_TIMEOUT_MS = 30_000;
-const DOWNLOAD_MAX_BYTES = 15 * 1024 * 1024;
 
 /**
  * Fal correlated_callback endpoint. Correlation id is in the URL so the
@@ -134,12 +133,11 @@ export async function materializeWebhookResult(
   for (const img of imagesSource) {
     if (img.bytesBase64) {
       const bytes = Buffer.from(img.bytesBase64, "base64");
+      const mime = resolveImageMime(img.content_type, null, bytes);
+      if (!mime) return null;
       images.push({
         bytesBase64: img.bytesBase64,
-        mime:
-          img.content_type ??
-          mimeFromMagicBytes(bytes) ??
-          "application/octet-stream",
+        mime,
         width: img.width ?? 1080,
         height: img.height ?? 1350,
       });
@@ -149,10 +147,11 @@ export async function materializeWebhookResult(
       return null;
     }
     const downloaded = await downloadImageBytes(img.url, http);
-    const mime =
-      img.content_type ??
-      downloaded.contentType ??
-      mimeFromMagicBytes(downloaded.bytes);
+    const mime = resolveImageMime(
+      img.content_type,
+      downloaded.contentType,
+      downloaded.bytes,
+    );
     if (!mime) {
       throw new Error("image_mime_unknown");
     }
@@ -177,76 +176,5 @@ function isHttpUrl(value: string): boolean {
     return url.protocol === "https:" || url.protocol === "http:";
   } catch {
     return false;
-  }
-}
-
-/** Rank: Fal content_type → HTTP Content-Type → magic bytes. No default guess. */
-export function mimeFromMagicBytes(bytes: Buffer): string | null {
-  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
-    return "image/jpeg";
-  }
-  if (
-    bytes.length >= 8 &&
-    bytes[0] === 0x89 &&
-    bytes[1] === 0x50 &&
-    bytes[2] === 0x4e &&
-    bytes[3] === 0x47
-  ) {
-    return "image/png";
-  }
-  if (
-    bytes.length >= 12 &&
-    bytes.toString("ascii", 0, 4) === "RIFF" &&
-    bytes.toString("ascii", 8, 12) === "WEBP"
-  ) {
-    return "image/webp";
-  }
-  if (bytes.length >= 6 && bytes.toString("ascii", 0, 6) === "GIF87a") {
-    return "image/gif";
-  }
-  if (bytes.length >= 6 && bytes.toString("ascii", 0, 6) === "GIF89a") {
-    return "image/gif";
-  }
-  return null;
-}
-
-export async function downloadImageBytes(
-  url: string,
-  http: { fetch: typeof fetch },
-): Promise<{ bytes: Buffer; contentType: string | null }> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), DOWNLOAD_TIMEOUT_MS);
-  try {
-    const response = await http.fetch(url, { signal: controller.signal });
-    if (!response.ok) {
-      throw new Error(`download_http_${response.status}`);
-    }
-    const lengthHeader = response.headers.get("content-length");
-    if (lengthHeader && Number(lengthHeader) > DOWNLOAD_MAX_BYTES) {
-      throw new Error("download_too_large");
-    }
-    const headerType = response.headers.get("content-type");
-    const contentType = headerType ? headerType.split(";")[0]!.trim() || null : null;
-
-    if (!response.body) {
-      throw new Error("download_empty_body");
-    }
-    const reader = response.body.getReader();
-    const chunks: Uint8Array[] = [];
-    let total = 0;
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      if (!value) continue;
-      total += value.byteLength;
-      if (total > DOWNLOAD_MAX_BYTES) {
-        await reader.cancel();
-        throw new Error("download_too_large");
-      }
-      chunks.push(value);
-    }
-    return { bytes: Buffer.concat(chunks.map((c) => Buffer.from(c))), contentType };
-  } finally {
-    clearTimeout(timer);
   }
 }

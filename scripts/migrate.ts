@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { Client } from "pg";
-import runMigrations from "node-pg-migrate";
+import { runner as runMigrations } from "node-pg-migrate";
 
 if (!process.env.DATABASE_URL) {
   throw new Error("DATABASE_URL is required to run migrations");

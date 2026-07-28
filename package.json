@@ -21,8 +21,8 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1096.0",
-    "next": "15.1.4",
-    "node-pg-migrate": "7.9.1",
+    "next": "15.5.22",
+    "node-pg-migrate": "9.0.0",
     "pg": "8.13.1",
     "react": "19.0.0",
     "react-dom": "19.0.0",
@@ -30,15 +30,22 @@
     "zod": "3.24.1"
   },
   "devDependencies": {
-    "@testcontainers/postgresql": "10.16.0",
-    "@types/node": "22.10.5",
+    "@testcontainers/postgresql": "12.0.4",
+    "@types/node": "26.1.2",
     "@types/pg": "8.11.10",
     "@types/react": "19.0.4",
     "@types/react-dom": "19.0.2",
-    "esbuild": "0.24.2",
+    "esbuild": "0.28.1",
     "lefthook": "^2.1.10",
-    "testcontainers": "10.16.0",
+    "testcontainers": "12.0.4",
     "typescript": "5.7.2",
-    "vitest": "2.1.8"
+    "vite": "^7.3.6",
+    "vitest": "4.1.10"
+  },
+  "pnpm": {
+    "overrides": {
+      "postcss": "8.5.18",
+      "sharp": "0.35.0"
+    }
   }
 }

@@ -7,8 +7,7 @@ export default defineConfig({
     testTimeout: 20000,
     hookTimeout: 60000,
     fileParallelism: true,
-    minWorkers: 1,
-    maxWorkers: 4,
+    maxWorkers: 1,
     env: {
       DATABASE_URL: "postgres://test:test@127.0.0.1:1/test",
       SESSION_SECRET: "test-session-secret-at-least-32-characters",

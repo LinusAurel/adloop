@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import runMigrations from "node-pg-migrate";
+import { runner as runMigrations } from "node-pg-migrate";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { startTestDb, type TestDb } from "./db-harness";
 

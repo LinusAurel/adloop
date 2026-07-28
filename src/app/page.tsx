@@ -67,7 +67,8 @@ export default function Home() {
       <h1>adloop v2 — queue smoke test</h1>
       <p style={{ color: "#666" }}>
         Verification tool, not a product surface (§7 of the auftrag). Starts an <code>echo</code> run
-        (the runId is generated in the browser) and polls its progress.
+        (the runId is generated in the browser) and polls its progress.{" "}
+        <a href="/connectors">Connectors</a> · <a href="/metrics">Metriken</a>
       </p>
       <form onSubmit={submit} style={{ display: "flex", gap: "0.5rem", marginBottom: "1.5rem" }}>
         <input

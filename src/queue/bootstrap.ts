@@ -3,6 +3,11 @@ import { echoFamily } from "./families/echo";
 import { metaInsightSyncFamily } from "./families/meta-insight-sync";
 import { metricSnapshotComputeFamily } from "./families/metric-snapshot-compute";
 import { agentTurnFamily } from "@/agent/turn";
+import {
+  copychiefReviewFamily,
+  croReviewFamily,
+  variationsFamily,
+} from "./families/strategist-review";
 import { ensureToolsBootstrapped } from "@/agent/tools/bootstrap";
 
 /**
@@ -30,5 +35,14 @@ export function ensureQueueBootstrapped(): void {
   }
   if (!isFamilyRegistered(agentTurnFamily.name)) {
     registerFamily(agentTurnFamily);
+  }
+  if (!isFamilyRegistered(copychiefReviewFamily.name)) {
+    registerFamily(copychiefReviewFamily);
+  }
+  if (!isFamilyRegistered(croReviewFamily.name)) {
+    registerFamily(croReviewFamily);
+  }
+  if (!isFamilyRegistered(variationsFamily.name)) {
+    registerFamily(variationsFamily);
   }
 }

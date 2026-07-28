@@ -33,6 +33,15 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       family: "metric_snapshot_compute",
     });
   }
+  if (
+    parsed.data.family === "copychief_review" ||
+    parsed.data.family === "cro_review" ||
+    parsed.data.family === "variations"
+  ) {
+    return errorResponse(400, "family_requires_dedicated_endpoint", {
+      endpoint: "/api/creative-strategies/ad-review",
+    });
+  }
 
   const result = await createRun(getPool(), {
     ...parsed.data,

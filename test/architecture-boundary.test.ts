@@ -24,6 +24,9 @@ const ALLOWED_FILES = new Set([
   "src/agent/create-chat-run.ts",
   "src/agent/run-events.ts",
   "src/agent/turn.ts",
+  // Etappe 5: ad-review creates chat+run+job+mapping in one transaction,
+  // same pattern as create-chat-run.
+  "src/strategist/ad-review.ts",
 ]);
 const ALLOWED_DIR_PREFIX = "src/queue/sql/";
 

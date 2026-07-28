@@ -1,11 +1,13 @@
 import type { Pool } from "pg";
+import { assertJobTransitionAllowed } from "../transitions";
 import type { JobError, JobRow } from "../types";
 
 /**
  * §4.7: scheduled_for = now() + min(base * 2^(attempts-1), max) + jitter(0..250ms).
  * `attempts` already reflects the attempt that just failed (claim increments
  * it). Fenced identically to every other worker mutation: only reachable
- * from 'claimed', with a lease_token match.
+ * from 'claimed', with a lease_token match, and (P1-1, second review) the
+ * lease must not already have expired — see sql/heartbeat.ts.
  */
 export async function scheduleRetry(
   pool: Pool,
@@ -17,6 +19,7 @@ export async function scheduleRetry(
     backoffMaxMs: number;
   },
 ): Promise<JobRow | null> {
+  assertJobTransitionAllowed("claimed", "retry_scheduled");
   const result = await pool.query<JobRow>(
     `UPDATE job SET
        status = 'retry_scheduled',
@@ -29,6 +32,7 @@ export async function scheduleRetry(
        || ' milliseconds')::interval,
        updated_at = now()
      WHERE id = $4 AND lease_token = $5 AND status = 'claimed'
+       AND lease_expires_at >= now()
      RETURNING *`,
     [JSON.stringify(params.error), params.backoffBaseMs, params.backoffMaxMs, params.jobId, params.leaseToken],
   );

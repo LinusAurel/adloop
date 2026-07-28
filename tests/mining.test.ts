@@ -95,13 +95,16 @@ test("classify: CPL im Rahmen, aber unter Lead-Schwelle -> zu wenig Daten", () =
   assert.equal(fewLeads.classification, "insufficient_data");
 });
 
-test("Fixture: 6 Ads, 2 Winner, 2 Loser, 2x zu wenig Daten", () => {
+// Klassifikation ueber ein echtes Brand-Fixture. Die drei Faelle einzeln
+// decken die Tests darueber ab; hier geht es darum, dass der Pfad vom
+// Fixture bis zur Klassifikation durchlaeuft und stabil bleibt.
+test("Fixture creators-demo: 6 Ads, 4 Winner, 1 Loser, 1x zu wenig Daten", () => {
   const rows = classifyRows(loadFixtureRows("creators-demo"), TARGET_CPA);
   assert.equal(rows.length, 6);
   const count = (c: string) => rows.filter((r) => r.classification === c).length;
-  assert.equal(count("winner"), 2);
-  assert.equal(count("loser"), 2);
-  assert.equal(count("insufficient_data"), 2);
+  assert.equal(count("winner"), 4);
+  assert.equal(count("loser"), 1);
+  assert.equal(count("insufficient_data"), 1);
 });
 
 test("Naming: build + parse sind Umkehrfunktionen", () => {

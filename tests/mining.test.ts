@@ -96,7 +96,7 @@ test("classify: CPL im Rahmen, aber unter Lead-Schwelle -> zu wenig Daten", () =
 });
 
 test("Fixture: 6 Ads, 2 Winner, 2 Loser, 2x zu wenig Daten", () => {
-  const rows = classifyRows(loadFixtureRows(), TARGET_CPA);
+  const rows = classifyRows(loadFixtureRows("creators-demo"), TARGET_CPA);
   assert.equal(rows.length, 6);
   const count = (c: string) => rows.filter((r) => r.classification === c).length;
   assert.equal(count("winner"), 2);

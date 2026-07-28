@@ -2,7 +2,7 @@
 // (a) real insights read against the account, filtered to OUR campaign_id —
 //     freshly paused ads physically deliver no data, so an empty result is
 //     reported as „Konnektivität OK, noch keine Daten“, never as failure;
-// (b) mining demo on data/fixtures/insights-demo.json, clearly labeled as
+// (b) mining demo on data/fixtures/insights-<slug>.json, clearly labeled as
 //     fixture data (UI badge „Demo-Daten“).
 // Classification rules live in engine/skills/mining.md; this module is the
 // deterministic implementation (thresholds against small-sample noise).
@@ -143,17 +143,13 @@ export function classifyRows(rows: MetaInsightRow[], targetCpa: number): Classif
   return rows.map((r) => classifyRow(normalizeRow(r), targetCpa));
 }
 
-// Per-brand fixture first (data/fixtures/insights-<slug>.json, e.g. the
-// creators-demo dataset from #13), shared insights-demo.json as fallback.
-function fixturePath(slug?: string): string {
-  if (slug) {
-    const perBrand = path.join(process.cwd(), "data", "fixtures", `insights-${slug}.json`);
-    if (fs.existsSync(perBrand)) return perBrand;
-  }
-  return path.join(process.cwd(), "data", "fixtures", "insights-demo.json");
+// Fixture per Brand: data/fixtures/insights-<slug>.json. Kein Fallback —
+// fehlt die Datei, ist das ein Konfigurationsfehler und soll auffallen.
+function fixturePath(slug: string): string {
+  return path.join(process.cwd(), "data", "fixtures", `insights-${slug}.json`);
 }
 
-export function loadFixtureRows(slug?: string): MetaInsightRow[] {
+export function loadFixtureRows(slug: string): MetaInsightRow[] {
   const file = fixturePath(slug);
   if (!fs.existsSync(file)) throw new Error(`Fixture fehlt: ${file}`);
   return JSON.parse(fs.readFileSync(file, "utf8")) as MetaInsightRow[];

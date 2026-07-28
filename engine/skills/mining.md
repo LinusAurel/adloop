@@ -80,7 +80,7 @@ Ein einzelner billiger Lead bei 6 € Spend ist Rauschen, kein Winner.
 
 Frisch publishte, pausierte Ads liefern physikalisch keine Insights. Darum:
 (a) echter Read als Konnektivitätsbeweis („Konnektivität OK, noch keine
-Daten“), (b) Mining-Demo auf `data/fixtures/insights-demo.json` — im UI immer
+Daten“), (b) Mining-Demo auf `data/fixtures/insights-<slug>.json` — im UI immer
 als „Demo-Daten“ gelabelt, nie als Live-Optimierung verkauft.
 
 **Sprache: Alle Ausgaben auf Deutsch mit echten deutschen Umlauten (ä, ö, ü, Ä, Ö, Ü, ß) — NIEMALS ae/oe/ue-Ersatzschreibungen.**

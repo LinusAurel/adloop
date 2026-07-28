@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getPool } from "@/db/pool";
 import { errorResponse } from "@/lib/api-error";
 import type { JobProgress, JobStatus, RunStatus } from "@/queue/types";
+import { authenticate, requireOwnedResource } from "@/auth/guard";
 
 interface RunRow {
   id: string;
@@ -18,24 +19,33 @@ interface JobRow {
 
 /** §5 GET /api/runs/:id */
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
+  const auth = authenticate(req);
+  if (!auth.ok) return auth.response;
+
   const { id } = await params;
   const pool = getPool();
+  const ownershipError = await requireOwnedResource(pool, auth.session, "run", id);
+  if (ownershipError) return ownershipError;
 
   const runResult = await pool.query<RunRow>(
-    `SELECT id, status, created_at, updated_at FROM run WHERE id = $1`,
-    [id],
+    `SELECT id, status, created_at, updated_at
+     FROM run
+     WHERE id = $1 AND tenant_id = $2`,
+    [id, auth.session.tenantId],
   );
   const run = runResult.rows[0];
   if (!run) {
-    return errorResponse(404, { code: "NOT_FOUND", message: "run not found", retryable: false });
+    return errorResponse(404, "not_found");
   }
 
   const jobResult = await pool.query<JobRow>(
-    `SELECT status, attempts, progress FROM job WHERE run_id = $1`,
-    [id],
+    `SELECT status, attempts, progress
+     FROM job
+     WHERE run_id = $1 AND tenant_id = $2`,
+    [id, auth.session.tenantId],
   );
   const job = jobResult.rows[0] ?? null;
 

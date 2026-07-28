@@ -133,9 +133,13 @@ export async function materializeWebhookResult(
   const images = [];
   for (const img of imagesSource) {
     if (img.bytesBase64) {
+      const bytes = Buffer.from(img.bytesBase64, "base64");
       images.push({
         bytesBase64: img.bytesBase64,
-        mime: img.content_type ?? "image/png",
+        mime:
+          img.content_type ??
+          mimeFromMagicBytes(bytes) ??
+          "application/octet-stream",
         width: img.width ?? 1080,
         height: img.height ?? 1350,
       });
@@ -145,9 +149,16 @@ export async function materializeWebhookResult(
       return null;
     }
     const downloaded = await downloadImageBytes(img.url, http);
+    const mime =
+      img.content_type ??
+      downloaded.contentType ??
+      mimeFromMagicBytes(downloaded.bytes);
+    if (!mime) {
+      throw new Error("image_mime_unknown");
+    }
     images.push({
-      bytesBase64: downloaded.toString("base64"),
-      mime: img.content_type ?? "image/jpeg",
+      bytesBase64: downloaded.bytes.toString("base64"),
+      mime,
       width: img.width ?? 1080,
       height: img.height ?? 1350,
     });
@@ -169,10 +180,40 @@ function isHttpUrl(value: string): boolean {
   }
 }
 
-async function downloadImageBytes(
+/** Rank: Fal content_type → HTTP Content-Type → magic bytes. No default guess. */
+export function mimeFromMagicBytes(bytes: Buffer): string | null {
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+    return "image/jpeg";
+  }
+  if (
+    bytes.length >= 8 &&
+    bytes[0] === 0x89 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x4e &&
+    bytes[3] === 0x47
+  ) {
+    return "image/png";
+  }
+  if (
+    bytes.length >= 12 &&
+    bytes.toString("ascii", 0, 4) === "RIFF" &&
+    bytes.toString("ascii", 8, 12) === "WEBP"
+  ) {
+    return "image/webp";
+  }
+  if (bytes.length >= 6 && bytes.toString("ascii", 0, 6) === "GIF87a") {
+    return "image/gif";
+  }
+  if (bytes.length >= 6 && bytes.toString("ascii", 0, 6) === "GIF89a") {
+    return "image/gif";
+  }
+  return null;
+}
+
+export async function downloadImageBytes(
   url: string,
   http: { fetch: typeof fetch },
-): Promise<Buffer> {
+): Promise<{ bytes: Buffer; contentType: string | null }> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), DOWNLOAD_TIMEOUT_MS);
   try {
@@ -184,11 +225,27 @@ async function downloadImageBytes(
     if (lengthHeader && Number(lengthHeader) > DOWNLOAD_MAX_BYTES) {
       throw new Error("download_too_large");
     }
-    const buf = Buffer.from(await response.arrayBuffer());
-    if (buf.byteLength > DOWNLOAD_MAX_BYTES) {
-      throw new Error("download_too_large");
+    const headerType = response.headers.get("content-type");
+    const contentType = headerType ? headerType.split(";")[0]!.trim() || null : null;
+
+    if (!response.body) {
+      throw new Error("download_empty_body");
     }
-    return buf;
+    const reader = response.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let total = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      total += value.byteLength;
+      if (total > DOWNLOAD_MAX_BYTES) {
+        await reader.cancel();
+        throw new Error("download_too_large");
+      }
+      chunks.push(value);
+    }
+    return { bytes: Buffer.concat(chunks.map((c) => Buffer.from(c))), contentType };
   } finally {
     clearTimeout(timer);
   }

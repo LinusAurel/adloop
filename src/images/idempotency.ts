@@ -84,15 +84,28 @@ export async function reserveIdempotencyKey(
       `SELECT * FROM idempotency_key WHERE key = $1 FOR UPDATE`,
       [params.key],
     );
-    const row = existing.rows[0];
+    let row = existing.rows[0];
     if (!row) {
-      await client.query(
+      const inserted = await client.query<IdempotencyRow>(
         `INSERT INTO idempotency_key (
            key, tenant_id, request_hash, status, correlation_id, provider
-         ) VALUES ($1, $2, $3, 'in_flight', $4, $5)`,
+         ) VALUES ($1, $2, $3, 'in_flight', $4, $5)
+         ON CONFLICT (key) DO NOTHING
+         RETURNING *`,
         [params.key, params.tenantId, params.requestHash, correlationId, params.provider],
       );
-      return { kind: "reserved", correlationId };
+      if (inserted.rows[0]) {
+        return { kind: "reserved", correlationId };
+      }
+      // Parallel first-writer: lock the row the other transaction inserted.
+      const raced = await client.query<IdempotencyRow>(
+        `SELECT * FROM idempotency_key WHERE key = $1 FOR UPDATE`,
+        [params.key],
+      );
+      row = raced.rows[0];
+      if (!row) {
+        throw new Error("idempotency_key_missing_after_conflict");
+      }
     }
     if (row.request_hash !== params.requestHash) {
       return { kind: "conflict" };
@@ -170,6 +183,18 @@ export function setCrashAfterProviderSubmitForTests(
   hook: ((job: ProviderJob) => Promise<void> | void) | null,
 ): void {
   crashAfterProviderSubmit = hook;
+}
+
+/**
+ * Test hook: both concurrent callers reach this before the CAS that grants
+ * submit rights — proves the race on two Postgres backends.
+ */
+let beforeClaimSubmit: (() => Promise<void> | void) | null = null;
+
+export function setBeforeClaimSubmitForTests(
+  hook: (() => Promise<void> | void) | null,
+): void {
+  beforeClaimSubmit = hook;
 }
 
 function parseProviderJob(raw: unknown): ProviderJob | null {
@@ -265,15 +290,28 @@ async function submitAndComplete(
     request: Parameters<ImageProvider["submit"]>[0];
   },
 ): Promise<ProviderCallOutcome> {
-  // Mark the crash window BEFORE the network call. If we die after the
-  // provider accepts but before we learn the external id, a retry sees
-  // phase=submitting and must recover — never blind-resubmit.
+  // Atomic compare-and-set: exactly one caller wins the right to submit.
+  // Check-then-set leaves a parallel window where two jobs both see
+  // provider_job IS NULL and both bill the provider.
   const submittingMarker: ProviderJob = {
     externalId: "pending",
     correlationId: params.correlationId,
     raw: { phase: "submitting" },
   };
-  await recordProviderJob(db, { key: params.key, job: submittingMarker });
+  if (beforeClaimSubmit) {
+    await beforeClaimSubmit();
+  }
+  const claimed = await db.query<{ key: string }>(
+    `UPDATE idempotency_key
+     SET provider_job = $1::jsonb
+     WHERE key = $2 AND provider_job IS NULL AND status = 'in_flight'
+     RETURNING key`,
+    [JSON.stringify(submittingMarker), params.key],
+  );
+  if (claimed.rows.length === 0) {
+    // Lost the race — never submit. Reconcile like a crash recovery.
+    return reconcileAfterLostSubmitClaim(db, params);
+  }
 
   const job = await params.provider.submit(params.request, params.correlationId);
   await recordProviderJob(db, { key: params.key, job });
@@ -285,6 +323,51 @@ async function submitAndComplete(
   const result = await params.provider.fetchResult(job, new AbortController().signal);
   await completeIdempotencyKey(db, { key: params.key, result });
   return { kind: "result", result, job };
+}
+
+async function reconcileAfterLostSubmitClaim(
+  db: Queryable,
+  params: {
+    key: string;
+    provider: ImageProvider;
+    correlationId: string;
+    request: Parameters<ImageProvider["submit"]>[0];
+  },
+): Promise<ProviderCallOutcome> {
+  const existing = await db.query<IdempotencyRow>(
+    `SELECT * FROM idempotency_key WHERE key = $1`,
+    [params.key],
+  );
+  const row = existing.rows[0];
+  if (!row) {
+    throw new Error("idempotency_key_missing_after_cas");
+  }
+  if (row.status === "succeeded") {
+    const parsed = GenerationResultSchema.safeParse(row.result);
+    if (!parsed.success) throw new Error("idempotency_result_corrupt");
+    return { kind: "replay", result: parsed.data };
+  }
+  const providerJob = parseProviderJob(row.provider_job) ?? {
+    externalId: "pending",
+    correlationId: row.correlation_id,
+    raw: { phase: "submitting" },
+  };
+  // Peer holds the submit marker. If they already have an external id we can
+  // fetch; if still pending we wait — never a second submit.
+  if (providerJob.externalId !== "pending") {
+    return recoverInFlight(db, {
+      key: params.key,
+      provider: params.provider,
+      correlationId: row.correlation_id,
+      providerJob,
+      request: params.request,
+    });
+  }
+  return enterAwaitingCallback(db, {
+    key: params.key,
+    correlationId: row.correlation_id,
+    providerJob,
+  });
 }
 
 async function recoverInFlight(

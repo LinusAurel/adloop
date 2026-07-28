@@ -19,6 +19,7 @@ import {
   resolveConfiguredProvider,
   resolveGenerationInputs,
   runImageGeneration,
+  ProviderNotAllowedError,
   type GenerationInputs,
 } from "@/images/generate";
 import {
@@ -275,26 +276,31 @@ describe("review 14 — etappe 6 findings", () => {
     );
   });
 
-  it("F4 — request provider ignored unless allowlisted; workshop must not force stub", async () => {
+  it("F4 — allowlist only under NODE_ENV=test; workshop must not force stub", async () => {
     const prev = process.env.IMAGE_PROVIDER_REQUEST_ALLOWLIST;
     const prevProvider = process.env.IMAGE_PROVIDER;
+    const prevNode = process.env.NODE_ENV;
 
     process.env.IMAGE_PROVIDER = "fal";
     delete process.env.IMAGE_PROVIDER_REQUEST_ALLOWLIST;
+    (process.env as { NODE_ENV?: string }).NODE_ENV = "test";
     resetEnvCacheForTests();
-    expect(resolveConfiguredProvider("stub")).toBe("fal");
+    // Mismatch without allowlist → hard error (not silent ignore).
+    expect(() => resolveConfiguredProvider("stub")).toThrow(ProviderNotAllowedError);
     expect(resolveConfiguredProvider(undefined)).toBe("fal");
 
     process.env.IMAGE_PROVIDER_REQUEST_ALLOWLIST = "stub";
     resetEnvCacheForTests();
     expect(resolveConfiguredProvider("stub")).toBe("stub");
-    expect(resolveConfiguredProvider("openai-images")).toBe("fal");
+    expect(() => resolveConfiguredProvider("openai-images")).toThrow(
+      ProviderNotAllowedError,
+    );
 
-    // Restore vitest defaults for the rest of the suite.
     process.env.IMAGE_PROVIDER_REQUEST_ALLOWLIST =
       prev ?? "stub,fal,openai-images";
     if (prevProvider === undefined) delete process.env.IMAGE_PROVIDER;
     else process.env.IMAGE_PROVIDER = prevProvider;
+    (process.env as { NODE_ENV?: string }).NODE_ENV = prevNode;
     resetEnvCacheForTests();
     process.env.IMAGE_PROVIDER_REQUEST_ALLOWLIST = "stub,fal,openai-images";
     resetEnvCacheForTests();

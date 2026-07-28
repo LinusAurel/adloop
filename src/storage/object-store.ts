@@ -121,9 +121,13 @@ export class S3ObjectStore implements ObjectStore {
         new GetBucketPolicyCommand({ Bucket: this.bucket }),
       );
       policyJson = got.Policy;
-    } catch {
-      // NoSuchBucketPolicy / empty — private by default. Safe to continue.
-      return;
+    } catch (error: unknown) {
+      if (isNoSuchBucketPolicy(error)) {
+        // Empty policy — private by default.
+        return;
+      }
+      // Cannot establish the state → refuse to start. Unverifiable ≠ ok.
+      throw new Error("bucket_policy_unverifiable");
     }
     if (policyAllowsPublicRead(policyJson)) {
       throw new Error("bucket_not_private");
@@ -239,13 +243,44 @@ function principalIsWildcard(principal: unknown): boolean {
 
 function actionIncludesGetObject(action: unknown): boolean {
   const actions = Array.isArray(action) ? action : [action];
-  return actions.some(
-    (a) =>
-      a === "s3:GetObject" ||
-      a === "s3:*" ||
-      a === "*" ||
-      (typeof a === "string" && a.toLowerCase() === "s3:getobject"),
+  return actions.some((a) => {
+    if (typeof a !== "string") return false;
+    const normalized = a.toLowerCase();
+    return (
+      normalized === "s3:getobject" ||
+      normalized === "s3:get*" ||
+      normalized === "s3:*" ||
+      normalized === "*"
+    );
+  });
+}
+
+/** True when GetBucketPolicy failed because no policy exists (private default). */
+export function isNoSuchBucketPolicy(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const err = error as { name?: string; Code?: string; code?: string };
+  const code = err.name ?? err.Code ?? err.code ?? "";
+  return (
+    code === "NoSuchBucketPolicy" ||
+    code === "NoSuchBucketPolicyError" ||
+    code === "NotFound"
   );
+}
+
+/**
+ * Resolve whether a bucket may be used after PutBucketPolicy failed.
+ * Exported for Finding 6 tests — unverifiable must abort.
+ */
+export function resolveBucketPrivacyAfterPutFailure(params: {
+  getPolicyError?: unknown;
+  policyJson?: string;
+}): "private" | "public" | "unverifiable" {
+  if (params.getPolicyError !== undefined) {
+    if (isNoSuchBucketPolicy(params.getPolicyError)) return "private";
+    return "unverifiable";
+  }
+  if (policyAllowsPublicRead(params.policyJson)) return "public";
+  return "private";
 }
 
 let cached: ObjectStore | undefined;
@@ -272,6 +307,8 @@ export class MemoryObjectStore implements ObjectStore {
   private readonly objects = new Map<string, StoredObject>();
   private readonly signed = new Map<string, { key: string; expiresAt: number }>();
 
+  putCount = 0;
+
   async putJson(key: string, value: unknown): Promise<void> {
     await this.putBytes(key, Buffer.from(JSON.stringify(value), "utf8"), "application/json");
   }
@@ -281,6 +318,7 @@ export class MemoryObjectStore implements ObjectStore {
     body: Buffer | Uint8Array,
     contentType: string,
   ): Promise<void> {
+    this.putCount += 1;
     this.objects.set(key, { body: Buffer.from(body), contentType });
   }
 

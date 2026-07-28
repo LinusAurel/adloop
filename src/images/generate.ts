@@ -155,17 +155,29 @@ export type GenerationOutcome =
   | GenerationAwaitingCallback;
 
 /**
- * Provider comes from server config. A request value is accepted only when it
- * appears on IMAGE_PROVIDER_REQUEST_ALLOWLIST — otherwise ignored. Clients must
- * not choose who gets billed.
+ * Provider comes from server config. A client override is accepted only under
+ * NODE_ENV=test and IMAGE_PROVIDER_REQUEST_ALLOWLIST. Anywhere else a mismatch
+ * is `provider_not_allowed` — the client must not choose who gets billed.
  */
+export class ProviderNotAllowedError extends Error {
+  readonly code = "provider_not_allowed";
+  constructor(requested: string, configured: string) {
+    super(`provider_not_allowed:${requested}:${configured}`);
+    this.name = "ProviderNotAllowedError";
+  }
+}
+
 export function resolveConfiguredProvider(
   requested: GenerationInputs["provider"] | undefined,
 ): ResolvedGenerationInputs["provider"] {
-  if (requested && isRequestProviderAllowed(requested)) {
+  const configured = env.IMAGE_PROVIDER;
+  if (!requested || requested === configured) {
+    return configured;
+  }
+  if (env.NODE_ENV === "test" && isRequestProviderAllowed(requested)) {
     return requested;
   }
-  return env.IMAGE_PROVIDER;
+  throw new ProviderNotAllowedError(requested, configured);
 }
 
 function isRequestProviderAllowed(id: string): boolean {
@@ -176,6 +188,18 @@ function isRequestProviderAllowed(id: string): boolean {
     .map((s) => s.trim())
     .filter(Boolean)
     .includes(id);
+}
+
+/** Deterministic asset id from (generationId, imageIndex) — resume-safe. */
+export function deterministicAssetId(generationId: string, imageIndex: number): string {
+  const hash = createHash("sha256")
+    .update(`adloop:asset:${generationId}:${imageIndex}`)
+    .digest();
+  const bytes = Buffer.from(hash.subarray(0, 16));
+  bytes[6] = (bytes[6]! & 0x0f) | 0x50;
+  bytes[8] = (bytes[8]! & 0x3f) | 0x80;
+  const hex = bytes.toString("hex");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
 export async function runImageGeneration(
@@ -341,26 +365,43 @@ export async function runImageGeneration(
     const image = generationResult.images[i]!;
     const bytes = Buffer.from(image.bytesBase64, "base64");
     const checksum = createHash("sha256").update(bytes).digest("hex");
-    const assetId = uuidv7();
+    const assetId = deterministicAssetId(generationId, i);
     const storageKey = `tenants/${params.tenantId}/assets/${assetId}`;
 
-    await store.putBytes(storageKey, bytes, image.mime, signal);
-
-    await db.query(
-      `INSERT INTO asset (
-         id, tenant_id, kind, storage_key, width, height, mime, checksum
-       ) VALUES ($1, $2, 'image', $3, $4, $5, $6, $7)`,
-      [
-        assetId,
-        params.tenantId,
-        storageKey,
-        image.width,
-        image.height,
-        image.mime,
-        checksum,
-      ],
+    const existingAsset = await db.query<{ id: string }>(
+      `SELECT id FROM asset WHERE id = $1 AND tenant_id = $2`,
+      [assetId, params.tenantId],
     );
+    if (!existingAsset.rows[0]) {
+      // Insert the row before upload so a crash mid-put still yields a stable id.
+      await db.query(
+        `INSERT INTO asset (
+           id, tenant_id, kind, storage_key, width, height, mime, checksum
+         ) VALUES ($1, $2, 'image', $3, $4, $5, $6, $7)`,
+        [
+          assetId,
+          params.tenantId,
+          storageKey,
+          image.width,
+          image.height,
+          image.mime,
+          checksum,
+        ],
+      );
+      await store.putBytes(storageKey, bytes, image.mime, signal);
+    }
+    // Else: asset already exists from a prior attempt (e.g. copy failed after
+    // upload). Same id + storage key — do not create an orphan object.
     assetIds.push(assetId);
+
+    const existingCreative = await db.query<{ id: string }>(
+      `SELECT id FROM creative WHERE asset_id = $1 AND tenant_id = $2`,
+      [assetId, params.tenantId],
+    );
+    if (existingCreative.rows[0]) {
+      creativeIds.push(existingCreative.rows[0].id);
+      continue;
+    }
 
     const copy: AdCopy = await copyGen.generate({
       contentLocale: params.resolved.contentLocale,

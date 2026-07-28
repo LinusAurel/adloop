@@ -15,6 +15,7 @@ import {
   GenerationInputsSchema,
   estimateGenerationCost,
   resolveGenerationInputs,
+  ProviderNotAllowedError,
 } from "@/images/generate";
 import { generateImagesTool } from "@/agent/tools/generate-images";
 import { sha256Canonical } from "@/lib/canonical-json";
@@ -46,7 +47,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   let resolved;
   try {
     resolved = await resolveGenerationInputs(pool, auth.session.tenantId, parsed.data);
-  } catch {
+  } catch (error) {
+    if (error instanceof ProviderNotAllowedError) {
+      return errorResponse(400, "provider_not_allowed");
+    }
     return errorResponse(404, "not_found");
   }
   const costEstimate = estimateGenerationCost(resolved);

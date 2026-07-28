@@ -564,3 +564,13 @@ costs a build run that the current budget does not justify.
   string); `content_type` preserved. Client `provider` is ignored unless on
   `IMAGE_PROVIDER_REQUEST_ALLOWLIST`. Replay requires the expected creative
   count. Bucket policy Put failure aborts when Get shows public-read.
+- **Submit right is compare-and-set (Review 15 / Finding 1).**
+  `UPDATE … SET provider_job = … WHERE provider_job IS NULL RETURNING` — the
+  loser never submits and reconciles. Reserve insert uses `ON CONFLICT DO
+  NOTHING`. Concurrent proof: two `PoolClient`s + `pg_backend_pid()` + barrier
+  before the CAS; mutation (check-then-set) yields `submitCount === 2`.
+- **Allowlist is test-only (Review 15).** Outside `NODE_ENV=test`, a mismatched
+  request provider → `provider_not_allowed`. Streaming download cancels past
+  15 MiB; MIME from Fal → HTTP → magic bytes. Assets use deterministic ids so
+  copy-retries do not orphan objects. Unverifiable bucket policy aborts
+  (`bucket_policy_unverifiable`); `s3:Get*` counts as public.

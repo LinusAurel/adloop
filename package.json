@@ -16,7 +16,8 @@
     "migrate": "node dist/migrate.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "prepare": "lefthook install"
   },
   "dependencies": {
     "next": "15.1.4",
@@ -34,6 +35,7 @@
     "@types/react": "19.0.4",
     "@types/react-dom": "19.0.2",
     "esbuild": "0.24.2",
+    "lefthook": "^2.1.10",
     "typescript": "5.7.2",
     "vitest": "2.1.8"
   }

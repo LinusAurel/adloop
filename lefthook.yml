@@ -1,0 +1,19 @@
+# Git hooks. Installed by `pnpm install` via the "prepare" script; manually with
+# `pnpm exec lefthook install`.
+#
+# Split by cost: pre-commit stays fast enough that nobody reaches for --no-verify,
+# the slow checks run once at push time.
+
+pre-commit:
+  parallel: false
+  commands:
+    secrets:
+      run: bash scripts/check-secrets.sh
+    typecheck:
+      glob: "*.{ts,tsx}"
+      run: pnpm exec tsc --noEmit
+
+pre-push:
+  commands:
+    test:
+      run: pnpm test

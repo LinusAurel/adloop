@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { uuidv7 } from "uuidv7";
 import { z } from "zod";
-import { AGENT_SYSTEM_INSTRUCTION } from "@/agent/turn";
+import { AGENT_SYSTEM_INSTRUCTION, agentTurnFamily } from "@/agent/turn";
 import {
   computePromptHash,
 } from "@/agent/context-packet";
@@ -23,6 +23,7 @@ import { registerTool, type ToolContext } from "@/agent/tools/types";
 import { hashPlaybookFiles } from "@/lib/canonical-json";
 import { ensureQueueBootstrapped } from "@/queue/bootstrap";
 import { startWorker } from "@/queue/poll-loop";
+import type { JobContext } from "@/queue/types";
 import { setPoolForTests } from "@/db/pool";
 import { type TestDb, startTestDb } from "./db-harness";
 
@@ -109,6 +110,59 @@ describe("etappe 4 — agent, chat, playbooks", () => {
       [chatId, db.tenantId, projectId],
     );
     return chatId;
+  }
+
+  async function seedTurnRun(params: {
+    chatId: string;
+    runId: string;
+    userMessageId: string;
+    assistantMessageId: string;
+    message: string;
+  }): Promise<void> {
+    await db.pool.query(
+      `INSERT INTO run (id, tenant_id, kind, status, chat_id, input, turn_phase)
+       VALUES ($1, $2, 'agent_turn', 'queued', $3, '{}'::jsonb, 'queued')`,
+      [params.runId, db.tenantId, params.chatId],
+    );
+    await db.pool.query(
+      `INSERT INTO message (id, tenant_id, chat_id, role, content, run_id)
+       VALUES ($1, $2, $3, 'user', $4, $5)`,
+      [
+        params.userMessageId,
+        db.tenantId,
+        params.chatId,
+        params.message,
+        params.runId,
+      ],
+    );
+    await db.pool.query(
+      `INSERT INTO message (id, tenant_id, chat_id, role, content, run_id)
+       VALUES ($1, $2, $3, 'assistant', '', $4)`,
+      [params.assistantMessageId, db.tenantId, params.chatId, params.runId],
+    );
+  }
+
+  function turnCtx(
+    input: {
+      runId: string;
+      chatId: string;
+      userMessageId: string;
+      assistantMessageId: string;
+      message: string;
+      playbookSlug: string;
+      agentLocale: "de" | "en";
+      userId: string;
+    },
+    signal: AbortSignal,
+  ): JobContext<typeof input> {
+    return {
+      input,
+      tenantId: db.tenantId,
+      signal,
+      progress: async () => {},
+      withLease: async () => ({ acquired: false }),
+      isCancelled: () => signal.aborted,
+    };
   }
 
   it("1 — turn runs through phases and ends with terminal/[DONE] payload", async () => {
@@ -320,6 +374,167 @@ describe("etappe 4 — agent, chat, playbooks", () => {
       expect(rejected.code).toBe("approval_hash_mismatch");
     }
   });
+
+  it("5c — agentTurnFamily.handler executes persisted A after resolution flips to B", async () => {
+    // Load-bearing: drives the real turn path. Must fail if turn.ts reverts to
+    // executeToolCall(rawInput) after consent (Review-8 P0-1 acceptance).
+    const chatId = await seedChat();
+    const runId = uuidv7();
+    const userMessageId = uuidv7();
+    const assistantMessageId = uuidv7();
+    const message = "please write";
+    await seedTurnRun({ chatId, runId, userMessageId, assistantMessageId, message });
+
+    resolutionDefault = "A";
+    setAgentModelForTests(
+      new ScriptedModel([
+        {
+          toolUses: [
+            { id: "tu-1", name: "writes_probe", input: { label: "same" } },
+          ],
+        },
+        { text: "Persisted A executed." },
+      ]),
+    );
+
+    const controller = new AbortController();
+    const turnPromise = agentTurnFamily.handler(
+      turnCtx(
+        {
+          runId,
+          chatId,
+          userMessageId,
+          assistantMessageId,
+          message,
+          playbookSlug: "general",
+          agentLocale: "de",
+          userId,
+        },
+        controller.signal,
+      ),
+    );
+
+    const approvalDeadline = Date.now() + 10_000;
+    let approvalId: string | null = null;
+    while (Date.now() < approvalDeadline) {
+      const pending = await db.pool.query<{
+        id: string;
+        resolved_payload: { label: string; resolvedDefault: string };
+      }>(
+        `SELECT id, resolved_payload
+         FROM tool_approval
+         WHERE run_id = $1 AND decided_at IS NULL
+         ORDER BY created_at DESC
+         LIMIT 1`,
+        [runId],
+      );
+      if (pending.rows[0]) {
+        approvalId = pending.rows[0].id;
+        expect(pending.rows[0].resolved_payload).toEqual({
+          label: "same",
+          resolvedDefault: "A",
+        });
+        break;
+      }
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    expect(approvalId).toBeTruthy();
+
+    // Midnight flips the resolver — production must still run payload A.
+    resolutionDefault = "B";
+    await decideApproval(db.pool, {
+      approvalId: approvalId!,
+      tenantId: db.tenantId,
+      userId,
+      approve: true,
+    });
+
+    const result = await turnPromise;
+    expect(result.text).toBe("Persisted A executed.");
+
+    const reserved = await db.pool.query<{
+      resolved_payload: { resolvedDefault: string };
+      result: { ok: boolean; resolved: { resolvedDefault: string } };
+    }>(
+      `SELECT resolved_payload, result
+       FROM reserved_operation
+       WHERE approval_id = $1`,
+      [approvalId],
+    );
+    expect(reserved.rows[0]?.resolved_payload.resolvedDefault).toBe("A");
+    expect(reserved.rows[0]?.result.resolved.resolvedDefault).toBe("A");
+
+    const terminal = await listRunEventsAfter(db.pool, { runId, afterSeq: 0 });
+    expect(
+      terminal.some(
+        (e) =>
+          e.kind === "terminal" &&
+          (e.payload as { status?: string }).status === "completed",
+      ),
+    ).toBe(true);
+  }, 30_000);
+
+  it("5d — abort mid-turn persists a terminal event", async () => {
+    const chatId = await seedChat();
+    const runId = uuidv7();
+    const userMessageId = uuidv7();
+    const assistantMessageId = uuidv7();
+    const message = "abort me";
+    await seedTurnRun({ chatId, runId, userMessageId, assistantMessageId, message });
+
+    resolutionDefault = "A";
+    setAgentModelForTests(
+      new ScriptedModel([
+        {
+          toolUses: [
+            { id: "tu-abort", name: "writes_probe", input: { label: "abort" } },
+          ],
+        },
+      ]),
+    );
+
+    const controller = new AbortController();
+    const turnPromise = agentTurnFamily.handler(
+      turnCtx(
+        {
+          runId,
+          chatId,
+          userMessageId,
+          assistantMessageId,
+          message,
+          playbookSlug: "general",
+          agentLocale: "de",
+          userId,
+        },
+        controller.signal,
+      ),
+    );
+
+    const phaseDeadline = Date.now() + 10_000;
+    while (Date.now() < phaseDeadline) {
+      const phase = await db.pool.query<{ turn_phase: string | null }>(
+        `SELECT turn_phase FROM run WHERE id = $1`,
+        [runId],
+      );
+      if (phase.rows[0]?.turn_phase === "awaiting_approval") break;
+      await new Promise((r) => setTimeout(r, 50));
+    }
+
+    controller.abort();
+    await expect(turnPromise).rejects.toMatchObject({
+      name: "HandlerError",
+      code: "APPROVAL_TIMEOUT",
+    });
+
+    const events = await listRunEventsAfter(db.pool, { runId, afterSeq: 0 });
+    const terminal = events.find((e) => e.kind === "terminal");
+    expect(terminal).toBeDefined();
+    expect(terminal?.payload).toMatchObject({
+      kind: "terminal",
+      status: "failed",
+      errorCode: "approval_timeout",
+    });
+  }, 30_000);
 
   it("6 — expired approval is rejected", async () => {
     const runId = uuidv7();

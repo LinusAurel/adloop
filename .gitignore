@@ -6,3 +6,6 @@ dist/
 .DS_Store
 coverage/
 *.tsbuildinfo
+
+# Privates Schwester-Repo, liegt physisch hier, gehört aber nicht hierher
+_local/

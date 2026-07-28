@@ -91,7 +91,7 @@ export async function resolveGenerationInputs(
     throw new Error("advertiser_not_found");
   }
 
-  const provider = raw.provider ?? env.IMAGE_PROVIDER;
+  const provider = resolveConfiguredProvider(raw.provider);
   const aspectRatio = raw.aspectRatio ?? "4:5";
   const count = raw.count ?? 1;
   const productContext = raw.productContext ?? row.name;
@@ -136,13 +136,47 @@ export interface GenerationSuccess {
 
 export interface GenerationNeedsHuman {
   status: "needs_human_check";
-  code: "provider_unprotected_crash";
+  code: "provider_unprotected_crash" | "callback_timeout";
   reason: string;
   generationId: string;
   costEstimate: CostEstimate;
 }
 
-export type GenerationOutcome = GenerationSuccess | GenerationNeedsHuman;
+export interface GenerationAwaitingCallback {
+  status: "awaiting_callback";
+  deadlineAt: string;
+  correlationId: string;
+  costEstimate: CostEstimate;
+}
+
+export type GenerationOutcome =
+  | GenerationSuccess
+  | GenerationNeedsHuman
+  | GenerationAwaitingCallback;
+
+/**
+ * Provider comes from server config. A request value is accepted only when it
+ * appears on IMAGE_PROVIDER_REQUEST_ALLOWLIST — otherwise ignored. Clients must
+ * not choose who gets billed.
+ */
+export function resolveConfiguredProvider(
+  requested: GenerationInputs["provider"] | undefined,
+): ResolvedGenerationInputs["provider"] {
+  if (requested && isRequestProviderAllowed(requested)) {
+    return requested;
+  }
+  return env.IMAGE_PROVIDER;
+}
+
+function isRequestProviderAllowed(id: string): boolean {
+  const raw = env.IMAGE_PROVIDER_REQUEST_ALLOWLIST;
+  if (!raw) return false;
+  return raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .includes(id);
+}
 
 export async function runImageGeneration(
   db: Queryable,
@@ -179,7 +213,9 @@ export async function runImageGeneration(
     variationReason: params.resolved.variationReason,
   });
 
-  // Replay short-circuit: creatives already persist under this key.
+  // Replay short-circuit only when the expected creative count is present.
+  // A partial persist (e.g. copy failed on image 2 of 3) must resume — the
+  // images are already paid for.
   const priorCreatives = await db.query<{
     generation_id: string;
     id: string;
@@ -193,7 +229,7 @@ export async function runImageGeneration(
      ORDER BY c.created_at`,
     [idempotencyKey, params.tenantId],
   );
-  if (priorCreatives.rows.length > 0) {
+  if (priorCreatives.rows.length >= params.resolved.count) {
     return {
       status: "succeeded",
       generationId: priorCreatives.rows[0]!.generation_id,
@@ -205,6 +241,16 @@ export async function runImageGeneration(
       replayed: true,
     };
   }
+
+  const existingGeneration = await db.query<{ id: string }>(
+    `SELECT id FROM creative_generation
+     WHERE idempotency_key = $1 AND tenant_id = $2
+     ORDER BY created_at
+     LIMIT 1`,
+    [idempotencyKey, params.tenantId],
+  );
+  const resumeGenerationId = existingGeneration.rows[0]?.id ?? null;
+  const alreadyPersisted = priorCreatives.rows.length;
 
   const providerRequest: GenerationRequest = {
     prompt: params.resolved.resolvedPrompt,
@@ -228,39 +274,50 @@ export async function runImageGeneration(
     throw error;
   }
 
-  const generationId = uuidv7();
+  if (callOutcome.kind === "awaiting_callback") {
+    return {
+      status: "awaiting_callback",
+      deadlineAt: callOutcome.deadlineAt,
+      correlationId: callOutcome.correlationId,
+      costEstimate,
+    };
+  }
 
-  // Key now exists (reserved or completed) — safe for the FK.
-  await db.query(
-    `INSERT INTO creative_generation (
-       id, tenant_id, run_id, advertiser_id, provider, model,
-       inputs, resolved_inputs, provider_request, provider_response,
-       playbook_version, cost_estimate, idempotency_key
-     ) VALUES (
-       $1, $2, $3, $4, $5, $6,
-       $7::jsonb, $8::jsonb, $9::jsonb, $10::jsonb,
-       $11, $12::jsonb, $13
-     )`,
-    [
-      generationId,
-      params.tenantId,
-      params.runId,
-      params.resolved.advertiserId,
-      params.resolved.provider,
-      params.resolved.model,
-      JSON.stringify(params.inputs),
-      JSON.stringify(params.resolved),
-      JSON.stringify(providerRequest),
-      JSON.stringify(
-        callOutcome.kind === "needs_human_check"
-          ? { status: callOutcome.code, reason: callOutcome.reason }
-          : (callOutcome.result.providerResponse ?? callOutcome.result),
-      ),
-      params.resolved.playbookVersion,
-      JSON.stringify(costEstimate),
-      idempotencyKey,
-    ],
-  );
+  const generationId = resumeGenerationId ?? uuidv7();
+
+  if (!resumeGenerationId) {
+    // Key now exists (reserved or completed) — safe for the FK.
+    await db.query(
+      `INSERT INTO creative_generation (
+         id, tenant_id, run_id, advertiser_id, provider, model,
+         inputs, resolved_inputs, provider_request, provider_response,
+         playbook_version, cost_estimate, idempotency_key
+       ) VALUES (
+         $1, $2, $3, $4, $5, $6,
+         $7::jsonb, $8::jsonb, $9::jsonb, $10::jsonb,
+         $11, $12::jsonb, $13
+       )`,
+      [
+        generationId,
+        params.tenantId,
+        params.runId,
+        params.resolved.advertiserId,
+        params.resolved.provider,
+        params.resolved.model,
+        JSON.stringify(params.inputs),
+        JSON.stringify(params.resolved),
+        JSON.stringify(providerRequest),
+        JSON.stringify(
+          callOutcome.kind === "needs_human_check"
+            ? { status: callOutcome.code, reason: callOutcome.reason }
+            : (callOutcome.result.providerResponse ?? callOutcome.result),
+        ),
+        params.resolved.playbookVersion,
+        JSON.stringify(costEstimate),
+        idempotencyKey,
+      ],
+    );
+  }
 
   if (callOutcome.kind === "needs_human_check") {
     return {
@@ -273,14 +330,14 @@ export async function runImageGeneration(
   }
 
   const generationResult = callOutcome.result;
-  const replayed = callOutcome.kind === "replay";
+  const replayed = callOutcome.kind === "replay" || alreadyPersisted > 0;
 
   const copyGen = getCopyGenerator();
   const signal = params.signal ?? new AbortController().signal;
-  const creativeIds: string[] = [];
-  const assetIds: string[] = [];
+  const creativeIds: string[] = priorCreatives.rows.map((r) => r.id);
+  const assetIds: string[] = priorCreatives.rows.map((r) => r.asset_id);
 
-  for (let i = 0; i < generationResult.images.length; i += 1) {
+  for (let i = alreadyPersisted; i < generationResult.images.length; i += 1) {
     const image = generationResult.images[i]!;
     const bytes = Buffer.from(image.bytesBase64, "base64");
     const checksum = createHash("sha256").update(bytes).digest("hex");

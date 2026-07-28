@@ -34,7 +34,7 @@ const ResultSchema = z.discriminatedUnion("status", [
   }),
   z.object({
     status: z.literal("needs_human_check"),
-    code: z.literal("provider_unprotected_crash"),
+    code: z.enum(["provider_unprotected_crash", "callback_timeout"]),
     reason: z.string(),
     generationId: z.string().uuid(),
     costEstimate: z.object({
@@ -52,8 +52,12 @@ export const imageGenerationFamily: JobFamilyDefinition<Input, Result> = {
   name: "image_generation",
   inputSchema: InputSchema,
   resultSchema: ResultSchema,
-  maxAttempts: 3,
+  // Correlated callbacks may wait up to CALLBACK_GRACE_MS (~15m) with
+  // periodic polls; attempts must cover that window.
+  maxAttempts: 40,
   timeoutMs: 10 * 60 * 1_000,
+  backoffBaseMs: 30_000,
+  backoffMaxMs: 60_000,
 
   async handler(ctx) {
     if (env.NODE_ENV === "test" || ctx.input.resolved.provider === "stub") {
@@ -71,6 +75,15 @@ export const imageGenerationFamily: JobFamilyDefinition<Input, Result> = {
         webhookBaseUrl: ctx.input.webhookBaseUrl ?? env.PUBLIC_BASE_URL,
         signal: ctx.signal,
       });
+
+      if (outcome.status === "awaiting_callback") {
+        // Reschedule — never a second submit. Webhook may complete the key.
+        throw new HandlerError(
+          "AWAITING_CALLBACK",
+          `awaiting_callback until ${outcome.deadlineAt}`,
+          true,
+        );
+      }
 
       if (outcome.status === "needs_human_check") {
         return outcome;

@@ -50,6 +50,12 @@ export class StubImageProvider implements ImageProvider {
     this.byCorrelation.set(corr, result);
   }
 
+  /** Simulate a process restart — in-memory recover cache is gone. */
+  discardMemory(): void {
+    this.byCorrelation.clear();
+    this.jobs.clear();
+  }
+
   async submit(req: GenerationRequest, corr: CorrelationId): Promise<ProviderJob> {
     this.submitCount += 1;
     const externalId = `stub-${corr}`;

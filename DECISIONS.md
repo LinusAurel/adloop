@@ -550,3 +550,17 @@ costs a build run that the current budget does not justify.
 - **Default `IMAGE_PROVIDER=fal`** — only provider with a closed crash window. Local
   `.env.example` uses `stub` until keys exist. `PUBLIC_BASE_URL` required for fal
   webhooks in live mode.
+- **`correlated_callback` never blind-resubmits (Review 14 / Finding 1).** Fal's
+  recover path is the webhook, not a lookup. After a crash with `externalId`
+  still `pending`, the layer enters `awaiting_callback` with deadline
+  `CALLBACK_GRACE_MS` (default 15m), reschedules the job, and waits. Timeout →
+  `needs_human_check` / `callback_timeout`. Mutation proof: replacing the wait
+  with `submitAndComplete` makes the F1 test fail (`awaiting_callback` → `result`).
+- **Fal webhook signature is mandatory (Review 14 / Finding 2).** Missing
+  `FAL_WEBHOOK_SECRET` → `503 webhook_not_configured`. `correlationId` routes;
+  it does not authorize. Mutation: optional-signature path accepts unsigned
+  body → F2 expects 503, gets 200.
+- **Webhook materializes Fal URL images by download** (not base64 of the URL
+  string); `content_type` preserved. Client `provider` is ignored unless on
+  `IMAGE_PROVIDER_REQUEST_ALLOWLIST`. Replay requires the expected creative
+  count. Bucket policy Put failure aborts when Get shows public-read.

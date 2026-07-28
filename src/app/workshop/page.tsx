@@ -90,7 +90,6 @@ export default function WorkshopPage() {
           aspectRatio,
           count,
           clientRequestId: uuidv7(),
-          provider: "stub",
         }),
       });
       if (!res.ok) {

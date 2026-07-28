@@ -3,6 +3,7 @@ import { uuidv7 } from "uuidv7";
 import type { PoolClient } from "pg";
 import { withTransaction, type Queryable } from "@/db/queryable";
 import { sha256Canonical } from "@/lib/canonical-json";
+import { env } from "@/lib/env";
 import type { ImageProvider, ProviderJob, GenerationResult } from "./provider";
 import { GenerationResultSchema } from "./provider";
 
@@ -186,7 +187,16 @@ function parseProviderJob(raw: unknown): ProviderJob | null {
 
 export type ProviderCallOutcome =
   | { kind: "result"; result: GenerationResult; job: ProviderJob }
-  | { kind: "needs_human_check"; code: "provider_unprotected_crash"; reason: string }
+  | {
+      kind: "needs_human_check";
+      code: "provider_unprotected_crash" | "callback_timeout";
+      reason: string;
+    }
+  | {
+      kind: "awaiting_callback";
+      deadlineAt: string;
+      correlationId: string;
+    }
   | { kind: "replay"; result: GenerationResult };
 
 /**
@@ -317,9 +327,41 @@ async function recoverInFlight(
     return { kind: "result", result, job };
   }
 
-  // correlated_callback | lookup_by_correlation — ask recover() first.
-  // Works even when externalId was lost (still "pending") because the
-  // webhook URL / lookup key is our correlation id.
+  if (recovery.kind === "correlated_callback") {
+    // We are called back — there is nothing to ask. recover() only sees a
+    // webhook that already arrived. Never blind-resubmit while pending.
+    if (params.provider.recover) {
+      const found = await params.provider.recover(params.correlationId);
+      if (found) {
+        await completeIdempotencyKey(db, { key: params.key, result: found });
+        return {
+          kind: "result",
+          result: found,
+          job: stillPending
+            ? {
+                externalId: `recovered:${params.correlationId}`,
+                correlationId: params.correlationId,
+              }
+            : params.providerJob,
+        };
+      }
+    }
+    if (!stillPending) {
+      const result = await params.provider.fetchResult(
+        params.providerJob,
+        new AbortController().signal,
+      );
+      await completeIdempotencyKey(db, { key: params.key, result });
+      return { kind: "result", result, job: params.providerJob };
+    }
+    return enterAwaitingCallback(db, {
+      key: params.key,
+      correlationId: params.correlationId,
+      providerJob: params.providerJob,
+    });
+  }
+
+  // lookup_by_correlation — a failed lookup is a trustworthy “nothing landed”.
   if (params.provider.recover) {
     const found = await params.provider.recover(params.correlationId);
     if (found) {
@@ -347,13 +389,62 @@ async function recoverInFlight(
   }
 
   // Nothing under our correlation and no external id — provider never
-  // accepted (or callback not yet). Safe to submit once more.
+  // accepted. Safe to submit once more (lookup_by_correlation only).
   return submitAndComplete(db, {
     key: params.key,
     provider: params.provider,
     correlationId: params.correlationId,
     request: params.request,
   });
+}
+
+async function enterAwaitingCallback(
+  db: Queryable,
+  params: {
+    key: string;
+    correlationId: string;
+    providerJob: ProviderJob;
+  },
+): Promise<ProviderCallOutcome> {
+  const existingDeadline = readAwaitingDeadline(params.providerJob);
+  const deadlineAt =
+    existingDeadline ?? new Date(Date.now() + env.CALLBACK_GRACE_MS).toISOString();
+
+  if (!existingDeadline) {
+    await recordProviderJob(db, {
+      key: params.key,
+      job: {
+        externalId: "pending",
+        correlationId: params.correlationId,
+        raw: {
+          phase: "awaiting_callback",
+          deadlineAt,
+        },
+      },
+    });
+  }
+
+  if (Date.now() >= Date.parse(deadlineAt)) {
+    return {
+      kind: "needs_human_check",
+      code: "callback_timeout",
+      reason: `correlated_callback grace elapsed (${deadlineAt})`,
+    };
+  }
+
+  return {
+    kind: "awaiting_callback",
+    deadlineAt,
+    correlationId: params.correlationId,
+  };
+}
+
+function readAwaitingDeadline(job: ProviderJob): string | null {
+  if (!job.raw || typeof job.raw !== "object") return null;
+  const raw = job.raw as { phase?: unknown; deadlineAt?: unknown };
+  if (raw.phase !== "awaiting_callback") return null;
+  if (typeof raw.deadlineAt !== "string") return null;
+  return raw.deadlineAt;
 }
 
 /**

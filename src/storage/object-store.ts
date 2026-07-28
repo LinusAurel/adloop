@@ -100,26 +100,34 @@ export class S3ObjectStore implements ObjectStore {
           // MinIO / S3: keep the bucket private. Public-read policies are never applied.
           try {
             await this.client.send(
-              new GetBucketPolicyCommand({ Bucket: this.bucket }),
-            );
-          } catch {
-            // No policy yet — fine. Explicitly refuse anonymous access via ACL absence.
-          }
-          // Ensure we never leave a public-read statement around in local MinIO.
-          try {
-            await this.client.send(
               new PutBucketPolicyCommand({
                 Bucket: this.bucket,
                 Policy: this.denyPublicPolicy(),
               }),
             );
           } catch {
-            // Some MinIO setups reject principal conditions; private-by-default still holds
-            // when no public policy exists. Signed URLs remain the only access path.
+            // Put failed — verify the bucket is not already publicly readable.
+            await this.assertBucketNotPubliclyReadable();
           }
         });
     }
     return this.bucketReady;
+  }
+
+  private async assertBucketNotPubliclyReadable(): Promise<void> {
+    let policyJson: string | undefined;
+    try {
+      const got = await this.client.send(
+        new GetBucketPolicyCommand({ Bucket: this.bucket }),
+      );
+      policyJson = got.Policy;
+    } catch {
+      // NoSuchBucketPolicy / empty — private by default. Safe to continue.
+      return;
+    }
+    if (policyAllowsPublicRead(policyJson)) {
+      throw new Error("bucket_not_private");
+    }
   }
 
   async putJson(key: string, value: unknown, signal?: AbortSignal): Promise<void> {
@@ -186,6 +194,58 @@ export class S3ObjectStore implements ObjectStore {
   getClient(): S3Client {
     return this.client;
   }
+}
+
+/**
+ * True when a bucket policy grants anonymous GetObject (or s3:*).
+ * Exported for unit tests — Finding 6 must not silently keep a public bucket.
+ */
+export function policyAllowsPublicRead(policyJson: string | undefined): boolean {
+  if (!policyJson) return false;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(policyJson);
+  } catch {
+    return false;
+  }
+  if (!parsed || typeof parsed !== "object" || !("Statement" in parsed)) {
+    return false;
+  }
+  const statements = (parsed as { Statement: unknown }).Statement;
+  const list = Array.isArray(statements) ? statements : [statements];
+  for (const statement of list) {
+    if (!statement || typeof statement !== "object") continue;
+    const s = statement as {
+      Effect?: unknown;
+      Principal?: unknown;
+      Action?: unknown;
+    };
+    if (s.Effect !== "Allow") continue;
+    if (!principalIsWildcard(s.Principal)) continue;
+    if (!actionIncludesGetObject(s.Action)) continue;
+    return true;
+  }
+  return false;
+}
+
+function principalIsWildcard(principal: unknown): boolean {
+  if (principal === "*") return true;
+  if (!principal || typeof principal !== "object") return false;
+  const p = principal as { AWS?: unknown; "*"?: unknown };
+  if (p.AWS === "*") return true;
+  if (Array.isArray(p.AWS) && p.AWS.includes("*")) return true;
+  return false;
+}
+
+function actionIncludesGetObject(action: unknown): boolean {
+  const actions = Array.isArray(action) ? action : [action];
+  return actions.some(
+    (a) =>
+      a === "s3:GetObject" ||
+      a === "s3:*" ||
+      a === "*" ||
+      (typeof a === "string" && a.toLowerCase() === "s3:getobject"),
+  );
 }
 
 let cached: ObjectStore | undefined;

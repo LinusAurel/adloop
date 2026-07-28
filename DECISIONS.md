@@ -279,3 +279,36 @@ What changed, and why:
   black-box HTTP test could pass by accident (bad timing happening to work
   out) in a way these can't, since case 5 and case 7 use an explicit
   barrier to force real concurrency rather than two sequential calls.
+
+## Etappe 2
+
+- **Sessions are stateless signed cookies containing only user id, tenant
+  id, issued-at, and expiry.** The signature uses a stable
+  `SESSION_SECRET`, so restarting the web container does not invalidate a
+  session and no bearer token is exposed to browser JavaScript.
+- **Email codes are only issued for existing users, expire after ten
+  minutes, allow five attempts, and are stored as HMAC hashes.** This keeps
+  Etappe 2 a login flow rather than silently adding open registration.
+- **Readiness and job progress contain stable codes and parameters, not
+  `userMessage` prose.** The examples in the Auftrag conflict with its
+  explicit §8.2 rule; the rule wins and the German UI owns wording.
+- **A retried page fetch continues the same `insight_sync_run`.** Page data
+  and the next cursor are checkpointed atomically, so resuming into a new
+  sync run cannot mark a partial observation complete.
+- **Current views are backed by explicit `*_as_of(timestamptz)` functions.**
+  A parameterless SQL view cannot implement the specified historical
+  `data_as_of` contract; the view is the current-time convenience reader,
+  while later snapshot code can call the function with its exact cutoff.
+- **Action completeness is scoped to the same `query_signature`.** A later
+  run with different fields or attribution windows must not zero a valid
+  action merely because that action was outside the later query.
+- **`advertiser.content_locale` defaults to `de-DE` until explicitly
+  overridden.** The Marketing API ad-account object has no content-language
+  field, so deriving it "from the language of the ad account" would require
+  an undocumented guess from currency or timezone; no such guess is made.
+- **`net_new_reach` is a required provider response field and is never
+  derived from `reach`.** Meta's documented Ads Insights field list has no
+  `net_new_reach`; recorded fixtures can prove the storage contract, but a
+  live sync will fail loudly with `META_RESPONSE_INVALID` until Meta
+  provides an agreed source field. Claiming live support by substituting
+  `reach` would make the Etappe 3 funnel input false.

@@ -7,12 +7,6 @@ node_modules/
 # Private Recherche/Notizen - nie committen
 _local/
 
-# Vendored AI-skill files (lokal installieren: npx impeccable install)
-.cursor/skills/
-.cursor/hooks.json
-.github/skills/
-.github/hooks/
-
 # Next.js / Build-Artefakte
 /.next/
 /out/
@@ -22,10 +16,6 @@ _local/
 data/*
 !data/fixtures/
 
-# Brand-Daten bleiben lokal und privat (Repo ist öffentlich) — nur die
-# fiktive Beispiel-Brand ist versioniert
-brands/*
-!brands/creators-demo/
 
 # Worktrees (AGENTS.md Workflow)
 .worktrees/

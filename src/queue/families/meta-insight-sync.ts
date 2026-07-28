@@ -13,8 +13,10 @@ import {
 import { initialReadiness, ReadinessSchema } from "@/meta/oauth";
 import { decryptToken } from "@/meta/token-crypto";
 import { getObjectStore } from "@/storage/object-store";
+import { createRun } from "../create-run";
 import { HandlerError, JobCancelledError } from "../errors";
 import type { JobFamilyDefinition } from "../types";
+import { uuidv7 } from "uuidv7";
 
 const InputSchema = z.object({
   metaAdAccountId: z.string().uuid(),
@@ -144,7 +146,7 @@ export const metaInsightSyncFamily: JobFamilyDefinition<Input, Result> = {
     };
 
     try {
-      return await executeInsightSync({
+      const syncResult = await executeInsightSync({
         pool,
         tenantId: account.tenant_id,
         internalAdAccountId: ctx.input.metaAdAccountId,
@@ -159,6 +161,29 @@ export const metaInsightSyncFamily: JobFamilyDefinition<Input, Result> = {
         progress: ctx.progress,
         withLease: ctx.withLease,
       });
+
+      // Score snapshots are a separate job family — never block the sync
+      // lease on computation. At-least-once: a second enqueue with a new
+      // run id simply inserts additional append-only snapshot rows.
+      const snapshotEnqueue = await createRun(pool, {
+        runId: uuidv7(),
+        tenantId: account.tenant_id,
+        family: "metric_snapshot_compute",
+        input: {
+          metaAdAccountId: ctx.input.metaAdAccountId,
+          syncRunId: syncResult.syncRunId,
+          windowEnd: ctx.input.windowEnd,
+        },
+      });
+      if (
+        snapshotEnqueue.outcome !== "created" &&
+        snapshotEnqueue.outcome !== "idempotent_replay"
+      ) {
+        // Sync itself succeeded; snapshot enqueue failure is retryable via a
+        // later sync. Do not fail the insight observation over this.
+      }
+
+      return syncResult;
     } catch (error) {
       if (ctx.signal.aborted || error instanceof JobCancelledError) {
         throw new JobCancelledError();

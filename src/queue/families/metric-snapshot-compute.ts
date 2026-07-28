@@ -77,7 +77,8 @@ export const metricSnapshotComputeFamily: JobFamilyDefinition<Input, Result> = {
       }
       await ctx.progress({
         state: "computing_snapshots",
-        message: "metric_snapshot_window",
+        code: "metric_snapshot_window",
+        params: { index: index + 1, total: windows.length },
         percent: Math.round(((index + 1) / windows.length) * 100),
       });
       const result = await computeAndPersistSnapshots({

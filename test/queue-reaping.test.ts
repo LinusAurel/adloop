@@ -52,7 +52,7 @@ describe("queue reaping and fencing", () => {
       jobId,
       leaseToken,
       leaseMs: 30000,
-      progress: { state: "x", message: "should not land", percent: 50 },
+      progress: { state: "x", code: "should_not_land", params: {}, percent: 50 },
     });
     expect(progressResult).toBeNull();
 
@@ -137,7 +137,7 @@ describe("queue reaping and fencing", () => {
       jobId,
       leaseToken: staleToken,
       leaseMs: 30000,
-      progress: { state: "x", message: "stale write from worker A", percent: 50 },
+      progress: { state: "x", code: "stale_write", params: {}, percent: 50 },
     });
     expect(staleProgress).toBeNull();
 

@@ -1057,7 +1057,8 @@ export async function executeInsightSync(
       onProgress: async (percent) =>
         options.progress({
           state: "waiting_for_meta_report",
-          message: "meta_report_progress",
+          code: "meta_report_progress",
+          params: { percent },
           percent,
         }),
     });
@@ -1095,7 +1096,8 @@ export async function executeInsightSync(
           pagesFetched = absolutePage;
           await options.progress({
             state: "fetching_insights",
-            message: "insight_page_fetched",
+            code: "insight_page_fetched",
+            params: { pagesFetched: absolutePage },
             percent: Math.min(
               99,
               Math.round((checkpointed.value / Math.max(reportDays, 1)) * 100),
@@ -1151,7 +1153,8 @@ export async function executeInsightSync(
     if (!finalized.acquired) throw new JobCancelledError();
     await options.progress({
       state: "completed",
-      message: "insight_sync_completed",
+      code: "insight_sync_completed",
+      params: { pagesFetched },
       percent: 100,
     });
     return { syncRunId: options.syncRunId, pagesFetched, rawResponseKey };

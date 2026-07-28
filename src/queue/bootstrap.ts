@@ -2,6 +2,8 @@ import { registerFamily, isFamilyRegistered } from "./registry";
 import { echoFamily } from "./families/echo";
 import { metaInsightSyncFamily } from "./families/meta-insight-sync";
 import { metricSnapshotComputeFamily } from "./families/metric-snapshot-compute";
+import { agentTurnFamily } from "@/agent/turn";
+import { ensureToolsBootstrapped } from "@/agent/tools/bootstrap";
 
 /**
  * The Next.js app process (API routes) needs the registry populated too —
@@ -16,6 +18,7 @@ import { metricSnapshotComputeFamily } from "./families/metric-snapshot-compute"
  * in some runtimes) — registerFamily() throws on a duplicate name.
  */
 export function ensureQueueBootstrapped(): void {
+  ensureToolsBootstrapped();
   if (!isFamilyRegistered(echoFamily.name)) {
     registerFamily(echoFamily);
   }
@@ -24,5 +27,8 @@ export function ensureQueueBootstrapped(): void {
   }
   if (!isFamilyRegistered(metricSnapshotComputeFamily.name)) {
     registerFamily(metricSnapshotComputeFamily);
+  }
+  if (!isFamilyRegistered(agentTurnFamily.name)) {
+    registerFamily(agentTurnFamily);
   }
 }

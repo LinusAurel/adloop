@@ -26,7 +26,8 @@ export const echoFamily: JobFamilyDefinition<EchoInput, EchoResult> = {
       throwIfAborted(ctx.signal); // nach jedem Warten
       await ctx.progress({
         state: `step_${step}`,
-        message: `Step ${step} of 5`,
+        code: "echo_step",
+        params: { step, total: 5 },
         percent: step * 20,
       });
     }

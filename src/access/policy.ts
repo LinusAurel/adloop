@@ -24,22 +24,38 @@ export const AccessPolicySchema = z.object({
 });
 export type AccessPolicy = z.infer<typeof AccessPolicySchema>;
 
-const OWNER_POLICY: AccessPolicy = {
+/**
+ * Second review: `evaluateAccessPolicy` used to return the SAME mutable
+ * object on every call for a given role — a caller mutating its copy (e.g.
+ * `policy.actions.publish = true`) would corrupt every future call's
+ * result too, and a test asserting `evaluateAccessPolicy("owner")` is
+ * "pure" by checking two calls are `.toEqual()` wouldn't catch that, since
+ * it would trivially hold even for the same shared, broken object. Freezing
+ * (both levels — `surfaces` and `actions` are nested objects) makes any
+ * such mutation throw in strict mode instead of silently succeeding.
+ */
+function deepFreezePolicy(policy: AccessPolicy): Readonly<AccessPolicy> {
+  Object.freeze(policy.surfaces);
+  Object.freeze(policy.actions);
+  return Object.freeze(policy);
+}
+
+const OWNER_POLICY: AccessPolicy = deepFreezePolicy({
   surfaces: { chat: true, images: true, strategist: true, launch: true },
   actions: { publish: true, manageTeam: true, editPlaybooks: true },
-};
+});
 
 // Not seeded or used anywhere in Etappe 1 — included so evaluateAccessPolicy
 // is a real tree lookup instead of a single-case stub. See DECISIONS.md.
-const MEMBER_POLICY: AccessPolicy = {
+const MEMBER_POLICY: AccessPolicy = deepFreezePolicy({
   surfaces: { chat: true, images: true, strategist: true, launch: false },
   actions: { publish: false, manageTeam: false, editPlaybooks: false },
-};
+});
 
-const DENY_ALL_POLICY: AccessPolicy = {
+const DENY_ALL_POLICY: AccessPolicy = deepFreezePolicy({
   surfaces: { chat: false, images: false, strategist: false, launch: false },
   actions: { publish: false, manageTeam: false, editPlaybooks: false },
-};
+});
 
 export function evaluateAccessPolicy(role: string): AccessPolicy {
   const parsedRole = RoleSchema.safeParse(role);

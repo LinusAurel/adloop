@@ -1,5 +1,6 @@
 import type { Pool } from "pg";
 import { claimNextJob } from "./sql/claim";
+import { releaseClaimWithoutCounting } from "./sql/release";
 import { requeueExpiredLeases, reapOrphanedCancellations } from "./sql/reap";
 import { runJob } from "./run-job";
 import { createListener, type Listener } from "./listener";
@@ -17,11 +18,28 @@ export interface WorkerOptions {
 
 export interface WorkerHandle {
   shutdown(): Promise<void>;
+  /** Diagnostic only — how many jobs this worker currently believes it owns. */
+  getInFlightCount(): number;
 }
 
 interface InFlight {
   controller: AbortController;
   promise: Promise<void>;
+}
+
+/**
+ * P2-4 (second review): keyed by `${jobId}:${leaseToken}`, not just jobId.
+ * If this worker's own reaper reclaims one of its own jobs (its lease
+ * expired while runJob was still — wrongly, but possibly — running) and the
+ * poll loop then claims that same job again with a fresh token, a map keyed
+ * by jobId alone would let the second entry silently overwrite the first:
+ * the old (still actually running, now fenced-out) execution stops being
+ * tracked, `inFlight.size` under-counts real concurrency, and the old
+ * execution's eventual `.finally()` cleanup would delete the *new* entry
+ * out from under it.
+ */
+export function inFlightKey(jobId: string, leaseToken: string): string {
+  return `${jobId}:${leaseToken}`;
 }
 
 /**
@@ -61,7 +79,12 @@ export function startWorker(opts: WorkerOptions): WorkerHandle {
       if (channel === "job_available") {
         wakeLoop();
       } else if (channel === "job_cancelled" && payload) {
-        inFlight.get(payload)?.controller.abort();
+        // NOTIFY only carries the jobId — abort every in-flight entry for
+        // it (normally exactly one; see inFlightKey's doc comment for why
+        // there could briefly be more than one under the P2-4 race).
+        for (const [key, entry] of inFlight) {
+          if (key.startsWith(`${payload}:`)) entry.controller.abort();
+        }
       }
     },
   ).catch((err) => {
@@ -76,12 +99,27 @@ export function startWorker(opts: WorkerOptions): WorkerHandle {
     await requeueExpiredLeases(opts.pool);
     await reapOrphanedCancellations(opts.pool);
 
+    // P1-3 (second review): re-check right before claiming — shutdown() may
+    // have flipped `shuttingDown` while the two reap calls above were in
+    // flight.
+    if (shuttingDown) return false;
     if (inFlight.size >= opts.concurrency) return false;
 
     const job = await claimNextJob(opts.pool, { leaseMs: opts.leaseMs, workerId: opts.workerId });
     if (!job) return false;
 
+    // P1-3 (second review): and re-check again right after — a claim that
+    // slipped through the instant shutdown began must be released
+    // immediately, without counting it as a real attempt (the handler never
+    // ran). claimNextJob already incremented `attempts`;
+    // releaseClaimWithoutCounting decrements it back.
+    if (shuttingDown) {
+      await releaseClaimWithoutCounting(opts.pool, { jobId: job.id, leaseToken: job.lease_token as string });
+      return false;
+    }
+
     const controller = new AbortController();
+    const key = inFlightKey(job.id, job.lease_token as string);
     const promise = runJob({
       pool: opts.pool,
       job,
@@ -94,11 +132,11 @@ export function startWorker(opts: WorkerOptions): WorkerHandle {
         console.error(`[worker ${opts.workerId}] job ${job.id} crashed inside runJob:`, err);
       })
       .finally(() => {
-        inFlight.delete(job.id);
+        inFlight.delete(key);
         wakeLoop();
       });
 
-    inFlight.set(job.id, { controller, promise });
+    inFlight.set(key, { controller, promise });
     return true;
   }
 
@@ -135,11 +173,23 @@ export function startWorker(opts: WorkerOptions): WorkerHandle {
     }
     if (inFlight.size > 0) {
       for (const entry of inFlight.values()) entry.controller.abort();
+      // Give the abort a short, bounded moment to actually take effect
+      // before shutdown() itself returns. A cooperative handler (echo's
+      // abortable delay()) settles within milliseconds of being aborted; a
+      // handler that ignores the signal entirely (sleeps_forever, by
+      // design) will not, and that is fine — getInFlightCount() may still
+      // report it, and the lease is what allows another worker to resume
+      // it regardless. Without this wait, shutdown() could return with an
+      // entry still technically in-flight for a few more microtasks purely
+      // because its `.finally()` cleanup hadn't run yet, which is
+      // observably wrong for anyone using getInFlightCount() right after
+      // shutdown() resolves.
+      await Promise.race([Promise.allSettled([...inFlight.values()].map((e) => e.promise)), sleep(1000)]);
     }
 
     const listener = await listenerPromise;
     await listener.close();
   }
 
-  return { shutdown };
+  return { shutdown, getInFlightCount: () => inFlight.size };
 }

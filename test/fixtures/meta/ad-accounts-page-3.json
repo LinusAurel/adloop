@@ -1,0 +1,12 @@
+{
+  "data": [
+    {
+      "id": "act_000000000000002",
+      "name": "Synthetic account three",
+      "currency": "GBP",
+      "timezone_name": "Europe/London",
+      "timezone_offset_hours_utc": 1,
+      "account_status": 2
+    }
+  ]
+}

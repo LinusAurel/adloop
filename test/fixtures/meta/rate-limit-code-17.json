@@ -1,0 +1,11 @@
+{
+  "error": {
+    "message": "Synthetic rate limit",
+    "type": "OAuthException",
+    "code": 17,
+    "error_subcode": 99,
+    "error_user_msg": "Synthetic retry message",
+    "fbtrace_id": "fixture-trace-id",
+    "is_transient": true
+  }
+}

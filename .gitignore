@@ -29,3 +29,7 @@ brands/*
 
 # Worktrees (AGENTS.md Workflow)
 .worktrees/
+
+# Editor- und Agenten-Konfiguration bleibt lokal
+.cursor/
+.impeccable/

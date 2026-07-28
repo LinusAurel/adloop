@@ -1,23 +1,23 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { NextRequest } from "next/server";
 import { uuidv7 } from "uuidv7";
+import { GET as getMetricsResolve } from "@/app/api/metrics/resolve/route";
+import {
+  createSession,
+  encodeSession,
+  SESSION_COOKIE,
+} from "@/auth/session";
 import { setPoolForTests } from "@/db/pool";
 import { withTransaction } from "@/db/queryable";
 import { CreateConversionMetricSchema } from "@/metrics/definition";
 import { aggregateNumerator } from "@/metrics/numerator";
 import { resolveMetrics } from "@/metrics/resolve";
-import {
-  computeAndPersistSnapshots,
-  latestSyncDataAsOf,
-  readScoreSnapshots,
-} from "@/metrics/snapshots";
+import { computeAndPersistSnapshots } from "@/metrics/snapshots";
 import {
   assignMetricToAdAccount,
   createConversionMetric,
 } from "@/metrics/store";
-import {
-  FUNNEL_POSITION_FORMULA_PREFIX,
-  FUNNEL_POSITION_FORMULA_VERSION,
-} from "@/metrics/types";
+import { FUNNEL_POSITION_FORMULA_VERSION } from "@/metrics/types";
 import { MetaGraphClient } from "@/meta/graph-client";
 import {
   executeInsightSync,
@@ -61,12 +61,19 @@ function jsonResponse(body: unknown): Response {
 describe("review-6 adversarial fixes", () => {
   let db: TestDb;
   let account: SeedAccount;
+  let userId: string;
 
   beforeAll(async () => {
     db = await startTestDb();
     setPoolForTests(db.pool);
     clearRegistry();
     registerFamily(metricSnapshotComputeFamily);
+    userId = uuidv7();
+    await db.pool.query(
+      `INSERT INTO app_user (id, tenant_id, email, role, ui_locale, agent_locale)
+       VALUES ($1, $2, 'owner-r6@example.com', 'owner', 'de', 'en')`,
+      [userId, db.tenantId],
+    );
   }, 60_000);
 
   afterAll(async () => {
@@ -100,6 +107,25 @@ describe("review-6 adversarial fixes", () => {
     ]);
     account = await seedMetaAccount(db.pool, db.tenantId, "EUR");
   });
+
+  async function callMetricsResolve(params: {
+    metaAdAccountId: string;
+    windowStart: string;
+    windowEnd: string;
+    dataAsOf: string;
+  }): Promise<Response> {
+    const url = new URL("http://localhost/api/metrics/resolve");
+    url.searchParams.set("metaAdAccountId", params.metaAdAccountId);
+    url.searchParams.set("windowStart", params.windowStart);
+    url.searchParams.set("windowEnd", params.windowEnd);
+    url.searchParams.set("dataAsOf", params.dataAsOf);
+    const request = new NextRequest(url, {
+      headers: {
+        cookie: `${SESSION_COOKIE}=${encodeSession(createSession(userId, db.tenantId))}`,
+      },
+    });
+    return getMetricsResolve(request);
+  }
 
   it("finding 1: microsecond finished_at is included in as_of cutoff", async () => {
     const syncRunId = uuidv7();
@@ -447,7 +473,13 @@ describe("review-6 adversarial fixes", () => {
     expect(resolved.rows[0]?.numerator).toBeNull();
   });
 
-  it("finding 4: historical dataAsOf reads snapshots; missing → no_snapshot", async () => {
+  it("finding 4: historical resolve returns prior formula version via route", async () => {
+    // Snapshot stored under an older family version than today's constant.
+    // The route must still return it; hard-filtering on FUNNEL_POSITION_FORMULA_VERSION
+    // yields no_snapshot and fails this test.
+    const priorVersion = "funnel_position_v0";
+    expect(priorVersion).not.toBe(FUNNEL_POSITION_FORMULA_VERSION);
+
     const population = buildPassingPopulation();
     const sync1 = await seedSucceededSync(db.pool, {
       tenantId: db.tenantId,
@@ -467,78 +499,75 @@ describe("review-6 adversarial fixes", () => {
       dataAsOf: "2026-07-20T12:00:00.000Z",
       sourceSyncRunIds: [sync1],
     });
+    await db.pool.query(
+      `UPDATE metric_snapshot
+       SET formula_version = $1
+       WHERE tenant_id = $2
+         AND meta_ad_account_id = $3
+         AND data_as_of = $4::timestamptz
+         AND formula_version = $5`,
+      [
+        priorVersion,
+        db.tenantId,
+        account.accountId,
+        "2026-07-20T12:00:00.000Z",
+        FUNNEL_POSITION_FORMULA_VERSION,
+      ],
+    );
 
-    const sync2 = await seedSucceededSync(db.pool, {
+    // Newer sync makes 2026-07-20 historical (scoresFromSnapshot path).
+    await seedSucceededSync(db.pool, {
       tenantId: db.tenantId,
       accountId: account.accountId,
       windowStart: population.windowStart,
       windowEnd: population.windowEnd,
       finishedAt: new Date("2026-07-21T12:00:00.000Z"),
     });
-    void sync2;
 
-    const historical = await readScoreSnapshots({
-      pool: db.pool,
-      tenantId: db.tenantId,
-      adAccountId: account.accountId,
+    const response = await callMetricsResolve({
+      metaAdAccountId: account.accountId,
       windowStart: population.windowStart,
       windowEnd: population.windowEnd,
       dataAsOf: "2026-07-20T12:00:00.000Z",
-      formulaPrefix: FUNNEL_POSITION_FORMULA_PREFIX,
     });
-    expect(historical.size).toBeGreaterThan(0);
-    const storedVersion = [...historical.values()][0]!.formulaVersion;
-    expect(storedVersion).toBe(FUNNEL_POSITION_FORMULA_VERSION);
-
-    // Simulate a formula upgrade: compiled constant is now v2, snapshot stays v1.
-    // Hard-filtering on today's version must fail; family prefix must still resolve.
-    const upgradedConstant = "funnel_position_v2";
-    expect(upgradedConstant).not.toBe(FUNNEL_POSITION_FORMULA_VERSION);
-    const hardFiltered = await readScoreSnapshots({
-      pool: db.pool,
-      tenantId: db.tenantId,
-      adAccountId: account.accountId,
-      windowStart: population.windowStart,
-      windowEnd: population.windowEnd,
-      dataAsOf: "2026-07-20T12:00:00.000Z",
-      formulaVersion: upgradedConstant,
-    });
-    expect(hardFiltered.size).toBe(0);
-
-    const afterUpgrade = await readScoreSnapshots({
-      pool: db.pool,
-      tenantId: db.tenantId,
-      adAccountId: account.accountId,
-      windowStart: population.windowStart,
-      windowEnd: population.windowEnd,
-      dataAsOf: "2026-07-20T12:00:00.000Z",
-      formulaPrefix: FUNNEL_POSITION_FORMULA_PREFIX,
-    });
-    expect(afterUpgrade.size).toBeGreaterThan(0);
-    expect([...afterUpgrade.values()][0]!.formulaVersion).toBe(
-      "funnel_position_v1",
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      scoresFromSnapshot: boolean;
+      funnel: {
+        formulaVersion: string;
+        gateStatus: string;
+        gateReasons: string[];
+      };
+      ads: Array<{
+        funnelPosition: {
+          gateStatus: string;
+          gateReasons: string[];
+          score: number | null;
+        } | null;
+      }>;
+    };
+    expect(body.scoresFromSnapshot).toBe(true);
+    expect(body.funnel.formulaVersion).toBe(priorVersion);
+    expect(body.funnel.gateStatus).toBe("ok");
+    expect(body.funnel.gateReasons).not.toContain("no_snapshot");
+    const scored = body.ads.filter(
+      (ad) => ad.funnelPosition && ad.funnelPosition.score !== null,
     );
-    expect([...afterUpgrade.values()][0]!.value).toBe(
-      [...historical.values()][0]!.value,
-    );
+    expect(scored.length).toBeGreaterThan(0);
 
-    const missing = await readScoreSnapshots({
-      pool: db.pool,
-      tenantId: db.tenantId,
-      adAccountId: account.accountId,
+    const missing = await callMetricsResolve({
+      metaAdAccountId: account.accountId,
       windowStart: population.windowStart,
       windowEnd: population.windowEnd,
       dataAsOf: "2026-07-15T12:00:00.000Z",
-      formulaPrefix: FUNNEL_POSITION_FORMULA_PREFIX,
     });
-    expect(missing.size).toBe(0);
-
-    const latest = await latestSyncDataAsOf(
-      db.pool,
-      db.tenantId,
-      account.accountId,
-    );
-    expect(latest).toContain("2026-07-21");
+    expect(missing.status).toBe(200);
+    const missingBody = (await missing.json()) as {
+      scoresFromSnapshot: boolean;
+      funnel: { gateReasons: string[] };
+    };
+    expect(missingBody.scoresFromSnapshot).toBe(true);
+    expect(missingBody.funnel.gateReasons).toContain("no_snapshot");
   });
 
   it("finding 5: backdated assignment created later does not rewrite past dataAsOf", async () => {

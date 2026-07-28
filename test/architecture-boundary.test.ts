@@ -17,7 +17,14 @@ import { describe, expect, it } from "vitest";
 
 const ROOT = join(__dirname, "..");
 const SCAN_DIRS = ["src", "worker"];
-const ALLOWED_FILES = new Set(["src/queue/create-run.ts"]);
+const ALLOWED_FILES = new Set([
+  "src/queue/create-run.ts",
+  // Etappe 4: chat turns create run+job and write turn_phase / context_packet
+  // without going through the job-status state machine.
+  "src/agent/create-chat-run.ts",
+  "src/agent/run-events.ts",
+  "src/agent/turn.ts",
+]);
 const ALLOWED_DIR_PREFIX = "src/queue/sql/";
 
 const MUTATION_PATTERN = /\b(UPDATE|INSERT INTO)\s+(job|run)\b/i;

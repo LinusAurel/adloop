@@ -236,7 +236,7 @@ export default function MetricsPage() {
       }}
     >
       <h1>Metriken (Etappe 3)</h1>
-      <p style={{ color: "#666" }}>
+      <p style={{ color: "var(--dim)" }}>
         Prüfoberfläche für Leitmetrik, Funnel-Position und Creative Strain. Codes
         kommen vom Backend; Texte hier sind nur Beschriftung.
       </p>
@@ -392,7 +392,7 @@ export default function MetricsPage() {
             <h2>metricDefinition</h2>
             <pre
               style={{
-                background: "#f4f4f4",
+                background: "var(--raised)",
                 padding: "0.75rem",
                 overflow: "auto",
               }}
@@ -429,21 +429,25 @@ export default function MetricsPage() {
               </thead>
               <tbody>
                 {resolved.ads.map((ad) => (
-                  <tr key={ad.metaAdId} style={{ borderTop: "1px solid #ddd" }}>
+                  <tr key={ad.metaAdId} style={{ borderTop: "1px solid var(--line)" }}>
                     <td>
-                      <code>{ad.metaAdId}</code>
+                      <code className="data">{ad.metaAdId}</code>
                     </td>
-                    <td align="right">{ad.spend}</td>
-                    <td align="right">{ad.numerator ?? "null"}</td>
-                    <td align="right">
+                    <td align="right" className="data">
+                      {ad.spend}
+                    </td>
+                    <td align="right" className="data">
+                      {ad.numerator ?? "null"}
+                    </td>
+                    <td align="right" className="data">
                       {ad.cvr === null ? "null" : ad.cvr.toFixed(4)}
                     </td>
-                    <td>
+                    <td className="data">
                       {ad.funnelPosition?.band
                         ? `${BAND_TEXT[ad.funnelPosition.band] ?? ad.funnelPosition.band} (${ad.funnelPosition.score?.toFixed(3)})`
                         : "—"}
                     </td>
-                    <td>
+                    <td className="data">
                       {ad.creativeStrain?.value === null ||
                       ad.creativeStrain?.value === undefined
                         ? "—"

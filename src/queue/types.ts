@@ -38,10 +38,17 @@ export const JobErrorSchema = z.object({
 });
 export type JobError = z.infer<typeof JobErrorSchema>;
 
-/** §4.8: progress reports. percent is an integer 0..100. */
+/**
+ * §4.8 + Etappe 4 §0.7: progress reports use stable codes and params,
+ * never user-facing prose. percent is an integer 0..100.
+ */
+export const JobProgressParamsSchema = z.record(
+  z.union([z.string(), z.number(), z.boolean()]),
+);
 export const JobProgressSchema = z.object({
   state: z.string().min(1),
-  message: z.string().min(1),
+  code: z.string().min(1),
+  params: JobProgressParamsSchema.default({}),
   percent: z.number().int().min(0).max(100),
 });
 export type JobProgress = z.infer<typeof JobProgressSchema>;

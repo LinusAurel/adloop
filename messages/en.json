@@ -1,0 +1,62 @@
+{
+  "app": {
+    "title": "adloop",
+    "chat": "Chat",
+    "projects": "Projects",
+    "connectors": "Connectors",
+    "metrics": "Metrics",
+    "playbooks": "Playbooks",
+    "queueSmoke": "Queue",
+    "newChat": "New chat",
+    "send": "Send",
+    "themeLight": "Light",
+    "themeDark": "Dark",
+    "themeSystem": "System",
+    "playbookSlug": "Slug",
+    "saveOverride": "Save override",
+    "activeOverrides": "Active overrides",
+    "resetOverride": "Reset"
+  },
+  "chat": {
+    "empty": "Send a message to get started.",
+    "placeholder": "Ask about your account…",
+    "toolRunning": "Tool running",
+    "toolCompleted": "Tool finished",
+    "approvalRequired": "Approval required",
+    "approve": "Approve",
+    "deny": "Deny",
+    "approvalHashHint": "Approval applies only to exactly these resolved values.",
+    "costEstimate": "Cost estimate",
+    "resolvedValues": "Resolved values",
+    "waitingApproval": "Waiting for approval…"
+  },
+  "progress": {
+    "echo_step": "Step {step} of {total}",
+    "metric_snapshot_window": "Snapshot window {index}/{total}",
+    "meta_report_progress": "Meta report {percent}%",
+    "insight_page_fetched": "Insight page {pagesFetched}",
+    "insight_sync_completed": "Sync completed ({pagesFetched} pages)",
+    "late_write_attempt": "Late write attempt",
+    "turn_phase": "Phase: {phase}",
+    "waiting_approval": "Approval pending"
+  },
+  "errors": {
+    "insufficient_data": "Insufficient data for this score",
+    "below_minimum_spend": "Below minimum spend",
+    "token_expired": "Meta token expired",
+    "unauthenticated": "Please sign in again",
+    "not_found": "Not found",
+    "validation_error": "Invalid input",
+    "idempotency_conflict": "This request was already used differently",
+    "approval_not_decidable": "Approval can no longer be decided",
+    "playbook_missing": "Playbook missing",
+    "export_disabled": "Export is disabled",
+    "forbidden": "Forbidden",
+    "account_not_selected": "Select an ad account first",
+    "meta_not_configured": "Meta credentials are not configured",
+    "sync_in_progress": "A sync is already running for this ad account",
+    "base_facts_not_synced": "Daily facts have not been synced yet",
+    "base_facts_syncing": "Preparing your account…",
+    "base_facts_ready": "Daily facts are ready"
+  }
+}

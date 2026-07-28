@@ -1,0 +1,62 @@
+{
+  "app": {
+    "title": "adloop",
+    "chat": "Chat",
+    "projects": "Projekte",
+    "connectors": "Anbindungen",
+    "metrics": "Metriken",
+    "playbooks": "Playbooks",
+    "queueSmoke": "Warteschlange",
+    "newChat": "Neuer Chat",
+    "send": "Senden",
+    "themeLight": "Hell",
+    "themeDark": "Dunkel",
+    "themeSystem": "System",
+    "playbookSlug": "Slug",
+    "saveOverride": "Override speichern",
+    "activeOverrides": "Aktive Overrides",
+    "resetOverride": "Zurücksetzen"
+  },
+  "chat": {
+    "empty": "Schreib eine Nachricht, um zu starten.",
+    "placeholder": "Frage zu deinem Konto…",
+    "toolRunning": "Werkzeug läuft",
+    "toolCompleted": "Werkzeug fertig",
+    "approvalRequired": "Freigabe erforderlich",
+    "approve": "Zustimmen",
+    "deny": "Ablehnen",
+    "approvalHashHint": "Die Zustimmung gilt nur für exakt diese aufgelösten Werte.",
+    "costEstimate": "Kostenschätzung",
+    "resolvedValues": "Aufgelöste Werte",
+    "waitingApproval": "Warte auf Freigabe…"
+  },
+  "progress": {
+    "echo_step": "Schritt {step} von {total}",
+    "metric_snapshot_window": "Snapshot-Fenster {index}/{total}",
+    "meta_report_progress": "Meta-Report {percent}%",
+    "insight_page_fetched": "Insight-Seite {pagesFetched}",
+    "insight_sync_completed": "Sync abgeschlossen ({pagesFetched} Seiten)",
+    "late_write_attempt": "Verspäteter Schreibversuch",
+    "turn_phase": "Phase: {phase}",
+    "waiting_approval": "Freigabe ausstehend"
+  },
+  "errors": {
+    "insufficient_data": "Zu wenig Daten für diese Bewertung",
+    "below_minimum_spend": "Unter der Mindestausgabe",
+    "token_expired": "Meta-Token abgelaufen",
+    "unauthenticated": "Bitte erneut anmelden",
+    "not_found": "Nicht gefunden",
+    "validation_error": "Ungültige Eingabe",
+    "idempotency_conflict": "Diese Anfrage wurde bereits anders verwendet",
+    "approval_not_decidable": "Freigabe nicht mehr entscheidbar",
+    "playbook_missing": "Playbook fehlt",
+    "export_disabled": "Export ist deaktiviert",
+    "forbidden": "Keine Berechtigung",
+    "account_not_selected": "Wähle zuerst ein Werbekonto aus",
+    "meta_not_configured": "Meta-Zugangsdaten fehlen",
+    "sync_in_progress": "Für dieses Werbekonto läuft bereits ein Sync",
+    "base_facts_not_synced": "Tageswerte wurden noch nicht synchronisiert",
+    "base_facts_syncing": "Wir bereiten dein Konto vor…",
+    "base_facts_ready": "Tageswerte sind bereit"
+  }
+}

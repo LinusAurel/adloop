@@ -102,7 +102,7 @@ export default function LoginPage() {
         </form>
       )}
       {error && <p style={{ color: "crimson" }}>{error}</p>}
-      <p style={{ color: "#666", marginTop: "2rem" }}>
+      <p style={{ color: "var(--dim)", marginTop: "2rem" }}>
         In der Entwicklung steht der Code im Web-Log.
       </p>
     </main>

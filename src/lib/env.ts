@@ -27,6 +27,9 @@ const envSchema = z
   META_GRAPH_API_VERSION: z.string().regex(/^v\d+\.\d+$/).default("v25.0"),
   SYNC_BACKFILL_DAYS: z.coerce.number().int().min(1).max(90).default(7),
 
+  PLAYBOOK_DIR: z.string().min(1).optional(),
+  ANTHROPIC_API_KEY: z.string().min(1).optional(),
+
   JOB_POLL_INTERVAL_MS: z.coerce.number().int().positive().default(1000),
   JOB_LEASE_MS: z.coerce.number().int().positive().default(30000),
   JOB_HEARTBEAT_INTERVAL_MS: z.coerce.number().int().positive().default(5000),

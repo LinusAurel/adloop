@@ -25,7 +25,12 @@ export const timeoutThenLateWriteFamily: JobFamilyDefinition<TimeoutThenLateWrit
   handler(ctx): Promise<never> {
     setTimeout(() => {
       void ctx
-        .progress({ state: "late", message: "this must never land", percent: 99 })
+        .progress({
+          state: "late",
+          code: "late_write_attempt",
+          params: {},
+          percent: 99,
+        })
         .catch(() => {
           /* fencing is expected to reject this; nothing to do here */
         });

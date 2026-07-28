@@ -107,9 +107,10 @@ describe("insight observation read contract", () => {
   function graphFrom(
     responses: unknown[],
     requested: string[] = [],
+    listedAdIds?: string[],
   ): MetaGraphClient {
     const queue = [...responses];
-    const adIds = [
+    const adIds = listedAdIds ?? [
       ...new Set(
         responses.flatMap((response) => {
           if (!response || typeof response !== "object" || !("data" in response)) return [];
@@ -338,6 +339,65 @@ describe("insight observation read contract", () => {
     await expect(
       executeInsightSync(options(uuidv7(), graphFrom([mismatched]))),
     ).rejects.toThrow("Meta response failed schema validation");
+  });
+
+  it("writes zero observations when a previously delivered ad-date disappears", async () => {
+    const firstSyncRun = uuidv7();
+    await executeInsightSync(options(firstSyncRun, graphFrom([firstPageOnly])));
+
+    const secondSyncRun = uuidv7();
+    await executeInsightSync(
+      options(
+        secondSyncRun,
+        graphFrom(
+          [{ data: [] }],
+          [],
+          ["000000000000000001", "000000000000000099"],
+        ),
+      ),
+    );
+
+    const daily = await db.pool.query<{
+      spend: string;
+      impressions: string;
+      reach: string;
+      sync_run_id: string;
+    }>(
+      `SELECT spend::text, impressions::text, reach::text, sync_run_id
+       FROM insight_daily_current
+       WHERE tenant_id = $1
+         AND meta_ad_id = '000000000000000001'
+         AND date = '2026-07-20'`,
+      [db.tenantId],
+    );
+    expect(daily.rows).toEqual([
+      {
+        spend: "0",
+        impressions: "0",
+        reach: "0",
+        sync_run_id: secondSyncRun,
+      },
+    ]);
+
+    const action = await db.pool.query<{ count: string; value: string }>(
+      `SELECT count::text, value::text
+       FROM insight_action_daily_current
+       WHERE tenant_id = $1
+         AND meta_ad_id = '000000000000000001'
+         AND date = '2026-07-20'
+         AND action_type = 'offsite_conversion.fb_pixel_lead'`,
+      [db.tenantId],
+    );
+    expect(action.rows).toEqual([{ count: "0", value: "0" }]);
+
+    const neverDelivered = await db.pool.query<{ count: string }>(
+      `SELECT count(*)::text AS count
+       FROM insight_daily
+       WHERE tenant_id = $1
+         AND meta_ad_id = '000000000000000099'`,
+      [db.tenantId],
+    );
+    expect(neverDelivered.rows).toEqual([{ count: "0" }]);
   });
 
   it("stores exact comparison and cumulative windows and derives net-new reach", async () => {

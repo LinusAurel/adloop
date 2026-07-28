@@ -325,3 +325,9 @@ What changed, and why:
   sync requests and validates that setting; it never adds `1d_view` and
   `7d_click`, and rejects a differently configured ad instead of attaching
   the wrong label.
+- **A successful backfill writes zero observations for previously delivered
+  `(ad, date)` keys that disappear from the same account, query contract,
+  and requested window.** The expected set comes from prior successful
+  observations, not from every ad in the account, so ads that never
+  delivered do not acquire synthetic daily rows. The zero row uses the new
+  sync run and also tombstones every previously observed action type.

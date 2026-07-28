@@ -693,6 +693,72 @@ async function writeInsightRow(
   }
 }
 
+function zeroInsightRow(adId: string, date: string): MetaInsightRow {
+  return {
+    ad_id: adId,
+    date_start: date,
+    date_stop: date,
+    spend: 0,
+    impressions: 0,
+    clicks: 0,
+    inline_link_clicks: 0,
+    reach: 0,
+    frequency: 0,
+    attribution_setting: "1d_view_7d_click",
+  };
+}
+
+async function reconcileMissingInsightRows(
+  options: ExecuteInsightSyncOptions,
+): Promise<number> {
+  const missing = await options.pool.query<{
+    meta_ad_id: string;
+    date: string;
+  }>(
+    `SELECT DISTINCT ON (d.meta_ad_id, d.date)
+       d.meta_ad_id,
+       d.date::text
+     FROM insight_daily d
+     JOIN insight_sync_run r
+       ON r.id = d.sync_run_id
+      AND r.tenant_id = d.tenant_id
+     WHERE d.tenant_id = $1
+       AND r.meta_ad_account_id = $2
+       AND r.query_signature = $3
+       AND r.status = 'succeeded'
+       AND d.date BETWEEN $4 AND $5
+       AND NOT EXISTS (
+         SELECT 1
+         FROM insight_daily current_observation
+         WHERE current_observation.tenant_id = d.tenant_id
+           AND current_observation.meta_ad_id = d.meta_ad_id
+           AND current_observation.date = d.date
+           AND current_observation.sync_run_id = $6
+       )
+     ORDER BY d.meta_ad_id, d.date, d.observed_at DESC`,
+    [
+      options.tenantId,
+      options.internalAdAccountId,
+      INSIGHT_QUERY_SIGNATURE,
+      options.window.start,
+      options.window.end,
+      options.syncRunId,
+    ],
+  );
+
+  for (const row of missing.rows) {
+    const written = await options.withLease((client) =>
+      writeInsightRow(
+        client,
+        options,
+        zeroInsightRow(row.meta_ad_id, row.date),
+      ),
+    );
+    if (!written.acquired) throw new JobCancelledError();
+  }
+  return missing.rowCount ?? missing.rows.length;
+}
+
 async function checkpointInsightPage(
   client: PoolClient,
   options: ExecuteInsightSyncOptions,
@@ -874,6 +940,7 @@ export async function executeInsightSync(
       });
     }
 
+    await reconcileMissingInsightRows(options);
     const windowResponses = await syncInsightWindows(options);
     const rawPages = await options.pool.query<{ raw_response: unknown }>(
       `SELECT raw_response

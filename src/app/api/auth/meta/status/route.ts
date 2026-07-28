@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { authenticate } from "@/auth/guard";
 import { getPool } from "@/db/pool";
-import { ReadinessSchema } from "@/meta/oauth";
+import { metaConfiguration, ReadinessSchema } from "@/meta/oauth";
 
 const ConnectionRowSchema = z.object({
   id: z.string().uuid(),
@@ -26,6 +26,7 @@ const AccountRowSchema = z.object({
   business_name: z.string().nullable(),
   selected: z.boolean(),
   readiness: ReadinessSchema,
+  content_locale: z.string(),
 });
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
@@ -43,12 +44,15 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     ),
     pool.query(
       `SELECT
-         id, connection_id, advertiser_id, meta_ad_account_id, name,
-         currency, timezone_name, timezone_offset_hours, account_status,
-         business_name, selected, readiness
-       FROM meta_ad_account
-       WHERE tenant_id = $1
-       ORDER BY name, meta_ad_account_id`,
+         a.id, a.connection_id, a.advertiser_id, a.meta_ad_account_id, a.name,
+         a.currency, a.timezone_name, a.timezone_offset_hours, a.account_status,
+         a.business_name, a.selected, a.readiness, adv.content_locale
+       FROM meta_ad_account a
+       JOIN advertiser adv
+         ON adv.id = a.advertiser_id
+        AND adv.tenant_id = a.tenant_id
+       WHERE a.tenant_id = $1
+       ORDER BY a.name, a.meta_ad_account_id`,
       [auth.session.tenantId],
     ),
   ]);
@@ -57,6 +61,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const now = Date.now();
 
   return NextResponse.json({
+    metaConfigured: metaConfiguration() !== null,
     connections: connections.map((connection) => {
       const expiresInDays = Math.ceil(
         (connection.token_expires_at.getTime() - now) / (24 * 60 * 60 * 1_000),
@@ -85,6 +90,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       businessName: account.business_name,
       selected: account.selected,
       readiness: account.readiness,
+      contentLocale: account.content_locale,
     })),
   });
 }

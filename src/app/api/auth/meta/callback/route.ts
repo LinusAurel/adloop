@@ -4,6 +4,10 @@ import { getPool } from "@/db/pool";
 import { errorResponse } from "@/lib/api-error";
 import { completeMetaOAuth, metaConfiguration } from "@/meta/oauth";
 
+
+/** Every API route touches auth or the database — nothing here is static.
+ * Without this, `next build` executes module code and fails on env validation. */
+export const dynamic = "force-dynamic";
 function connectorsRedirect(request: NextRequest, key: string, value: string): NextResponse {
   const url = new URL("/connectors", request.url);
   url.searchParams.set(key, value);

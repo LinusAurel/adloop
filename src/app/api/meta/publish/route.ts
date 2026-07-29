@@ -25,6 +25,10 @@ import {
 } from "@/publish/live-client";
 import { getWriteClientOrThrow } from "@/publish/client-factory";
 
+
+/** Every API route touches auth or the database — nothing here is static.
+ * Without this, `next build` executes module code and fails on env validation. */
+export const dynamic = "force-dynamic";
 ensureQueueBootstrapped();
 ensureToolsBootstrapped();
 

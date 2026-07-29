@@ -9,6 +9,10 @@ import { initialReadiness, ReadinessSchema } from "@/meta/oauth";
 import { ensureQueueBootstrapped } from "@/queue/bootstrap";
 import { createRun } from "@/queue/create-run";
 
+
+/** Every API route touches auth or the database — nothing here is static.
+ * Without this, `next build` executes module code and fails on env validation. */
+export const dynamic = "force-dynamic";
 const BodySchema = z.object({
   runId: z.string().uuid(),
   metaAdAccountId: z.string().uuid(),

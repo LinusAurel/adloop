@@ -5,6 +5,10 @@ import { decideApproval } from "@/agent/tools/approvals";
 import { getPool } from "@/db/pool";
 import { errorResponse } from "@/lib/api-error";
 
+
+/** Every API route touches auth or the database — nothing here is static.
+ * Without this, `next build` executes module code and fails on env validation. */
+export const dynamic = "force-dynamic";
 const BodySchema = z.object({
   approve: z.boolean(),
 });

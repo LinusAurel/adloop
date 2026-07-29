@@ -7,6 +7,10 @@ import { loadLatestDefaults, saveDefaults } from "@/publish/resolve";
 import { PublishError } from "@/publish/schemas";
 import { z } from "zod";
 
+
+/** Every API route touches auth or the database — nothing here is static.
+ * Without this, `next build` executes module code and fails on env validation. */
+export const dynamic = "force-dynamic";
 const QuerySchema = z.object({
   advertiserId: z.string().uuid(),
 });

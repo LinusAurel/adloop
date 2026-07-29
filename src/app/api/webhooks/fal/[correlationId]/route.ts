@@ -17,6 +17,10 @@ import { FalImageProvider } from "@/images/providers/fal";
 import { downloadImageBytes } from "@/images/image-download";
 import { resolveImageMime } from "@/images/image-mime";
 
+
+/** Every API route touches auth or the database — nothing here is static.
+ * Without this, `next build` executes module code and fails on env validation. */
+export const dynamic = "force-dynamic";
 const ParamsSchema = z.object({
   correlationId: z.string().uuid(),
 });

@@ -3,6 +3,10 @@ import { authenticate, requireOwnedResource } from "@/auth/guard";
 import { getPool } from "@/db/pool";
 import { errorResponse } from "@/lib/api-error";
 import { ensureQueueBootstrapped } from "@/queue/bootstrap";
+
+/** Every API route touches auth or the database — nothing here is static.
+ * Without this, `next build` executes module code and fails on env validation. */
+export const dynamic = "force-dynamic";
 import {
   AdReviewRequestSchema,
   executeAdReview,

@@ -1,0 +1,83 @@
+# adloop on a Docker host behind Traefik.
+#
+# Assumes an existing Traefik with a Let's Encrypt resolver on an external
+# network. Nothing here publishes ports — Traefik reaches the web service
+# through that network, and Postgres stays internal.
+#
+#   docker compose -f docker-compose.server.yml --env-file .env up -d --build
+#
+# Required in .env: ADLOOP_HOST, TRAEFIK_NETWORK, TRAEFIK_CERTRESOLVER,
+# POSTGRES_PASSWORD, plus the application secrets (see .env.example).
+
+name: adloop
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: adloop
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: adloop
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U adloop -d adloop"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [internal]
+
+  web:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: adloop:local
+    restart: unless-stopped
+    # Migrations run before the server starts, so a deploy never serves a
+    # schema it does not have.
+    command: ["sh", "-c", "node dist/migrate.js && node server.js"]
+    env_file: [.env]
+    environment:
+      DATABASE_URL: postgres://adloop:${POSTGRES_PASSWORD}@db:5432/adloop
+      PUBLIC_BASE_URL: https://${ADLOOP_HOST:?set ADLOOP_HOST}
+      META_REDIRECT_URI: https://${ADLOOP_HOST}/api/auth/meta/callback
+    depends_on:
+      db: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: ${TRAEFIK_NETWORK:?set TRAEFIK_NETWORK}
+      traefik.http.routers.adloop.rule: Host(`${ADLOOP_HOST}`)
+      traefik.http.routers.adloop.entrypoints: websecure
+      traefik.http.routers.adloop.tls: "true"
+      traefik.http.routers.adloop.tls.certresolver: ${TRAEFIK_CERTRESOLVER:-le}
+      traefik.http.services.adloop.loadbalancer.server.port: "3000"
+    networks: [internal, proxy]
+
+  worker:
+    image: adloop:local
+    restart: unless-stopped
+    command: ["node", "dist/worker.js"]
+    env_file: [.env]
+    environment:
+      DATABASE_URL: postgres://adloop:${POSTGRES_PASSWORD}@db:5432/adloop
+      PUBLIC_BASE_URL: https://${ADLOOP_HOST}
+    depends_on:
+      db: { condition: service_healthy }
+      web: { condition: service_started }
+    networks: [internal]
+
+volumes:
+  db-data:
+
+networks:
+  internal:
+  proxy:
+    external: true
+    name: ${TRAEFIK_NETWORK}

@@ -12,6 +12,10 @@ import {
 } from "@/images/generate";
 import { generateImagesTool } from "@/agent/tools/generate-images";
 
+
+/** Every API route touches auth or the database — nothing here is static.
+ * Without this, `next build` executes module code and fails on env validation. */
+export const dynamic = "force-dynamic";
 ensureQueueBootstrapped();
 
 const BodySchema = z.object({

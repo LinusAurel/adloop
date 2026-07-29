@@ -4,6 +4,10 @@ import { authenticate } from "@/auth/guard";
 import { getPool } from "@/db/pool";
 import { metaConfiguration, ReadinessSchema } from "@/meta/oauth";
 
+
+/** Every API route touches auth or the database — nothing here is static.
+ * Without this, `next build` executes module code and fails on env validation. */
+export const dynamic = "force-dynamic";
 const ConnectionRowSchema = z.object({
   id: z.string().uuid(),
   meta_user_id: z.string(),

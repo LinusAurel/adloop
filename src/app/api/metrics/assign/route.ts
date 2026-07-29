@@ -6,6 +6,10 @@ import { errorResponse } from "@/lib/api-error";
 import { MetricConfigError } from "@/metrics/action-overlaps";
 import { assignMetricToAdAccount } from "@/metrics/store";
 
+
+/** Every API route touches auth or the database — nothing here is static.
+ * Without this, `next build` executes module code and fails on env validation. */
+export const dynamic = "force-dynamic";
 const BodySchema = z.object({
   metaAdAccountId: z.string().uuid(),
   conversionMetricId: z.string().uuid(),

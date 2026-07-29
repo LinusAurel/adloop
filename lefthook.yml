@@ -17,3 +17,8 @@ pre-push:
   commands:
     test:
       run: pnpm test
+    # A green test suite proved nothing about buildability: 199 tests passed while
+    # `next build` failed on environment validation, and it only surfaced during the
+    # first deploy. Tests exercise modules; the build walks the whole import graph.
+    build:
+      run: bash scripts/build-env.sh pnpm build

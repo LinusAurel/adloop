@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { uuidv7 } from "uuidv7";
 import { AppNav } from "@/components/AppNav";
@@ -249,50 +249,43 @@ export default function ChatPage() {
     if (!approve) setApproval(null);
   }
 
+  // Ein Werkzeug ist eine Zeile, nicht ein Ereignis je Zeile: tool_running und
+  // das spätere tool_completed desselben Aufrufs fallen zusammen. Sonst wächst
+  // der Verlauf bei jedem Schritt um einen Block, den niemand liest.
+  const toolRuns = (() => {
+    const order: string[] = [];
+    const byKey = new Map<string, { tool: string; done: boolean; params: StreamActivity["params"] }>();
+    for (const a of activities) {
+      if (a.code !== "tool_running" && a.code !== "tool_completed") continue;
+      const key = String(a.params.tool ?? a.code);
+      if (!byKey.has(key)) {
+        order.push(key);
+        byKey.set(key, { tool: key, done: false, params: {} });
+      }
+      const entry = byKey.get(key)!;
+      entry.params = { ...entry.params, ...a.params };
+      if (a.code === "tool_completed") entry.done = true;
+    }
+    return order.map((k) => byKey.get(k)!);
+  })();
+
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
       <AppNav />
-      <div
-        style={{
-          flex: 1,
-          display: "grid",
-          gridTemplateColumns: "220px 1fr",
-          minHeight: 0,
-        }}
-      >
-        <aside
-          style={{
-            borderRight: "1px solid var(--line)",
-            background: "var(--surface)",
-            padding: "0.75rem",
-            overflow: "auto",
-          }}
-        >
-          <div style={{ color: "var(--dim)", fontSize: "0.8rem", marginBottom: "0.5rem" }}>
-            {t("app.projects")}
-          </div>
+      <div className="chat">
+        <aside className="projects">
           {projects.map((p) => (
-            <div key={p.id} style={{ marginBottom: "0.75rem" }}>
-              <div style={{ fontWeight: 600, marginBottom: "0.25rem" }}>{p.name}</div>
+            <div key={p.id}>
+              <div className="pgroup">{p.name}</div>
               {chats
                 .filter((c) => c.project_id === p.id)
                 .map((c) => (
                   <button
                     key={c.id}
                     type="button"
+                    className="pitem"
+                    aria-current={c.id === activeChatId ? "true" : "false"}
                     onClick={() => void loadChat(c.id)}
-                    style={{
-                      display: "block",
-                      width: "100%",
-                      textAlign: "left",
-                      background:
-                        c.id === activeChatId ? "var(--raised)" : "transparent",
-                      color: "var(--fg)",
-                      border: "none",
-                      borderRadius: "var(--radius)",
-                      padding: "0.35rem 0.5rem",
-                      cursor: "pointer",
-                    }}
                   >
                     {c.name_code
                       ? t(c.name_code as never, (c.name_params ?? {}) as never)
@@ -301,178 +294,146 @@ export default function ChatPage() {
                 ))}
             </div>
           ))}
-          <button
-            type="button"
-            onClick={() => {
-              setActiveChatId(null);
-              setMessages([]);
-              setStreaming("");
-            }}
-            style={{
-              width: "100%",
-              marginTop: "0.5rem",
-              background: "var(--accent)",
-              color: "var(--on-accent)",
-              border: "none",
-              borderRadius: "var(--radius)",
-              padding: "0.5rem",
-              cursor: "pointer",
-            }}
-          >
-            {t("app.newChat")}
-          </button>
+          <div style={{ padding: "10px 14px 0" }}>
+            <button
+              type="button"
+              className="btn"
+              style={{ width: "100%" }}
+              onClick={() => {
+                setActiveChatId(null);
+                setMessages([]);
+                setStreaming("");
+              }}
+            >
+              {t("app.newChat")}
+            </button>
+          </div>
         </aside>
 
-        <main style={{ display: "flex", flexDirection: "column", minHeight: 0 }}>
-          <div style={{ flex: 1, overflow: "auto", padding: "1rem" }}>
+        <main className="thread">
+          <div className="msgs">
             {messages.length === 0 && !streaming && (
               <p style={{ color: "var(--dim)" }}>{t("chat.empty")}</p>
             )}
-            {messages.map((m) => (
-              <div key={m.id} style={{ marginBottom: "1rem" }}>
-                <div style={{ color: "var(--dim)", fontSize: "0.75rem" }}>{m.role}</div>
-                <div style={{ whiteSpace: "pre-wrap" }}>
-                  {m.role === "assistant" && !m.content && streaming
-                    ? streaming
-                    : m.content_code
-                      ? t(m.content_code as never, (m.content_params ?? {}) as never)
-                      : m.content}
+            {messages.map((m) => {
+              const isAgent = m.role === "assistant";
+              const live = isAgent && !m.content && streaming;
+              const body = live
+                ? streaming
+                : m.content_code
+                  ? t(m.content_code as never, (m.content_params ?? {}) as never)
+                  : m.content;
+              return (
+                <div className="msg" key={m.id}>
+                  <div className={isAgent ? "who agent" : "who"}>
+                    {isAgent ? t("app.title") : t("chat.you")}
+                  </div>
+                  <div>
+                    {/* Die Werkzeugzeilen gehören zur laufenden Antwort und stehen
+                        deshalb über ihr, nicht als eigener Abschnitt am Ende. */}
+                    {isAgent && live && toolRuns.length > 0 && (
+                      <div>
+                        {toolRuns.map((run) => (
+                          <details className="tool" key={run.tool} open={!run.done}>
+                            <summary>
+                              <span className="tname">{run.tool}</span>
+                              <span
+                                className="tstate"
+                                style={{ color: run.done ? "var(--good)" : "var(--dim)" }}
+                              >
+                                {run.done ? t("chat.toolCompleted") : t("chat.toolRunning")}
+                              </span>
+                            </summary>
+                            <div className="tbody">
+                              {Object.entries(run.params)
+                                .filter(([key]) => key !== "tool")
+                                .map(([key, value]) => (
+                                  <div key={key}>
+                                    {key} <b>{String(value)}</b>
+                                  </div>
+                                ))}
+                            </div>
+                          </details>
+                        ))}
+                      </div>
+                    )}
+                    <p style={{ whiteSpace: "pre-wrap" }}>
+                      {body}
+                      {live && <span className="stream" />}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Die Freigabe steht im Verlauf, nicht als Modal darüber: ein Dialog,
+                der den Chat verdeckt, nimmt genau den Kontext weg, auf dem die
+                Entscheidung beruht. */}
+            {approval && (
+              <div className="msg">
+                <div className="who agent">{t("app.title")}</div>
+                <div className="approve">
+                  <div className="ahead">
+                    <h4>{t("chat.approvalRequired")}</h4>
+                    {approval.costEstimate && (
+                      <span className="cost">{approval.costEstimate}</span>
+                    )}
+                  </div>
+                  <dl className="kv">
+                    <dt>{t("chat.tool")}</dt>
+                    <dd>{approval.tool}</dd>
+                    {Object.entries(
+                      (approval.resolvedPayload ?? {}) as Record<string, unknown>,
+                    ).map(([key, value]) => (
+                      <Fragment key={key}>
+                        <dt>{key}</dt>
+                        <dd>
+                          {typeof value === "object" && value !== null
+                            ? JSON.stringify(value)
+                            : String(value)}
+                        </dd>
+                      </Fragment>
+                    ))}
+                  </dl>
+                  <div className="hashline">
+                    sha256 <b>{approval.resolvedRequestHash.slice(0, 12)}…</b> —{" "}
+                    {t("chat.approvalHashHint")}
+                  </div>
+                  <div className="acts">
+                    <button type="button" className="btn pri" onClick={() => void decide(true)}>
+                      {t("chat.approve")}
+                    </button>
+                    <button type="button" className="btn" onClick={() => void decide(false)}>
+                      {t("chat.deny")}
+                    </button>
+                  </div>
                 </div>
               </div>
-            ))}
+            )}
 
-            {activities.map((a, i) => (
-              <details
-                key={`${a.code}-${i}`}
-                style={{
-                  marginBottom: "0.5rem",
-                  border: "1px solid var(--line)",
-                  borderRadius: "var(--radius)",
-                  padding: "0.35rem 0.5rem",
-                  background: "var(--raised)",
-                }}
-              >
-                <summary style={{ cursor: "pointer" }}>
-                  {a.code === "tool_running"
-                    ? `${t("chat.toolRunning")}: `
-                    : a.code === "tool_completed"
-                      ? `${t("chat.toolCompleted")}: `
-                      : a.code === "approval_required"
-                        ? `${t("chat.approvalRequired")}: `
-                        : ""}
-                  <span className="data">{String(a.params.tool ?? a.code)}</span>
-                </summary>
-                <pre className="data" style={{ margin: "0.5rem 0 0", fontSize: "0.8rem" }}>
-                  {JSON.stringify(a.params, null, 2)}
-                </pre>
-              </details>
-            ))}
-
-            {approval && (
-              <div
-                style={{
-                  border: "1px solid var(--warn)",
-                  borderRadius: "var(--radius)",
-                  padding: "0.75rem",
-                  background: "var(--raised)",
-                  marginTop: "0.75rem",
-                }}
-              >
-                <div style={{ fontWeight: 600, marginBottom: "0.5rem" }}>
-                  {t("chat.approvalRequired")}: <span className="data">{approval.tool}</span>
-                </div>
-                <div style={{ color: "var(--warn)", marginBottom: "0.5rem" }}>
-                  {t("chat.costEstimate")}: <span className="data">{approval.costEstimate}</span>
-                </div>
-                <div style={{ marginBottom: "0.35rem" }}>{t("chat.resolvedValues")}</div>
-                <pre className="data" style={{ fontSize: "0.8rem", overflow: "auto" }}>
-                  {JSON.stringify(approval.resolvedPayload ?? {}, null, 2)}
-                </pre>
-                <div className="data" style={{ fontSize: "0.75rem", margin: "0.5rem 0" }}>
-                  hash {approval.resolvedRequestHash}
-                </div>
-                <p style={{ color: "var(--dim)", fontSize: "0.85rem" }}>
-                  {t("chat.approvalHashHint")}
-                </p>
-                <div style={{ display: "flex", gap: "0.5rem" }}>
-                  <button
-                    type="button"
-                    onClick={() => void decide(true)}
-                    style={{
-                      background: "var(--accent)",
-                      color: "var(--on-accent)",
-                      border: "none",
-                      borderRadius: "var(--radius)",
-                      padding: "0.4rem 0.75rem",
-                      cursor: "pointer",
-                    }}
-                  >
-                    {t("chat.approve")}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void decide(false)}
-                    style={{
-                      background: "var(--surface)",
-                      color: "var(--fg)",
-                      border: "1px solid var(--line)",
-                      borderRadius: "var(--radius)",
-                      padding: "0.4rem 0.75rem",
-                      cursor: "pointer",
-                    }}
-                  >
-                    {t("chat.deny")}
-                  </button>
-                </div>
+            {error && (
+              <div className="msgbox err data" role="alert">
+                {error}
               </div>
             )}
           </div>
 
           <form
+            className="composer"
             onSubmit={(e) => {
               e.preventDefault();
               void send();
-            }}
-            style={{
-              display: "flex",
-              gap: "0.5rem",
-              padding: "0.75rem",
-              borderTop: "1px solid var(--line)",
-              background: "var(--surface)",
             }}
           >
             <input
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               placeholder={t("chat.placeholder")}
-              style={{
-                flex: 1,
-                background: "var(--bg)",
-                color: "var(--fg)",
-                border: "1px solid var(--line)",
-                borderRadius: "var(--radius)",
-                padding: "0.6rem 0.75rem",
-              }}
             />
-            <button
-              type="submit"
-              style={{
-                background: "var(--accent)",
-                color: "var(--on-accent)",
-                border: "none",
-                borderRadius: "var(--radius)",
-                padding: "0.6rem 1rem",
-                cursor: "pointer",
-              }}
-            >
+            <button type="submit" className="btn pri">
               {t("app.send")}
             </button>
           </form>
-          {error && (
-            <p style={{ color: "var(--crit)", padding: "0 0.75rem 0.75rem" }} className="data">
-              {error}
-            </p>
-          )}
         </main>
       </div>
     </div>

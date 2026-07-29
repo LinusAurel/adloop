@@ -32,7 +32,9 @@
     "approvalHashHint": "Die Zustimmung gilt nur für exakt diese aufgelösten Werte.",
     "costEstimate": "Kostenschätzung",
     "resolvedValues": "Aufgelöste Werte",
-    "waitingApproval": "Warte auf Freigabe…"
+    "waitingApproval": "Warte auf Freigabe…",
+    "you": "Du",
+    "tool": "Werkzeug"
   },
   "strategist": {
     "adAccount": "Werbekonto",
@@ -101,7 +103,8 @@
     "variations_title": "Varianten · {adName}",
     "copychief_review_request": "Copy-Review für Anzeige {adName} vom {since} bis {until} starten.",
     "cro_review_request": "Funnel-Review für Anzeige {adName} vom {since} bis {until} starten.",
-    "variations_request": "Varianten für Anzeige {adName} auf Basis von {since} bis {until} vorschlagen."
+    "variations_request": "Varianten für Anzeige {adName} auf Basis von {since} bis {until} vorschlagen.",
+    "noVerdict": "keine Aussage"
   },
   "workshop": {
     "title": "Bild-Werkstatt",
@@ -211,5 +214,90 @@
     "publish": "Freigabe anfordern",
     "costly": "Dieser Schritt erzeugt Objekte bei Meta und kann Geld kosten.",
     "queued": "Publish eingereiht"
+  },
+  "login": {
+    "title": "Anmelden",
+    "lead": "adloop schickt dir einen sechsstelligen Code. Kein Passwort.",
+    "email": "E-Mail",
+    "code": "Code",
+    "requestCode": "Code anfordern",
+    "requesting": "Wird angefordert …",
+    "signIn": "Anmelden",
+    "verifying": "Wird geprüft …",
+    "codeSent": "Der Code wurde an {email} geschickt und gilt 15 Minuten.",
+    "otherEmail": "Andere E-Mail",
+    "devHint": "In der Entwicklung steht der Code im Web-Log.",
+    "errValidation": "Bitte prüfe deine Eingabe.",
+    "errInvalidCode": "Der Code ist ungültig oder abgelaufen.",
+    "errRateLimited": "Zu viele Versuche. Bitte warte 15 Minuten.",
+    "errUnknown": "Anmeldung fehlgeschlagen ({code})."
+  },
+  "queue": {
+    "lead": "Diagnoseseite für die Warteschlange. Ein echo-Job durchläuft dieselbe Kette wie jeder andere.",
+    "enqueue": "Einreihen",
+    "status": "Status",
+    "progress": "Fortschritt",
+    "cancel": "Abbrechen"
+  },
+  "connectors": {
+    "title": "Anbindungen",
+    "logout": "Abmelden",
+    "loading": "Status wird geladen …",
+    "metaNotConfigured": "Meta ist noch nicht konfiguriert. Es fehlen App-Kennung, App-Geheimnis, Redirect-URI oder Verschlüsselungsschlüssel.",
+    "connectMeta": "Meta verbinden",
+    "token": "Token",
+    "daysLeft": "noch {days} Tage",
+    "reconnect": "bitte erneut verbinden",
+    "adAccounts": "Werbekonten",
+    "noAdAccounts": "Keine Werbekonten gefunden.",
+    "noBusinessName": "ohne Business-Name",
+    "select": "Auswählen",
+    "selected": "Ausgewählt",
+    "startSync": "Sync anstoßen",
+    "syncStarting": "Sync startet …",
+    "contentLocale": "Sprache der Anzeigentexte",
+    "save": "Speichern",
+    "readiness": "Bereitschaft",
+    "blocked": "gesperrt",
+    "msg": {
+      "base_facts_not_synced": "Tageswerte wurden noch nicht synchronisiert.",
+      "base_facts_syncing": "Wir bereiten dein Konto vor …",
+      "base_facts_ready": "Tageswerte sind bereit."
+    },
+    "errUnknown": "Fehlgeschlagen ({code}).",
+    "err": {
+      "account_not_selected": "Wähle zuerst ein Werbekonto aus.",
+      "idempotency_conflict": "Diese Anfrage wurde bereits anders verwendet.",
+      "meta_not_configured": "Meta-Zugangsdaten fehlen in der Umgebung.",
+      "sync_in_progress": "Für dieses Werbekonto läuft bereits ein Sync.",
+      "unauthenticated": "Bitte melde dich erneut an."
+    }
+  },
+  "metrics": {
+    "title": "Metriken",
+    "lead": "Prüfoberfläche für Leitmetrik, Funnel-Position und Creative Strain. Codes kommen vom Backend; Texte hier sind nur Beschriftung.",
+    "createMetric": "Leitmetrik anlegen",
+    "label": "Bezeichnung",
+    "actionTypes": "Aktionstypen (kommagetrennt)",
+    "aggregation": "Aggregation",
+    "denominator": "Nenner",
+    "noDenominator": "kein Nenner",
+    "valueSource": "Wertquelle",
+    "fixedValue": "Fester Wert",
+    "currency": "Währung",
+    "create": "Anlegen",
+    "assignment": "Zuordnung",
+    "adAccount": "Werbekonto",
+    "assign": "Zuordnen",
+    "evaluation": "Auswertung",
+    "from": "Von",
+    "to": "Bis",
+    "load": "Kennzahlen laden",
+    "errorCode": "Fehlercode",
+    "definition": "Metrikdefinition",
+    "accountTotals": "Kontosummen",
+    "ads": "Anzeigen",
+    "gate": "Gate",
+    "noGateReason": "keine Sperre"
   }
 }

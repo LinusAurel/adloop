@@ -2,6 +2,9 @@ node_modules/
 .next/
 dist/
 .env
+# Nur .env.example gehört ins Repo — jede andere .env-Datei trägt echte Werte.
+.env.*
+!.env.example
 *.log
 .DS_Store
 coverage/

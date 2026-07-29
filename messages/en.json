@@ -32,7 +32,9 @@
     "approvalHashHint": "Approval applies only to exactly these resolved values.",
     "costEstimate": "Cost estimate",
     "resolvedValues": "Resolved values",
-    "waitingApproval": "Waiting for approval…"
+    "waitingApproval": "Waiting for approval…",
+    "you": "You",
+    "tool": "Tool"
   },
   "strategist": {
     "adAccount": "Ad account",
@@ -101,7 +103,8 @@
     "variations_title": "Variations · {adName}",
     "copychief_review_request": "Run a copy review for ad {adName} over {since} to {until}.",
     "cro_review_request": "Run a funnel review for ad {adName} over {since} to {until}.",
-    "variations_request": "Propose variations for ad {adName} based on {since} to {until}."
+    "variations_request": "Propose variations for ad {adName} based on {since} to {until}.",
+    "noVerdict": "no verdict"
   },
   "workshop": {
     "title": "Image workshop",
@@ -211,5 +214,90 @@
     "publish": "Request approval",
     "costly": "This step creates Meta objects and can spend money.",
     "queued": "Publish queued"
+  },
+  "login": {
+    "title": "Sign in",
+    "lead": "adloop sends you a six-digit code. No password.",
+    "email": "Email",
+    "code": "Code",
+    "requestCode": "Request code",
+    "requesting": "Requesting …",
+    "signIn": "Sign in",
+    "verifying": "Verifying …",
+    "codeSent": "The code went to {email} and is valid for 15 minutes.",
+    "otherEmail": "Use another email",
+    "devHint": "In development the code is printed to the web log.",
+    "errValidation": "Please check your input.",
+    "errInvalidCode": "That code is invalid or has expired.",
+    "errRateLimited": "Too many attempts. Please wait 15 minutes.",
+    "errUnknown": "Sign-in failed ({code})."
+  },
+  "queue": {
+    "lead": "Queue diagnostics. An echo job runs through the same chain as any other.",
+    "enqueue": "Enqueue",
+    "status": "Status",
+    "progress": "Progress",
+    "cancel": "Cancel"
+  },
+  "connectors": {
+    "title": "Connectors",
+    "logout": "Sign out",
+    "loading": "Loading status …",
+    "metaNotConfigured": "Meta is not configured yet. App id, app secret, redirect URI or encryption key are missing.",
+    "connectMeta": "Connect Meta",
+    "token": "Token",
+    "daysLeft": "{days} days left",
+    "reconnect": "please reconnect",
+    "adAccounts": "Ad accounts",
+    "noAdAccounts": "No ad accounts found.",
+    "noBusinessName": "no business name",
+    "select": "Select",
+    "selected": "Selected",
+    "startSync": "Start sync",
+    "syncStarting": "Starting sync …",
+    "contentLocale": "Language of generated ad copy",
+    "save": "Save",
+    "readiness": "Readiness",
+    "blocked": "blocked",
+    "msg": {
+      "base_facts_not_synced": "Daily figures have not been synced yet.",
+      "base_facts_syncing": "Preparing your account …",
+      "base_facts_ready": "Daily figures are ready."
+    },
+    "errUnknown": "Failed ({code}).",
+    "err": {
+      "account_not_selected": "Select an ad account first.",
+      "idempotency_conflict": "This request was already used differently.",
+      "meta_not_configured": "Meta credentials are missing from the environment.",
+      "sync_in_progress": "A sync is already running for this ad account.",
+      "unauthenticated": "Please sign in again."
+    }
+  },
+  "metrics": {
+    "title": "Metrics",
+    "lead": "Inspection surface for the guiding metric, funnel position and creative strain. Codes come from the backend; text here is labelling only.",
+    "createMetric": "Create guiding metric",
+    "label": "Label",
+    "actionTypes": "Action types (comma separated)",
+    "aggregation": "Aggregation",
+    "denominator": "Denominator",
+    "noDenominator": "no denominator",
+    "valueSource": "Value source",
+    "fixedValue": "Fixed value",
+    "currency": "Currency",
+    "create": "Create",
+    "assignment": "Assignment",
+    "adAccount": "Ad account",
+    "assign": "Assign",
+    "evaluation": "Evaluation",
+    "from": "From",
+    "to": "To",
+    "load": "Load figures",
+    "errorCode": "Error code",
+    "definition": "Metric definition",
+    "accountTotals": "Account totals",
+    "ads": "Ads",
+    "gate": "Gate",
+    "noGateReason": "no gate"
   }
 }

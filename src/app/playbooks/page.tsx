@@ -57,95 +57,69 @@ export default function PlaybooksPage() {
   return (
     <div>
       <AppNav />
-      <main style={{ maxWidth: 720, margin: "2rem auto", padding: "0 1rem" }}>
+      <main className="page" style={{ maxWidth: 860 }}>
         <h1>{t("playbooks")}</h1>
-        <label style={{ display: "block", marginBottom: "0.5rem" }}>
-          {t("playbookSlug")}
-          <input
-            className="data"
-            value={slug}
-            onChange={(e) => setSlug(e.target.value)}
-            style={{
-              display: "block",
-              width: "100%",
-              marginTop: 4,
-              padding: "0.5rem",
-              background: "var(--surface)",
-              color: "var(--fg)",
-              border: "1px solid var(--line)",
-              borderRadius: "var(--radius)",
-            }}
-          />
-        </label>
-        <textarea
-          value={body}
-          onChange={(e) => setBody(e.target.value)}
-          rows={12}
-          style={{
-            width: "100%",
-            padding: "0.75rem",
-            background: "var(--surface)",
-            color: "var(--fg)",
-            border: "1px solid var(--line)",
-            borderRadius: "var(--radius)",
-            fontFamily: "var(--font-data)",
-          }}
-        />
-        <button
-          type="button"
-          onClick={() => void save()}
-          style={{
-            marginTop: "0.75rem",
-            background: "var(--accent)",
-            color: "var(--on-accent)",
-            border: "none",
-            borderRadius: "var(--radius)",
-            padding: "0.5rem 0.75rem",
-            cursor: "pointer",
-          }}
-        >
-          {t("saveOverride")}
-        </button>
-        {error && <p style={{ color: "var(--crit)" }} className="data">{error}</p>}
-        <h2 style={{ marginTop: "2rem" }}>{t("activeOverrides")}</h2>
-        <ul style={{ listStyle: "none", padding: 0 }}>
-          {overrides
-            .filter((o) => o.active)
-            .map((o) => (
-              <li
-                key={o.id}
-                style={{
-                  border: "1px solid var(--line)",
-                  borderRadius: "var(--radius)",
-                  padding: "0.75rem",
-                  marginBottom: "0.5rem",
-                  background: "var(--surface)",
-                }}
-              >
-                <div>
-                  {o.playbook_slug} v{o.version}
-                </div>
-                <div className="data" style={{ fontSize: "0.8rem", color: "var(--dim)" }}>
-                  {o.content_hash}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => void reset(o.playbook_slug)}
-                  style={{
-                    marginTop: 6,
-                    background: "var(--raised)",
-                    color: "var(--fg)",
-                    border: "1px solid var(--line)",
-                    borderRadius: "var(--radius)",
-                    padding: "0.25rem 0.5rem",
-                    cursor: "pointer",
-                  }}
-                >
-                  {t("resetOverride")}
-                </button>
-              </li>
-            ))}
-        </ul>
+
+        <div className="panel">
+          <label className="field">
+            <span>{t("playbookSlug")}</span>
+            <input className="data" value={slug} onChange={(e) => setSlug(e.target.value)} />
+          </label>
+          <label className="field">
+            <span>PLAYBOOK.md</span>
+            <textarea
+              className="data"
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              rows={14}
+              style={{ resize: "vertical", lineHeight: 1.6 }}
+            />
+          </label>
+          <button type="button" className="btn pri" onClick={() => void save()}>
+            {t("saveOverride")}
+          </button>
+          {error && (
+            <div className="msgbox err data" style={{ marginTop: 12, marginBottom: 0 }} role="alert">
+              {error}
+            </div>
+          )}
+        </div>
+
+        <h2 style={{ fontSize: 13, fontWeight: 640, margin: "18px 0 8px" }}>
+          {t("activeOverrides")}
+        </h2>
+        <div className="scroller">
+          <table>
+            <thead>
+              <tr>
+                <th>{t("playbookSlug")}</th>
+                <th>Version</th>
+                <th>content_hash</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {overrides
+                .filter((o) => o.active)
+                .map((o) => (
+                  <tr key={o.id}>
+                    <td className="name">{o.playbook_slug}</td>
+                    <td>v{o.version}</td>
+                    <td style={{ color: "var(--dim)" }}>{o.content_hash.slice(0, 16)}…</td>
+                    <td>
+                      <button
+                        type="button"
+                        className="chip"
+                        onClick={() => void reset(o.playbook_slug)}
+                      >
+                        {t("resetOverride")}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </div>
       </main>
     </div>
   );

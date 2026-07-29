@@ -71,7 +71,10 @@ export default function QueuePage() {
   }
 
   function progressLabel(progress: RunSummary["job"]["progress"]): string {
-    if (!progress) return "";
+    // Ohne Code gibt es keinen Text. next-intl liefert für einen fehlenden
+    // Schlüssel den Schlüssel zurück, sodass sonst "progress.undefined" in der
+    // Spalte steht statt einer leeren Zelle.
+    if (!progress?.code) return "";
     const key = `progress.${progress.code}` as const;
     try {
       return t(key, progress.params as Record<string, string | number | Date>);
@@ -80,99 +83,82 @@ export default function QueuePage() {
     }
   }
 
+  // Lauf-Status auf die vier Zustandsrollen: erledigt trägt, laufend ist der
+  // Akzent (Handlung, kein Zustand), gescheitert ruft nach Handeln, wartend
+  // sagt noch nichts aus.
+  function statusColor(status: string): string {
+    if (status === "completed") return "var(--good)";
+    if (status === "running") return "var(--accent)";
+    if (status === "failed" || status === "timed_out") return "var(--crit)";
+    if (status === "cancelled") return "var(--warn)";
+    return "var(--none)";
+  }
+
   return (
     <div>
       <AppNav />
-      <main style={{ maxWidth: 680, margin: "2rem auto", padding: "0 1rem" }}>
+      <main className="page">
         <h1>{t("app.queueSmoke")}</h1>
-        <form
-          onSubmit={submit}
-          style={{ display: "flex", gap: "0.5rem", marginBottom: "1.5rem" }}
-        >
-          <input
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            style={{
-              flex: 1,
-              padding: "0.5rem",
-              background: "var(--surface)",
-              color: "var(--fg)",
-              border: "1px solid var(--line)",
-              borderRadius: "var(--radius)",
-            }}
-          />
-          <button
-            type="submit"
-            disabled={submitting}
-            style={{
-              background: "var(--accent)",
-              color: "var(--on-accent)",
-              border: "none",
-              borderRadius: "var(--radius)",
-              padding: "0.5rem 0.75rem",
-              cursor: "pointer",
-            }}
-          >
-            {submitting ? "…" : "echo"}
+        <p>{t("queue.lead")}</p>
+
+        <form onSubmit={submit} style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+          <input value={text} onChange={(e) => setText(e.target.value)} />
+          <button type="submit" className="btn pri" disabled={submitting} style={{ flexShrink: 0 }}>
+            {submitting ? "…" : t("queue.enqueue")}
           </button>
         </form>
-        {errorMsg && <p style={{ color: "var(--crit)" }} className="data">{errorMsg}</p>}
-        <ul style={{ listStyle: "none", padding: 0 }}>
-          {runs.map((r) => (
-            <li
-              key={r.runId}
-              style={{
-                border: "1px solid var(--line)",
-                borderRadius: "var(--radius)",
-                padding: "0.75rem",
-                marginBottom: "0.5rem",
-                background: "var(--surface)",
-              }}
-            >
-              <div>
-                <strong className="data">{r.runId}</strong> — {r.status} /{" "}
-                <span className="data">{r.job.status ?? "—"}</span>
-              </div>
-              <div
-                style={{
-                  background: "var(--raised)",
-                  borderRadius: "var(--radius)",
-                  overflow: "hidden",
-                  height: 8,
-                  marginTop: 4,
-                }}
-              >
-                <div
-                  style={{
-                    background: "var(--accent)",
-                    height: "100%",
-                    width: `${r.job.progress?.percent ?? 0}%`,
-                  }}
-                />
-              </div>
-              <div style={{ fontSize: "0.85rem", color: "var(--dim)" }}>
-                {progressLabel(r.job.progress)}
-              </div>
-              {(r.status === "queued" || r.status === "running") && (
-                <button
-                  type="button"
-                  onClick={() => void cancel(r.runId)}
-                  style={{
-                    marginTop: 4,
-                    background: "var(--raised)",
-                    color: "var(--fg)",
-                    border: "1px solid var(--line)",
-                    borderRadius: "var(--radius)",
-                    padding: "0.25rem 0.5rem",
-                    cursor: "pointer",
-                  }}
-                >
-                  cancel
-                </button>
-              )}
-            </li>
-          ))}
-        </ul>
+
+        {errorMsg && (
+          <div className="msgbox err data" role="alert">
+            {errorMsg}
+          </div>
+        )}
+
+        <div className="scroller">
+          <table>
+            <thead>
+              <tr>
+                <th>run_id</th>
+                <th>{t("queue.status")}</th>
+                <th>job</th>
+                <th>{t("queue.progress")}</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {runs.map((r) => (
+                <tr key={r.runId}>
+                  <td className="name">
+                    <i className="stripe" style={{ background: statusColor(r.status) }} />
+                    <span className="data">{r.runId.slice(0, 8)}…</span>
+                  </td>
+                  <td style={{ color: statusColor(r.status) }}>{r.status}</td>
+                  <td style={{ color: "var(--dim)" }}>{r.job.status ?? "—"}</td>
+                  <td style={{ minWidth: 180, textAlign: "left" }}>
+                    <div className="meter" style={{ marginTop: 0 }}>
+                      <i
+                        style={{
+                          width: `${r.job.progress?.percent ?? 0}%`,
+                          background: statusColor(r.status),
+                        }}
+                      />
+                    </div>
+                    <div style={{ color: "var(--dim)", fontSize: 11, marginTop: 3 }}>
+                      {progressLabel(r.job.progress)}
+                    </div>
+                  </td>
+                  <td>
+                    {(r.status === "queued" || r.status === "running") && (
+                      <button type="button" className="chip" onClick={() => void cancel(r.runId)}>
+                        {t("queue.cancel")}
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </main>
     </div>
   );

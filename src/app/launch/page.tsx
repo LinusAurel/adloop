@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { uuidv7 } from "uuidv7";
 import { AppNav } from "@/components/AppNav";
@@ -223,33 +223,16 @@ export default function LaunchPage() {
   }
 
   return (
-    <main style={{ minHeight: "100vh", background: "var(--bg)", color: "var(--fg)" }}>
+    <div>
       <AppNav />
-      <div style={{ maxWidth: "52rem", margin: "0 auto", padding: "1.5rem 1rem" }}>
-        <h1 style={{ margin: "0 0 0.35rem", fontSize: "1.5rem" }}>
-          {t("launch.title")}
-        </h1>
-        <p style={{ color: "var(--dim)", marginBottom: "1.25rem" }}>
-          {t("launch.subtitle")}
-        </p>
+      <main className="page" style={{ maxWidth: 860 }}>
+        <h1>{t("launch.title")}</h1>
+        <p>{t("launch.subtitle")}</p>
 
-        <div
-          style={{
-            display: "grid",
-            gap: "0.75rem",
-            marginBottom: "1.25rem",
-            fontFamily: "var(--font-data)",
-          }}
-        >
-          <label>
-            <span style={{ color: "var(--dim)", marginRight: "0.5rem" }}>
-              {t("launch.advertiser")}
-            </span>
-            <select
-              value={advertiserId}
-              onChange={(e) => setAdvertiserId(e.target.value)}
-              style={selectStyle}
-            >
+        <div className="panel">
+          <label className="row">
+            <span>{t("launch.advertiser")}</span>
+            <select value={advertiserId} onChange={(e) => setAdvertiserId(e.target.value)}>
               {advertisers.map((a) => (
                 <option key={a.id} value={a.id}>
                   {a.name}
@@ -258,14 +241,12 @@ export default function LaunchPage() {
             </select>
           </label>
 
-          <label>
-            <span style={{ color: "var(--dim)", marginRight: "0.5rem" }}>
-              {t("launch.account")}
-            </span>
+          <label className="row">
+            <span>{t("launch.account")}</span>
             <select
+              className="data"
               value={metaAdAccountId}
               onChange={(e) => setMetaAdAccountId(e.target.value)}
-              style={selectStyle}
             >
               {accounts.length === 0 ? (
                 <option value="">{t("launch.noAccount")}</option>
@@ -279,16 +260,11 @@ export default function LaunchPage() {
             </select>
           </label>
 
-          <label>
-            <span style={{ color: "var(--dim)", marginRight: "0.5rem" }}>
-              {t("launch.campaign")}
-            </span>
+          <label className="row">
+            <span>{t("launch.campaign")}</span>
             <select
               value={campaignMode}
-              onChange={(e) =>
-                setCampaignMode(e.target.value as "new" | "existing")
-              }
-              style={selectStyle}
+              onChange={(e) => setCampaignMode(e.target.value as "new" | "existing")}
             >
               <option value="new">{t("launch.newCampaign")}</option>
               <option value="existing">{t("launch.existingCampaign")}</option>
@@ -296,32 +272,28 @@ export default function LaunchPage() {
           </label>
 
           {campaignMode === "existing" ? (
-            <label>
-              <span style={{ color: "var(--dim)", marginRight: "0.5rem" }}>
-                {t("launch.existingCampaignId")}
-              </span>
-              <input
-                value={existingCampaignId}
-                onChange={(e) => setExistingCampaignId(e.target.value)}
-                style={inputStyle}
-              />
-              {existingCampaignId.trim() && existingIsCbo !== null ? (
-                <span style={{ color: "var(--dim)", marginLeft: "0.5rem" }}>
-                  {existingIsCbo ? t("launch.existingCbo") : t("launch.existingAbo")}
-                </span>
-              ) : null}
+            <label className="row">
+              <span>{t("launch.existingCampaignId")}</span>
+              <div>
+                <input
+                  className="data"
+                  value={existingCampaignId}
+                  onChange={(e) => setExistingCampaignId(e.target.value)}
+                />
+                {existingCampaignId.trim() && existingIsCbo !== null ? (
+                  <div className="data" style={{ color: "var(--dim)", fontSize: 11, marginTop: 4 }}>
+                    {existingIsCbo ? t("launch.existingCbo") : t("launch.existingAbo")}
+                  </div>
+                ) : null}
+              </div>
             </label>
           ) : (
-            <label>
-              <span style={{ color: "var(--dim)", marginRight: "0.5rem" }}>
-                {t("launch.budgetMode")}
-              </span>
+            <label className="row">
+              <span>{t("launch.budgetMode")}</span>
               <select
+                className="data"
                 value={budgetMode}
-                onChange={(e) =>
-                  setBudgetMode(e.target.value as "ABO" | "CBO")
-                }
-                style={selectStyle}
+                onChange={(e) => setBudgetMode(e.target.value as "ABO" | "CBO")}
               >
                 <option value="ABO">ABO</option>
                 <option value="CBO">CBO</option>
@@ -330,31 +302,25 @@ export default function LaunchPage() {
           )}
 
           {budgetNeeded ? (
-            <label>
-              <span style={{ color: "var(--dim)", marginRight: "0.5rem" }}>
-                {t("launch.budget")}
-              </span>
-              <input
-                value={budgetAmount}
-                onChange={(e) => setBudgetAmount(e.target.value)}
-                style={inputStyle}
-                inputMode="numeric"
-              />
-              <span style={{ color: "var(--dim)", marginLeft: "0.35rem" }}>
-                {t("launch.budgetHint")}
-              </span>
+            <label className="row">
+              <span>{t("launch.budget")}</span>
+              <div>
+                <input
+                  className="data"
+                  value={budgetAmount}
+                  onChange={(e) => setBudgetAmount(e.target.value)}
+                  inputMode="numeric"
+                />
+                <div className="data" style={{ color: "var(--dim)", fontSize: 11, marginTop: 4 }}>
+                  {t("launch.budgetHint")}
+                </div>
+              </div>
             </label>
           ) : null}
 
-          <label>
-            <span style={{ color: "var(--dim)", marginRight: "0.5rem" }}>
-              {t("launch.creative")}
-            </span>
-            <select
-              value={selectedCreative}
-              onChange={(e) => setSelectedCreative(e.target.value)}
-              style={selectStyle}
-            >
+          <label className="row">
+            <span>{t("launch.creative")}</span>
+            <select value={selectedCreative} onChange={(e) => setSelectedCreative(e.target.value)}>
               <option value="">{t("launch.selectCreative")}</option>
               {creatives.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -364,105 +330,65 @@ export default function LaunchPage() {
             </select>
           </label>
 
-          <label>
-            <span style={{ color: "var(--dim)", marginRight: "0.5rem" }}>
-              {t("launch.deviationReason")}
-            </span>
+          <label className="row" style={{ marginBottom: 0 }}>
+            <span>{t("launch.deviationReason")}</span>
             <input
               value={deviationReason}
               onChange={(e) => setDeviationReason(e.target.value)}
-              style={inputStyle}
               placeholder={t("launch.deviationPlaceholder")}
             />
           </label>
         </div>
 
-        <p style={{ color: "var(--warn)", fontSize: "0.9rem" }}>
-          {t("launch.pausedNotice")}
-        </p>
+        {/* Jede Anzeige entsteht pausiert. Das ist kein Hinweis am Rand, sondern
+            die Zusage, unter der überhaupt veröffentlicht werden darf. */}
+        <div className="msgbox warn">{t("launch.pausedNotice")}</div>
 
-        <button
-          type="button"
-          disabled={busy || !selectedCreative || !metaAdAccountId}
-          onClick={() => void requestPublish()}
-          style={{
-            background: "var(--accent)",
-            color: "var(--on-accent)",
-            border: "none",
-            borderRadius: "var(--radius)",
-            padding: "0.55rem 1rem",
-            cursor: "pointer",
-            marginTop: "0.5rem",
-          }}
-        >
-          {t("launch.publish")}
-        </button>
+        <div className="acts">
+          <button
+            type="button"
+            className="btn pri"
+            disabled={busy || !selectedCreative || !metaAdAccountId}
+            onClick={() => void requestPublish()}
+          >
+            {t("launch.publish")}
+          </button>
+        </div>
 
         {approval ? (
-          <div
-            style={{
-              marginTop: "1.25rem",
-              padding: "1rem",
-              background: "var(--surface)",
-              border: "1px solid var(--line)",
-              borderRadius: "var(--radius)",
-            }}
-          >
-            <strong>{t("chat.approvalRequired")}</strong>
-            <p style={{ color: "var(--warn)", margin: "0.5rem 0" }}>
-              {t("launch.costly")}
-            </p>
+          <div className="approve" style={{ marginTop: 16, maxWidth: "none" }}>
+            <div className="ahead">
+              <h4>{t("chat.approvalRequired")}</h4>
+              <span className="cost">{t("launch.costly")}</span>
+            </div>
+
             {approval.bindingMismatch ? (
-              <p style={{ color: "var(--crit)", fontFamily: "var(--font-data)" }}>
-                metric_binding_mismatch
-              </p>
+              <div className="msgbox err data">metric_binding_mismatch</div>
             ) : null}
-            <pre
-              style={{
-                fontFamily: "var(--font-data)",
-                fontSize: "0.8rem",
-                overflow: "auto",
-                background: "var(--raised)",
-                padding: "0.75rem",
-                borderRadius: "var(--radius)",
-              }}
-            >
-              {JSON.stringify(approval.resolved, null, 2)}
-            </pre>
-            <p style={{ color: "var(--dim)", fontFamily: "var(--font-data)" }}>
+
+            <dl className="kv">
+              {Object.entries(approval.resolved as Record<string, unknown>).map(([key, value]) => (
+                <Fragment key={key}>
+                  <dt>{key}</dt>
+                  <dd>
+                    {typeof value === "object" && value !== null
+                      ? JSON.stringify(value)
+                      : String(value)}
+                  </dd>
+                </Fragment>
+              ))}
+            </dl>
+
+            <div className="hashline">
+              sha256 <b>{approval.resolvedRequestHash.slice(0, 12)}…</b> —{" "}
               {t("chat.approvalHashHint")}
-              <br />
-              {approval.resolvedRequestHash}
-            </p>
-            <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.75rem" }}>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void decide(true)}
-                style={{
-                  background: "var(--accent)",
-                  color: "var(--on-accent)",
-                  border: "none",
-                  borderRadius: "var(--radius)",
-                  padding: "0.4rem 0.85rem",
-                  cursor: "pointer",
-                }}
-              >
+            </div>
+
+            <div className="acts">
+              <button type="button" className="btn pri" disabled={busy} onClick={() => void decide(true)}>
                 {t("chat.approve")}
               </button>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void decide(false)}
-                style={{
-                  background: "var(--raised)",
-                  color: "var(--fg)",
-                  border: "1px solid var(--line)",
-                  borderRadius: "var(--radius)",
-                  padding: "0.4rem 0.85rem",
-                  cursor: "pointer",
-                }}
-              >
+              <button type="button" className="btn" disabled={busy} onClick={() => void decide(false)}>
                 {t("chat.deny")}
               </button>
             </div>
@@ -470,42 +396,18 @@ export default function LaunchPage() {
         ) : null}
 
         {publicationId ? (
-          <p style={{ marginTop: "1rem", fontFamily: "var(--font-data)" }}>
+          <div className="msgbox ok data" style={{ marginTop: 14 }}>
             {t("launch.queued")} · {publicationId}
-          </p>
+          </div>
         ) : null}
 
         {error ? (
-          <p
-            style={{
-              color: "var(--crit)",
-              fontFamily: "var(--font-data)",
-              marginTop: "1rem",
-            }}
-          >
+          <div className="msgbox err data" style={{ marginTop: 14 }} role="alert">
             {error}
             {errorParams ? ` ${JSON.stringify(errorParams)}` : ""}
-          </p>
+          </div>
         ) : null}
-      </div>
-    </main>
+      </main>
+    </div>
   );
 }
-
-const selectStyle: React.CSSProperties = {
-  background: "var(--raised)",
-  color: "var(--fg)",
-  border: "1px solid var(--line)",
-  borderRadius: "var(--radius)",
-  padding: "0.35rem 0.5rem",
-};
-
-const inputStyle: React.CSSProperties = {
-  background: "var(--raised)",
-  color: "var(--fg)",
-  border: "1px solid var(--line)",
-  borderRadius: "var(--radius)",
-  padding: "0.35rem 0.5rem",
-  fontFamily: "var(--font-data)",
-  minWidth: "12rem",
-};

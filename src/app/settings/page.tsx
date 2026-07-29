@@ -151,61 +151,32 @@ export default function SettingsPage() {
     setSaved(true);
   }
 
+  // Diese Werte gehen als Felder an Meta und stehen später in Spalten —
+  // deshalb Festbreitenschrift schon bei der Eingabe.
   const field = (key: keyof DefaultsForm, label: string) => (
-    <label
-      key={key}
-      style={{
-        display: "grid",
-        gridTemplateColumns: "12rem 1fr",
-        gap: "0.75rem",
-        alignItems: "center",
-        marginBottom: "0.65rem",
-        fontFamily: "var(--font-data)",
-      }}
-    >
-      <span style={{ color: "var(--dim)" }}>{label}</span>
+    <label className="row" key={key}>
+      <span>{label}</span>
       <input
+        className="data"
         value={form[key]}
         onChange={(e) => setForm({ ...form, [key]: e.target.value })}
-        style={{
-          background: "var(--raised)",
-          color: "var(--fg)",
-          border: "1px solid var(--line)",
-          borderRadius: "var(--radius)",
-          padding: "0.4rem 0.55rem",
-          fontFamily: "var(--font-data)",
-        }}
       />
     </label>
   );
 
   return (
-    <main style={{ minHeight: "100vh", background: "var(--bg)", color: "var(--fg)" }}>
+    <div>
       <AppNav />
-      <div style={{ maxWidth: "52rem", margin: "0 auto", padding: "1.5rem 1rem" }}>
-        <h1 style={{ margin: "0 0 0.35rem", fontSize: "1.5rem" }}>
-          {t("settings.title")}
-        </h1>
-        <p style={{ color: "var(--dim)", marginBottom: "1.25rem" }}>
+      <main className="page" style={{ maxWidth: 860 }}>
+        <h1>{t("settings.title")}</h1>
+        <p>
           {t("settings.subtitle")}
           {version !== null ? ` · v${version}` : ""}
         </p>
 
-        <label style={{ display: "block", marginBottom: "1rem" }}>
-          <span style={{ color: "var(--dim)", marginRight: "0.5rem" }}>
-            {t("settings.advertiser")}
-          </span>
-          <select
-            value={advertiserId}
-            onChange={(e) => setAdvertiserId(e.target.value)}
-            style={{
-              background: "var(--raised)",
-              color: "var(--fg)",
-              border: "1px solid var(--line)",
-              borderRadius: "var(--radius)",
-              padding: "0.35rem 0.5rem",
-            }}
-          >
+        <label className="row" style={{ marginBottom: 14 }}>
+          <span>{t("settings.advertiser")}</span>
+          <select value={advertiserId} onChange={(e) => setAdvertiserId(e.target.value)}>
             {advertisers.map((a) => (
               <option key={a.id} value={a.id}>
                 {a.name}
@@ -214,121 +185,61 @@ export default function SettingsPage() {
           </select>
         </label>
 
-        <section
-          style={{
-            background: "var(--surface)",
-            border: "1px solid var(--line)",
-            borderRadius: "var(--radius)",
-            padding: "1rem",
-            marginBottom: "1rem",
-          }}
-        >
-          <h2 style={{ marginTop: 0, fontSize: "1.05rem" }}>{t("settings.identity")}</h2>
+        <div className="panel">
+          <h2>{t("settings.identity")}</h2>
           {field("pageId", t("settings.pageId"))}
           {field("instagramActorId", t("settings.instagramActorId"))}
           {field("beneficiaryName", t("settings.beneficiaryName"))}
           {field("payerName", t("settings.payerName"))}
-        </section>
+        </div>
 
-        <section
-          style={{
-            background: "var(--surface)",
-            border: "1px solid var(--line)",
-            borderRadius: "var(--radius)",
-            padding: "1rem",
-            marginBottom: "1rem",
-          }}
-        >
-          <h2 style={{ marginTop: 0, fontSize: "1.05rem" }}>{t("settings.adSet")}</h2>
+        <div className="panel">
+          <h2>{t("settings.adSet")}</h2>
           {field("optimizationGoal", t("settings.optimizationGoal"))}
-          <label
-            style={{
-              display: "grid",
-              gridTemplateColumns: "12rem 1fr",
-              gap: "0.75rem",
-              marginBottom: "0.65rem",
-              fontFamily: "var(--font-data)",
-            }}
-          >
-            <span style={{ color: "var(--dim)" }}>{t("settings.budgetMode")}</span>
+          <label className="row">
+            <span>{t("settings.budgetMode")}</span>
             <select
+              className="data"
               value={form.budgetMode}
-              onChange={(e) =>
-                setForm({
-                  ...form,
-                  budgetMode: e.target.value as "CBO" | "ABO",
-                })
-              }
-              style={{
-                background: "var(--raised)",
-                color: "var(--fg)",
-                border: "1px solid var(--line)",
-                borderRadius: "var(--radius)",
-                padding: "0.4rem 0.55rem",
-              }}
+              onChange={(e) => setForm({ ...form, budgetMode: e.target.value as "CBO" | "ABO" })}
             >
               <option value="ABO">ABO</option>
               <option value="CBO">CBO</option>
             </select>
           </label>
           {field("countries", t("settings.countries"))}
-        </section>
+        </div>
 
-        <section
-          style={{
-            background: "var(--surface)",
-            border: "1px solid var(--line)",
-            borderRadius: "var(--radius)",
-            padding: "1rem",
-            marginBottom: "1rem",
-          }}
-        >
-          <h2 style={{ marginTop: 0, fontSize: "1.05rem" }}>{t("settings.website")}</h2>
+        <div className="panel">
+          <h2>{t("settings.website")}</h2>
           {field("websiteUrl", t("settings.websiteUrl"))}
           {field("utmParams", t("settings.utmParams"))}
-        </section>
+        </div>
 
-        <section
-          style={{
-            background: "var(--surface)",
-            border: "1px solid var(--line)",
-            borderRadius: "var(--radius)",
-            padding: "1rem",
-            marginBottom: "1rem",
-          }}
-        >
-          <h2 style={{ marginTop: 0, fontSize: "1.05rem" }}>{t("settings.autoNaming")}</h2>
+        <div className="panel">
+          <h2>{t("settings.autoNaming")}</h2>
           {field("creativeTemplate", t("settings.creativeTemplate"))}
           {field("adSetTemplate", t("settings.adSetTemplate"))}
           {field("adTemplate", t("settings.adTemplate"))}
-        </section>
+        </div>
 
-        <button
-          type="button"
-          onClick={() => void save()}
-          disabled={!baseSettings}
-          style={{
-            background: "var(--accent)",
-            color: "var(--on-accent)",
-            border: "none",
-            borderRadius: "var(--radius)",
-            padding: "0.55rem 1rem",
-            cursor: "pointer",
-          }}
-        >
-          {t("settings.save")}
-        </button>
-        {saved ? (
-          <span style={{ marginLeft: "0.75rem", color: "var(--good)" }}>
-            {t("settings.saved")}
-          </span>
-        ) : null}
+        <div className="acts" style={{ alignItems: "center" }}>
+          <button type="button" className="btn pri" onClick={() => void save()} disabled={!baseSettings}>
+            {t("settings.save")}
+          </button>
+          {saved ? (
+            <span className="data" style={{ color: "var(--good)", fontSize: 11.5 }}>
+              {t("settings.saved")}
+            </span>
+          ) : null}
+        </div>
+
         {error ? (
-          <p style={{ color: "var(--crit)", fontFamily: "var(--font-data)" }}>
+          <div className="msgbox err data" style={{ marginTop: 12 }} role="alert">
             {error}
-          </p>
+          </div>
         ) : null}
-      </div>
-    </main>
+      </main>
+    </div>
   );
 }

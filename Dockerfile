@@ -24,8 +24,8 @@ COPY . .
 ENV DATABASE_URL=postgres://build:build@127.0.0.1:5432/build \
     SESSION_SECRET=build-time-placeholder-at-least-32-characters \
     ENCRYPTION_KEY=YnVpbGQtdGltZS1wbGFjZWhvbGRlci0zMmJ5dGVzIQ== \
-    S3_ACCESS_KEY=build S3_SECRET_KEY=build \\
-    META_APP_ID=000000000000000 META_APP_SECRET=build-time-placeholder \\
+    S3_ACCESS_KEY=build S3_SECRET_KEY=build \
+    META_APP_ID=000000000000000 META_APP_SECRET=build-time-placeholder \
     META_REDIRECT_URI=http://localhost:3000/api/auth/meta/callback
 RUN pnpm build
 RUN pnpm build:worker

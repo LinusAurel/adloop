@@ -1,77 +1,58 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useTheme } from "./ThemeProvider";
 
-const navStyle: React.CSSProperties = {
-  display: "flex",
-  gap: "1rem",
-  alignItems: "center",
-  padding: "0.75rem 1rem",
-  borderBottom: "1px solid var(--line)",
-  background: "var(--surface)",
-};
-
-const linkStyle: React.CSSProperties = {
-  color: "var(--fg)",
-  textDecoration: "none",
-  fontSize: "0.95rem",
-};
+const ROUTES = [
+  ["/chat", "chat"],
+  ["/strategist", "strategist"],
+  ["/workshop", "workshop"],
+  ["/launch", "launch"],
+  ["/settings", "settings"],
+  ["/connectors", "connectors"],
+  ["/metrics", "metrics"],
+  ["/playbooks", "playbooks"],
+  ["/queue", "queueSmoke"],
+] as const;
 
 export function AppNav() {
   const t = useTranslations("app");
   const { mode, setMode } = useTheme();
+  const pathname = usePathname();
 
   return (
-    <nav style={navStyle}>
-      <strong style={{ color: "var(--accent)", marginRight: "0.5rem" }}>{t("title")}</strong>
-      <Link href="/chat" style={linkStyle}>
-        {t("chat")}
+    <div className="bar">
+      {/* Die Wortmarke trägt den Akzent auf der zweiten Silbe — der einzige
+          Ort, an dem die Akzentfarbe ohne Handlungsbezug auftaucht. */}
+      <Link href="/chat" className="mark">
+        ad<span>loop</span>
       </Link>
-      <Link href="/strategist" style={linkStyle}>
-        {t("strategist")}
-      </Link>
-      <Link href="/workshop" style={linkStyle}>
-        {t("workshop")}
-      </Link>
-      <Link href="/launch" style={linkStyle}>
-        {t("launch")}
-      </Link>
-      <Link href="/settings" style={linkStyle}>
-        {t("settings")}
-      </Link>
-      <Link href="/connectors" style={linkStyle}>
-        {t("connectors")}
-      </Link>
-      <Link href="/metrics" style={linkStyle}>
-        {t("metrics")}
-      </Link>
-      <Link href="/playbooks" style={linkStyle}>
-        {t("playbooks")}
-      </Link>
-      <Link href="/queue" style={linkStyle}>
-        {t("queueSmoke")}
-      </Link>
-      <span style={{ marginLeft: "auto", display: "flex", gap: "0.35rem" }}>
+      <nav>
+        {ROUTES.map(([href, key]) => (
+          <Link
+            key={href}
+            href={href}
+            aria-current={pathname?.startsWith(href) ? "page" : undefined}
+          >
+            {t(key)}
+          </Link>
+        ))}
+      </nav>
+      <span className="right">
         {(["system", "light", "dark"] as const).map((value) => (
           <button
             key={value}
             type="button"
+            className="chip"
+            aria-pressed={mode === value}
             onClick={() => setMode(value)}
-            style={{
-              background: mode === value ? "var(--accent)" : "var(--raised)",
-              color: mode === value ? "var(--on-accent)" : "var(--fg)",
-              border: "1px solid var(--line)",
-              borderRadius: "var(--radius)",
-              padding: "0.25rem 0.5rem",
-              cursor: "pointer",
-            }}
           >
             {value === "system" ? t("themeSystem") : value === "light" ? t("themeLight") : t("themeDark")}
           </button>
         ))}
       </span>
-    </nav>
+    </div>
   );
 }

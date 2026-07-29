@@ -6,7 +6,10 @@ import { hashPlaybookFiles } from "@/lib/canonical-json";
 // PLAYBOOK_DIR is read from process.env (not cached env) so tests can
 // point at a temp directory without resetting the env proxy.
 
-export type PlaybookSource = "db" | "dir" | "fixture";
+export type PlaybookSource = "db" | "dir" | "bundled";
+
+/** Shipped defaults live here — the open base every install starts from. */
+const BUNDLED_ROOT = join(process.cwd(), "playbooks");
 
 export interface ResolvedPlaybook {
   slug: string;
@@ -48,15 +51,21 @@ async function readPlaybookDirectory(
 }
 
 /**
- * Resolution order (auftrag §0.5 — overrides SPEC §7.2 and removes
- * ALLOW_SYNTHETIC_PLAYBOOKS):
+ * Resolution order:
  *
- * 1. Active DB override for (tenant, slug)
- * 2. PLAYBOOK_DIR/<slug>/
- * 3. fixtures/<slug>/ — ONLY when NODE_ENV=test
+ * 1. Active DB override for (tenant, slug) — what the operator edited
+ * 2. PLAYBOOK_DIR/<slug>/ — private playbooks, not in this repo
+ * 3. playbooks/<slug>/ — the shipped defaults
  *
- * Fail-closed in production: missing private playbook aborts; never falls
- * through to a fixture.
+ * The shipped defaults were added because the chain had no floor: without
+ * PLAYBOOK_DIR every agent run aborted with playbook_missing, which made a
+ * fresh install look broken rather than unconfigured. They are the open base
+ * of the open core — private playbooks refine them, they do not replace a void.
+ *
+ * There is no separate test fixture directory. Tests that need a specific text
+ * point PLAYBOOK_DIR at a temp directory; everything else runs against the same
+ * defaults production runs on, which is the only way a test says anything about
+ * production.
  */
 export async function resolvePlaybook(
   db: Queryable,
@@ -99,22 +108,53 @@ export async function resolvePlaybook(
     }
   }
 
-  if (process.env.NODE_ENV === "test") {
-    const fixtureRoot = join(process.cwd(), "fixtures", "playbooks", params.slug);
-    const fromFixture = await readPlaybookDirectory(fixtureRoot);
-    if (fromFixture) {
-      const contentHash = hashPlaybookFiles(fromFixture);
-      return {
-        slug: params.slug,
-        source: "fixture",
-        files: fromFixture,
-        contentHash,
-        version: `fixture:${contentHash}`,
-      };
-    }
+  const bundled = await readPlaybookDirectory(join(BUNDLED_ROOT, params.slug));
+  if (bundled) {
+    const contentHash = hashPlaybookFiles(bundled);
+    return {
+      slug: params.slug,
+      source: "bundled",
+      files: bundled,
+      contentHash,
+      version: `bundled:${contentHash}`,
+    };
   }
 
   throw new PlaybookMissingError(params.slug);
+}
+
+/**
+ * Every playbook the operator can see, with where it currently comes from.
+ * Slugs are the union of what is shipped, what a private directory adds, and
+ * what has been overridden — an override for a slug that no longer ships must
+ * stay visible, or it would keep taking effect invisibly.
+ */
+export async function listPlaybooks(
+  db: Queryable,
+  params: { tenantId: string },
+): Promise<Array<{ slug: string; source: PlaybookSource; files: Record<string, string> }>> {
+  const slugs = new Set<string>();
+
+  for (const root of [BUNDLED_ROOT, process.env.PLAYBOOK_DIR].filter(Boolean) as string[]) {
+    if (!(await pathExists(root))) continue;
+    for (const entry of await readdir(root, { withFileTypes: true })) {
+      if (entry.isDirectory()) slugs.add(entry.name);
+    }
+  }
+
+  const overridden = await db.query<{ playbook_slug: string }>(
+    `SELECT playbook_slug FROM playbook_override
+     WHERE tenant_id = $1 AND active = true`,
+    [params.tenantId],
+  );
+  for (const row of overridden.rows) slugs.add(row.playbook_slug);
+
+  const out = [];
+  for (const slug of [...slugs].sort()) {
+    const resolved = await resolvePlaybook(db, { tenantId: params.tenantId, slug });
+    out.push({ slug, source: resolved.source, files: { ...resolved.files } });
+  }
+  return out;
 }
 
 export function playbookBody(playbook: ResolvedPlaybook): string {

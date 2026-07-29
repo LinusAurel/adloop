@@ -279,6 +279,33 @@ export const MESSAGE_KEYS = [
   "metrics.noGateReason",
 
   "connectors.errUnknown",
+
+  "app.manage",
+  "app.localeDe",
+  "app.localeEn",
+
+  "app.playbookSource.db",
+  "app.playbookSource.dir",
+  "app.playbookSource.bundled",
+  "app.playbooksEmpty",
+  "app.playbookHint",
+  "app.unsaved",
+  "app.saved",
+
+  "empty.workshopTitle",
+  "empty.workshopBody",
+  "empty.chatTitle",
+  "empty.chatBody",
+  "empty.strategistNoAccount",
+  "empty.strategistNoAccountBody",
+  "empty.strategistNoData",
+  "empty.strategistNoDataBody",
+  "empty.launchNoCreative",
+  "empty.launchNoCreativeBody",
+  "empty.goToConnectors",
+  "empty.goToWorkshop",
+
+  "app.menu",
 ] as const;
 
 export type MessageKey = (typeof MESSAGE_KEYS)[number];

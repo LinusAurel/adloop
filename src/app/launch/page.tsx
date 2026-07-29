@@ -281,7 +281,7 @@ export default function LaunchPage() {
                   onChange={(e) => setExistingCampaignId(e.target.value)}
                 />
                 {existingCampaignId.trim() && existingIsCbo !== null ? (
-                  <div className="data" style={{ color: "var(--dim)", fontSize: 11, marginTop: 4 }}>
+                  <div className="data" style={{ color: "var(--dim)", fontSize: "var(--fs-label)", marginTop: 4 }}>
                     {existingIsCbo ? t("launch.existingCbo") : t("launch.existingAbo")}
                   </div>
                 ) : null}
@@ -311,7 +311,7 @@ export default function LaunchPage() {
                   onChange={(e) => setBudgetAmount(e.target.value)}
                   inputMode="numeric"
                 />
-                <div className="data" style={{ color: "var(--dim)", fontSize: 11, marginTop: 4 }}>
+                <div className="data" style={{ color: "var(--dim)", fontSize: "var(--fs-label)", marginTop: 4 }}>
                   {t("launch.budgetHint")}
                 </div>
               </div>
@@ -320,14 +320,25 @@ export default function LaunchPage() {
 
           <label className="row">
             <span>{t("launch.creative")}</span>
-            <select value={selectedCreative} onChange={(e) => setSelectedCreative(e.target.value)}>
-              <option value="">{t("launch.selectCreative")}</option>
-              {creatives.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
+            {creatives.length === 0 ? (
+              // Ohne fertiges Motiv ist die Auswahl kein leeres Feld, sondern
+              // ein fehlender Schritt — und der gehört benannt, nicht versteckt.
+              <div>
+                <div className="blocker">{t("empty.launchNoCreative")}</div>
+                <a className="btn" href="/workshop">
+                  {t("empty.goToWorkshop")}
+                </a>
+              </div>
+            ) : (
+              <select value={selectedCreative} onChange={(e) => setSelectedCreative(e.target.value)}>
+                <option value="">{t("launch.selectCreative")}</option>
+                {creatives.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            )}
           </label>
 
           <label className="row" style={{ marginBottom: 0 }}>

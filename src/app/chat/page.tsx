@@ -313,7 +313,10 @@ export default function ChatPage() {
         <main className="thread">
           <div className="msgs">
             {messages.length === 0 && !streaming && (
-              <p style={{ color: "var(--dim)" }}>{t("chat.empty")}</p>
+              <div className="empty">
+                <h3>{t("empty.chatTitle")}</h3>
+                <p>{t("empty.chatBody")}</p>
+              </div>
             )}
             {messages.map((m) => {
               const isAgent = m.role === "assistant";

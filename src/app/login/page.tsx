@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
+import { LocaleSwitch } from "@/components/LocaleSwitch";
 
 type Step = "email" | "code";
 
@@ -27,6 +28,8 @@ export default function LoginPage() {
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Wie der Server zugestellt hat — nur er weiß es. */
+  const [delivery, setDelivery] = useState<string | null>(null);
 
   function describe(key: string): string {
     const mapped = ERROR_KEY[key];
@@ -47,6 +50,8 @@ export default function LoginPage() {
       setError(describe(await errorCode(response)));
       return;
     }
+    const body = (await response.json().catch(() => null)) as { delivery?: string } | null;
+    setDelivery(body?.delivery ?? null);
     setStep("code");
   }
 
@@ -70,9 +75,21 @@ export default function LoginPage() {
   return (
     <main className="page" style={{ paddingTop: "12vh" }}>
       <div className="narrow">
-        <div style={{ marginBottom: 18 }}>
-          <span className="mark" style={{ fontSize: 20 }}>
+        <div
+          style={{
+            marginBottom: 18,
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+          }}
+        >
+          <span className="mark" style={{ fontSize: "var(--fs-head)" }}>
             ad<span>loop</span>
+          </span>
+          {/* Wer die Seite nicht lesen kann, kommt nie an den Umschalter
+              hinter der Anmeldung. */}
+          <span style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+            <LocaleSwitch />
           </span>
         </div>
 
@@ -81,7 +98,7 @@ export default function LoginPage() {
 
           {step === "email" ? (
             <form onSubmit={submitEmail}>
-              <p style={{ color: "var(--dim)", fontSize: 12.5, margin: "0 0 14px" }}>{t("lead")}</p>
+              <p style={{ color: "var(--dim)", fontSize: "var(--fs-small)", margin: "0 0 14px" }}>{t("lead")}</p>
               <label className="field">
                 <span>{t("email")}</span>
                 <input
@@ -100,7 +117,7 @@ export default function LoginPage() {
             </form>
           ) : (
             <form onSubmit={submitCode}>
-              <p style={{ color: "var(--dim)", fontSize: 12.5, margin: "0 0 14px" }}>
+              <p style={{ color: "var(--dim)", fontSize: "var(--fs-small)", margin: "0 0 14px" }}>
                 {t("codeSent", { email })}
               </p>
               <label className="field">
@@ -115,7 +132,7 @@ export default function LoginPage() {
                   placeholder="······"
                   // Der Code steht später in keiner Spalte, aber er ist eine
                   // Ziffernfolge, die man Zeichen für Zeichen abgleicht.
-                  style={{ letterSpacing: "0.4em", fontSize: 15 }}
+                  style={{ letterSpacing: "0.4em", fontSize: "var(--fs-lead)" }}
                   className="data"
                   value={code}
                   onChange={(event) => setCode(event.target.value)}
@@ -141,16 +158,21 @@ export default function LoginPage() {
             </form>
           )}
 
+          {/* Der Hinweis, wo der Code steht, gilt nur für die Log-Zustellung
+              und erst, nachdem einer angefordert wurde. Vorher ist er eine
+              Notiz an Entwickler auf einer Seite für Nutzer. */}
+          {step === "code" && delivery === "log" && (
+            <div className="msgbox warn data" style={{ marginTop: 14, marginBottom: 0 }}>
+              {t("devHint")}
+            </div>
+          )}
+
           {error && (
             <div className="msgbox err" style={{ marginTop: 14, marginBottom: 0 }} role="alert">
               {error}
             </div>
           )}
         </div>
-
-        <p style={{ color: "var(--dim)", fontSize: 11.5, fontFamily: "var(--font-data)" }}>
-          {t("devHint")}
-        </p>
       </div>
     </main>
   );

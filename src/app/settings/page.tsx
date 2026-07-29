@@ -228,7 +228,7 @@ export default function SettingsPage() {
             {t("settings.save")}
           </button>
           {saved ? (
-            <span className="data" style={{ color: "var(--good)", fontSize: 11.5 }}>
+            <span className="data" style={{ color: "var(--good)", fontSize: "var(--fs-label)" }}>
               {t("settings.saved")}
             </span>
           ) : null}

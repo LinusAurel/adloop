@@ -1,11 +1,14 @@
+import { cookies } from "next/headers";
 import { getRequestConfig } from "next-intl/server";
-import { defaultLocale, locales, type AppLocale } from "./config";
+import { LOCALE_COOKIE, defaultLocale, isLocale } from "./config";
 
 export default getRequestConfig(async ({ requestLocale }) => {
-  let locale = await requestLocale;
-  if (!locale || !locales.includes(locale as AppLocale)) {
-    locale = defaultLocale;
-  }
+  // Reihenfolge: die Wahl des Menschen schlägt alles. Erst wenn kein Cookie
+  // gesetzt ist, zählt das, was der Router mitbringt, und zuletzt der Standard.
+  const chosen = (await cookies()).get(LOCALE_COOKIE)?.value;
+  const requested = await requestLocale;
+  const locale = isLocale(chosen) ? chosen : isLocale(requested) ? requested : defaultLocale;
+
   return {
     locale,
     messages: (await import(`../../messages/${locale}.json`)).default,

@@ -15,11 +15,24 @@
     "themeDark": "Dunkel",
     "themeSystem": "System",
     "playbookSlug": "Slug",
-    "saveOverride": "Override speichern",
-    "activeOverrides": "Aktive Overrides",
-    "resetOverride": "Zurücksetzen",
+    "saveOverride": "Änderungen speichern",
+    "activeOverrides": "Angepasste Playbooks",
+    "resetOverride": "Auf Standard zurücksetzen",
     "launch": "Launch",
-    "settings": "Vorgaben"
+    "settings": "Vorgaben",
+    "manage": "Verwaltung",
+    "localeDe": "Deutsch",
+    "localeEn": "Englisch",
+    "playbookSource": {
+      "db": "angepasst",
+      "dir": "privat",
+      "bundled": "Standard"
+    },
+    "playbooksEmpty": "Keine Playbooks gefunden. Mitgelieferte Standards liegen unter playbooks/, private unter PLAYBOOK_DIR.",
+    "playbookHint": "Speichern legt eine angepasste Fassung für diesen Mandanten an. Die mitgelieferte bleibt erhalten und lässt sich jederzeit wiederherstellen.",
+    "unsaved": "ungespeichert",
+    "saved": "gespeichert",
+    "menu": "Menü"
   },
   "chat": {
     "empty": "Schreib eine Nachricht, um zu starten.",
@@ -299,5 +312,19 @@
     "ads": "Anzeigen",
     "gate": "Gate",
     "noGateReason": "keine Sperre"
+  },
+  "empty": {
+    "workshopTitle": "Noch keine Motive",
+    "workshopBody": "Beschreibe links, was entstehen soll, und wähle Format und Anzahl. Vor der Erzeugung siehst du die Kosten und gibst frei.",
+    "chatTitle": "Frag nach deinem Konto",
+    "chatBody": "Zum Beispiel: warum eine Anzeige teurer geworden ist, welche Motive sich abnutzen, oder was diese Woche zu tun wäre.",
+    "strategistNoAccount": "Kein Werbekonto verbunden",
+    "strategistNoAccountBody": "Der Strategist liest die Kennzahlen aus deinem Meta-Konto. Verbinde es unter Anbindungen und stoße einen Sync an.",
+    "strategistNoData": "Keine Daten in diesem Fenster",
+    "strategistNoDataBody": "Für den gewählten Zeitraum liegen keine synchronisierten Werte vor. Wähle ein anderes Fenster oder stoße den Sync an.",
+    "launchNoCreative": "Noch kein Motiv bereit",
+    "launchNoCreativeBody": "Zum Veröffentlichen braucht es ein fertiges Motiv. Erzeuge eines in der Werkstatt.",
+    "goToConnectors": "Zu den Anbindungen",
+    "goToWorkshop": "Zur Werkstatt"
   }
 }

@@ -208,7 +208,7 @@ export default function ConnectorsPage() {
               key={connection.id}
               className="data"
               style={{
-                fontSize: 11.5,
+                fontSize: "var(--fs-label)",
                 marginTop: 10,
                 color: connection.expiringSoon ? "var(--crit)" : "var(--dim)",
               }}
@@ -219,7 +219,7 @@ export default function ConnectorsPage() {
           ))}
         </div>
 
-        <h2 style={{ fontSize: 13, fontWeight: 640, margin: "18px 0 8px" }}>{t("adAccounts")}</h2>
+        <h2 style={{ fontSize: "var(--fs-body)", fontWeight: 640, margin: "18px 0 8px" }}>{t("adAccounts")}</h2>
         {status?.adAccounts.length === 0 && (
           <p style={{ color: "var(--dim)" }}>{t("noAdAccounts")}</p>
         )}

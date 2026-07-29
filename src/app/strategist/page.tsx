@@ -256,10 +256,10 @@ export default function StrategistPage() {
 
       {/* Zweite Leiste: Konto, Zeitfenster, Ansicht. Sie trägt dieselben
           Bauteile wie die Hauptleiste, damit kein zweites Formular entsteht. */}
-      <div className="bar">
+      <div className="bar tools">
         <select
           className="data"
-          style={{ width: "auto", padding: "4px 9px", fontSize: 11.5 }}
+          style={{ width: "auto", padding: "4px 9px", fontSize: "var(--fs-label)" }}
           value={accountId}
           onChange={(e) => setAccountId(e.target.value)}
           aria-label={t("strategist.adAccount")}
@@ -555,7 +555,35 @@ export default function StrategistPage() {
             </div>
           )}
         </>
-      ) : null}
+      ) : (
+        // Zwei verschiedene Leerzustände: gar kein Konto ist ein Einrichtungs-
+        // schritt, kein Wert im Fenster ist eine Frage des Zeitraums. Sie
+        // brauchen unterschiedliche nächste Schritte.
+        <div className="empty">
+          {accounts.length === 0 ? (
+            <>
+              <h3>{t("empty.strategistNoAccount")}</h3>
+              <p>{t("empty.strategistNoAccountBody")}</p>
+              <a className="btn" href="/connectors">
+                {t("empty.goToConnectors")}
+              </a>
+            </>
+          ) : (
+            <>
+              <h3>{t("empty.strategistNoData")}</h3>
+              <p>{t("empty.strategistNoDataBody")}</p>
+              <button
+                type="button"
+                className="btn"
+                disabled={busy}
+                onClick={() => void refreshSync()}
+              >
+                {t("strategist.refreshSync")}
+              </button>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }

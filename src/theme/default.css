@@ -19,6 +19,23 @@
   --font-ui: system-ui, sans-serif;
   --font-data: ui-monospace, monospace;
   --radius: 6px;
+
+  /* Typo-Maßstab.
+
+     Ein Leitstand ist dicht, aber er wird stundenlang gelesen — kein Bauteil
+     nennt deshalb eine eigene Schriftgröße, sie kommen alle von hier. Wer die
+     Dichte ändern will, ändert diese acht Werte und sonst nichts.
+
+     Die Stufen sind benannt nach ihrer Aufgabe, nicht nach ihrer Größe:
+     Ein "label" bleibt ein Label, auch wenn es später größer wird. */
+  --fs-micro: 11.5px; /* Spaltenköpfe, Einheiten, Zeitstempel */
+  --fs-label: 12.5px; /* Beschriftungen, Chips, Werkzeugzeilen */
+  --fs-small: 13.5px; /* Sekundärtext, Zellen */
+  --fs-body: 15px; /* Fließtext und Eingaben — die Grundgröße */
+  --fs-lead: 16px; /* Nachrichten im Verlauf */
+  --fs-title: 19px; /* Abschnittstitel */
+  --fs-head: 22px; /* Seitentitel */
+  --fs-metric: 30px; /* Kennzahlen im Band */
 }
 
 @media (prefers-color-scheme: light) {
@@ -82,8 +99,8 @@ body {
   background: var(--bg);
   color: var(--fg);
   font-family: var(--font-ui);
-  font-size: 13px;
-  line-height: 1.55;
+  font-size: var(--fs-body);
+  line-height: 1.6;
   min-height: 100%;
   -webkit-font-smoothing: antialiased;
 }
@@ -133,7 +150,7 @@ select {
 .mark {
   font-weight: 700;
   letter-spacing: -0.03em;
-  font-size: 15px;
+  font-size: var(--fs-lead);
   color: var(--fg);
   text-decoration: none;
 }
@@ -145,7 +162,7 @@ select {
 .crumb {
   color: var(--dim);
   font-family: var(--font-data);
-  font-size: 11.5px;
+  font-size: var(--fs-label);
 }
 
 .bar nav {
@@ -158,7 +175,7 @@ select {
 .bar nav a {
   color: var(--dim);
   text-decoration: none;
-  font-size: 12.5px;
+  font-size: var(--fs-small);
 }
 
 .bar nav a:hover {
@@ -177,11 +194,135 @@ select {
   align-items: center;
 }
 
+/* ── Menü für die Verwaltungsbereiche ── */
+
+.menu {
+  position: relative;
+}
+
+/* Ein Chip, der ein Menü öffnet, ist nicht gedrückt — aber er muss zeigen,
+   dass man sich gerade in einem seiner Bereiche befindet. */
+.menu .chip[data-active="true"] {
+  color: var(--fg);
+  border-color: var(--dim);
+}
+
+.menu-list {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 20;
+  min-width: 180px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.28);
+  display: flex;
+  flex-direction: column;
+}
+
+.menu-list a {
+  padding: 7px 10px;
+  border-radius: 5px;
+  color: var(--fg);
+  text-decoration: none;
+  font-size: var(--fs-small);
+}
+
+.menu-list a:hover {
+  background: var(--raised);
+}
+
+.menu-list a[aria-current="page"] {
+  color: var(--accent);
+  font-weight: 560;
+}
+
+.menu-list hr {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 4px 0;
+}
+
+.menu-row {
+  display: flex;
+  gap: 5px;
+  padding: 4px 6px;
+}
+
+.menu-row .chip {
+  flex: 1;
+  text-align: center;
+}
+
+/* Sichtbar für Hilfstechnik, nicht auf dem Schirm. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.narrow-only {
+  display: none;
+}
+
+/* Ab hier trägt die Leiste die Arbeitsbereiche nicht mehr nebeneinander;
+   alles wandert in das Menü, das ohnehin schon da ist. */
+@media (max-width: 720px) {
+  .wide-only {
+    display: none;
+  }
+
+  .narrow-only {
+    display: block;
+  }
+
+  .bar {
+    gap: 10px;
+    padding: 10px 12px;
+  }
+
+  .bar nav.work {
+    display: none;
+  }
+
+  /* Die Werkzeugleiste einer Seite trägt Filter, die nicht wegfallen dürfen —
+     sie bricht deshalb nicht um, sondern scrollt seitlich in sich selbst. */
+  .bar.tools {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+  }
+
+  .bar.tools > * {
+    flex-shrink: 0;
+  }
+
+  .bar.tools .right {
+    margin-left: 0;
+  }
+
+  .menu-list {
+    /* Am rechten Rand ausgerichtet würde das Menü über den Bildschirm
+       hinauslaufen; auf schmalen Schirmen spannt es stattdessen die Breite auf. */
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    top: 52px;
+    min-width: 0;
+  }
+}
+
 /* ── Chip: kleiner Schalter oder Statusanzeige in der Leiste ── */
 
 .chip {
   font-family: var(--font-data);
-  font-size: 11px;
+  font-size: var(--fs-label);
   padding: 4px 9px;
   border-radius: 4px;
   border: 1px solid var(--line);
@@ -231,7 +372,7 @@ select {
 
 .k {
   font-family: var(--font-data);
-  font-size: 10.5px;
+  font-size: var(--fs-micro);
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--dim);
@@ -239,7 +380,7 @@ select {
 
 .v {
   font-family: var(--font-data);
-  font-size: 26px;
+  font-size: var(--fs-metric);
   font-weight: 600;
   letter-spacing: -0.025em;
   margin-top: 2px;
@@ -274,7 +415,7 @@ table {
 th {
   text-align: right;
   font-family: var(--font-data);
-  font-size: 10.5px;
+  font-size: var(--fs-micro);
   text-transform: uppercase;
   letter-spacing: 0.07em;
   color: var(--dim);
@@ -294,13 +435,13 @@ td {
   text-align: right;
   border-bottom: 1px solid var(--line);
   font-family: var(--font-data);
-  font-size: 12.5px;
+  font-size: var(--fs-small);
   white-space: nowrap;
 }
 
 td.name {
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: var(--fs-body);
 }
 
 tbody tr.pick {
@@ -327,7 +468,7 @@ tbody tr[aria-current="true"] td {
 }
 
 .delta {
-  font-size: 11px;
+  font-size: var(--fs-label);
   margin-left: 6px;
 }
 
@@ -341,7 +482,7 @@ tbody tr[aria-current="true"] td {
 
 .band {
   font-family: var(--font-data);
-  font-size: 10.5px;
+  font-size: var(--fs-micro);
   padding: 2px 6px;
   border-radius: 3px;
   border: 1px solid currentColor;
@@ -353,7 +494,7 @@ tbody tr[aria-current="true"] td {
   color: var(--dim);
   font-style: italic;
   font-family: var(--font-ui);
-  font-size: 11.5px;
+  font-size: var(--fs-label);
 }
 
 /* ── Zweispaltige Detailarbeit ── */
@@ -379,7 +520,7 @@ tbody tr[aria-current="true"] td {
   gap: 10px;
   align-items: center;
   font-family: var(--font-data);
-  font-size: 10.5px;
+  font-size: var(--fs-micro);
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--dim);
@@ -411,14 +552,14 @@ tbody tr[aria-current="true"] td {
 .item .t {
   display: flex;
   align-items: center;
-  font-size: 12.5px;
+  font-size: var(--fs-small);
   margin-bottom: 3px;
 }
 
 .item .m {
   color: var(--dim);
   font-family: var(--font-data);
-  font-size: 11px;
+  font-size: var(--fs-label);
   display: flex;
   gap: 12px;
   font-variant-numeric: tabular-nums;
@@ -439,14 +580,14 @@ tbody tr[aria-current="true"] td {
 
 .rhead h3 {
   margin: 0;
-  font-size: 17px;
+  font-size: var(--fs-title);
   font-weight: 640;
   letter-spacing: -0.015em;
 }
 
 .rhead .meta {
   font-family: var(--font-data);
-  font-size: 11px;
+  font-size: var(--fs-label);
   color: var(--dim);
 }
 
@@ -470,7 +611,7 @@ tbody tr[aria-current="true"] td {
 
 .cell .cv {
   font-family: var(--font-data);
-  font-size: 17px;
+  font-size: var(--fs-title);
   font-weight: 640;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
@@ -479,7 +620,7 @@ tbody tr[aria-current="true"] td {
 
 .cell .cd {
   font-family: var(--font-data);
-  font-size: 10.5px;
+  font-size: var(--fs-micro);
 }
 
 /* ── Befundkasten ── */
@@ -494,7 +635,7 @@ tbody tr[aria-current="true"] td {
 
 .verdict h4 {
   margin: 0 0 4px;
-  font-size: 13px;
+  font-size: var(--fs-body);
   font-weight: 640;
   display: flex;
   align-items: baseline;
@@ -503,7 +644,7 @@ tbody tr[aria-current="true"] td {
 
 .verdict .score {
   font-family: var(--font-data);
-  font-size: 19px;
+  font-size: var(--fs-title);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
@@ -512,7 +653,7 @@ tbody tr[aria-current="true"] td {
 .verdict p {
   margin: 0;
   color: var(--dim);
-  font-size: 12.5px;
+  font-size: var(--fs-small);
   max-width: 62ch;
 }
 
@@ -522,7 +663,7 @@ tbody tr[aria-current="true"] td {
   margin-top: 9px;
   flex-wrap: wrap;
   font-family: var(--font-data);
-  font-size: 11px;
+  font-size: var(--fs-label);
   color: var(--dim);
 }
 
@@ -540,7 +681,7 @@ tbody tr[aria-current="true"] td {
 
 .btn {
   font: inherit;
-  font-size: 12.5px;
+  font-size: var(--fs-small);
   font-weight: 560;
   cursor: pointer;
   padding: 7px 13px;
@@ -595,7 +736,7 @@ select:focus-visible {
 .field > span {
   display: block;
   font-family: var(--font-data);
-  font-size: 10.5px;
+  font-size: var(--fs-micro);
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--dim);
@@ -614,7 +755,7 @@ select:focus-visible {
 
 .row > span {
   font-family: var(--font-data);
-  font-size: 11.5px;
+  font-size: var(--fs-label);
   color: var(--dim);
 }
 
@@ -634,7 +775,7 @@ select {
   border: 1px solid var(--line);
   background: var(--bg);
   color: var(--fg);
-  font-size: 13px;
+  font-size: var(--fs-body);
 }
 
 input::placeholder,
@@ -657,7 +798,7 @@ input[type="number"] {
   border: 1px solid currentColor;
   border-radius: var(--radius);
   padding: 9px 12px;
-  font-size: 12.5px;
+  font-size: var(--fs-small);
   margin-bottom: 12px;
 }
 
@@ -680,7 +821,7 @@ input[type="number"] {
 }
 
 .page > h1 {
-  font-size: 19px;
+  font-size: var(--fs-head);
   font-weight: 640;
   letter-spacing: -0.02em;
   margin: 0 0 4px;
@@ -688,7 +829,7 @@ input[type="number"] {
 
 .page > h1 + p {
   color: var(--dim);
-  font-size: 12.5px;
+  font-size: var(--fs-body);
   margin: 0 0 16px;
   max-width: 72ch;
 }
@@ -702,7 +843,7 @@ input[type="number"] {
 }
 
 .panel > h2 {
-  font-size: 13px;
+  font-size: var(--fs-body);
   font-weight: 640;
   margin: 0 0 10px;
 }
@@ -710,6 +851,41 @@ input[type="number"] {
 .narrow {
   max-width: 420px;
   margin: 0 auto;
+}
+
+/* ── Leerzustand ──
+   Eine leere Fläche ist eine Aufforderung, nicht ein Mangel: Sie sagt, was
+   fehlt, und benennt den nächsten Schritt. Kein Bild, keine Illustration —
+   in einem Leitstand wäre das Dekoration. */
+
+.empty {
+  padding: 28px 20px;
+  max-width: 52ch;
+}
+
+.empty h3 {
+  margin: 0 0 6px;
+  font-size: var(--fs-body);
+  font-weight: 640;
+}
+
+.empty p {
+  margin: 0 0 14px;
+  color: var(--dim);
+  font-size: var(--fs-small);
+}
+
+.empty p:last-child {
+  margin-bottom: 0;
+}
+
+/* Die Vorbedingung, an der es hängt — als Festbreitenzeile, weil sie auf
+   etwas Konkretes zeigt: ein Konto, einen Schlüssel, eine Einstellung. */
+.empty .blocker {
+  font-family: var(--font-data);
+  font-size: var(--fs-label);
+  color: var(--warn);
+  margin-bottom: 14px;
 }
 
 /* ── Bildkacheln ──
@@ -755,7 +931,7 @@ input[type="number"] {
   display: grid;
   place-items: center;
   color: var(--dim);
-  font-size: 11px;
+  font-size: var(--fs-label);
 }
 
 .tile .shot img {
@@ -773,13 +949,13 @@ input[type="number"] {
 }
 
 .tile .cap strong {
-  font-size: 12.5px;
+  font-size: var(--fs-small);
   font-weight: 600;
 }
 
 .tile .cap p {
   margin: 0;
-  font-size: 12px;
+  font-size: var(--fs-label);
   color: var(--dim);
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -788,7 +964,7 @@ input[type="number"] {
 }
 
 .tile .cap span {
-  font-size: 10.5px;
+  font-size: var(--fs-micro);
   color: var(--dim);
 }
 
@@ -809,7 +985,7 @@ input[type="number"] {
 
 .pgroup {
   font-family: var(--font-data);
-  font-size: 10px;
+  font-size: var(--fs-micro);
   text-transform: uppercase;
   letter-spacing: 0.09em;
   color: var(--dim);
@@ -821,7 +997,7 @@ input[type="number"] {
   width: 100%;
   text-align: left;
   font: inherit;
-  font-size: 12.5px;
+  font-size: var(--fs-small);
   padding: 6px 14px;
   border: 0;
   background: transparent;
@@ -862,7 +1038,7 @@ input[type="number"] {
 
 .who {
   font-family: var(--font-data);
-  font-size: 10.5px;
+  font-size: var(--fs-micro);
   text-transform: uppercase;
   letter-spacing: 0.07em;
   color: var(--dim);
@@ -874,8 +1050,8 @@ input[type="number"] {
 }
 
 .msg p {
-  margin: 0 0 8px;
-  font-size: 13.5px;
+  margin: 0 0 10px;
+  font-size: var(--fs-lead);
   max-width: 66ch;
 }
 
@@ -890,7 +1066,7 @@ input[type="number"] {
   border-radius: var(--radius);
   background: var(--surface);
   font-family: var(--font-data);
-  font-size: 11.5px;
+  font-size: var(--fs-label);
   margin-bottom: 8px;
   overflow: hidden;
 }
@@ -911,7 +1087,7 @@ input[type="number"] {
 
 .tool summary::before {
   content: "▸";
-  font-size: 9px;
+  font-size: var(--fs-micro);
   color: var(--dim);
 }
 
@@ -925,7 +1101,7 @@ input[type="number"] {
 
 .tool .tstate {
   margin-left: auto;
-  font-size: 10.5px;
+  font-size: var(--fs-micro);
 }
 
 .tool .tbody {
@@ -962,14 +1138,14 @@ input[type="number"] {
 
 .approve h4 {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--fs-body);
   font-weight: 640;
 }
 
 .approve .cost {
   margin-left: auto;
   font-family: var(--font-data);
-  font-size: 11.5px;
+  font-size: var(--fs-label);
   color: var(--warn);
 }
 
@@ -978,7 +1154,7 @@ input[type="number"] {
   grid-template-columns: auto minmax(0, 1fr);
   gap: 3px 14px;
   font-family: var(--font-data);
-  font-size: 11.5px;
+  font-size: var(--fs-label);
   margin: 0 0 10px;
 }
 
@@ -999,7 +1175,7 @@ input[type="number"] {
   padding-top: 8px;
   margin-bottom: 11px;
   font-family: var(--font-data);
-  font-size: 10.5px;
+  font-size: var(--fs-micro);
   color: var(--dim);
 }
 

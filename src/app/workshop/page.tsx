@@ -140,8 +140,8 @@ export default function WorkshopPage() {
       <AppNav />
       <div className="split">
         <div className="lcol" style={{ padding: "14px 16px" }}>
-          <h1 style={{ fontSize: 15, fontWeight: 640, margin: "0 0 3px" }}>{t("workshop.title")}</h1>
-          <p style={{ color: "var(--dim)", fontSize: 12, margin: "0 0 14px" }}>
+          <h1 style={{ fontSize: "var(--fs-lead)", fontWeight: 640, margin: "0 0 3px" }}>{t("workshop.title")}</h1>
+          <p style={{ color: "var(--dim)", fontSize: "var(--fs-label)", margin: "0 0 14px" }}>
             {t("workshop.subtitle")}
           </p>
 
@@ -245,7 +245,7 @@ export default function WorkshopPage() {
           {statusCode && (
             <div
               className="data"
-              style={{ fontSize: 11.5, color: "var(--dim)", marginTop: 12 }}
+              style={{ fontSize: "var(--fs-label)", color: "var(--dim)", marginTop: 12 }}
             >
               {t("workshop.status")}:{" "}
               {/* Ein Anbieterabsturz ohne Idempotenzschutz ist kein Fehler, sondern
@@ -277,7 +277,7 @@ export default function WorkshopPage() {
             <h3>{t("workshop.library")}</h3>
             <select
               className="data"
-              style={{ width: "auto", padding: "4px 9px", fontSize: 11.5 }}
+              style={{ width: "auto", padding: "4px 9px", fontSize: "var(--fs-label)" }}
               value={filterAspect}
               onChange={(e) => setFilterAspect(e.target.value)}
               aria-label={t("workshop.aspectRatio")}
@@ -293,6 +293,13 @@ export default function WorkshopPage() {
               {t("workshop.selected")} {selected.size}
             </span>
           </div>
+
+          {creatives.length === 0 ? (
+            <div className="empty">
+              <h3>{t("empty.workshopTitle")}</h3>
+              <p>{t("empty.workshopBody")}</p>
+            </div>
+          ) : null}
 
           <div className="tiles">
             {creatives.map((c) => {

@@ -7,6 +7,15 @@ import "@/theme/default.css";
 
 export const metadata: Metadata = {
   title: "adloop",
+  icons: {
+    // Zwei Dateien statt einer mit Media-Query im SVG: Browser werten die
+    // Query in einem Favicon uneinheitlich aus, die media-Angabe am <link>
+    // dagegen zuverlässig.
+    icon: [
+      { url: "/icon-light.svg", type: "image/svg+xml", media: "(prefers-color-scheme: light)" },
+      { url: "/icon-dark.svg", type: "image/svg+xml", media: "(prefers-color-scheme: dark)" },
+    ],
+  },
 };
 
 export default async function RootLayout({ children }: { children: ReactNode }) {

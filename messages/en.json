@@ -15,11 +15,24 @@
     "themeDark": "Dark",
     "themeSystem": "System",
     "playbookSlug": "Slug",
-    "saveOverride": "Save override",
-    "activeOverrides": "Active overrides",
-    "resetOverride": "Reset",
+    "saveOverride": "Save changes",
+    "activeOverrides": "Edited playbooks",
+    "resetOverride": "Reset to shipped",
     "launch": "Launch",
-    "settings": "Settings"
+    "settings": "Settings",
+    "manage": "Manage",
+    "localeDe": "German",
+    "localeEn": "English",
+    "playbookSource": {
+      "db": "edited",
+      "dir": "private",
+      "bundled": "shipped"
+    },
+    "playbooksEmpty": "No playbooks found. Shipped defaults live in playbooks/, private ones under PLAYBOOK_DIR.",
+    "playbookHint": "Saving creates an edited version for this tenant. The shipped one stays and can be restored at any time.",
+    "unsaved": "unsaved",
+    "saved": "saved",
+    "menu": "Menu"
   },
   "chat": {
     "empty": "Send a message to get started.",
@@ -299,5 +312,19 @@
     "ads": "Ads",
     "gate": "Gate",
     "noGateReason": "no gate"
+  },
+  "empty": {
+    "workshopTitle": "No creatives yet",
+    "workshopBody": "Describe what to make on the left, pick a format and a count. You see the cost and approve before anything is generated.",
+    "chatTitle": "Ask about your account",
+    "chatBody": "For example: why an ad got more expensive, which creatives are wearing out, or what to do this week.",
+    "strategistNoAccount": "No ad account connected",
+    "strategistNoAccountBody": "The strategist reads figures from your Meta account. Connect it under Connectors and start a sync.",
+    "strategistNoData": "No data in this window",
+    "strategistNoDataBody": "Nothing has been synced for the selected period. Pick another window or start a sync.",
+    "launchNoCreative": "No creative ready",
+    "launchNoCreativeBody": "Publishing needs a finished creative. Make one in the workshop.",
+    "goToConnectors": "Go to connectors",
+    "goToWorkshop": "Go to the workshop"
   }
 }

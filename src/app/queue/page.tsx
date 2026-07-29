@@ -143,7 +143,7 @@ export default function QueuePage() {
                         }}
                       />
                     </div>
-                    <div style={{ color: "var(--dim)", fontSize: 11, marginTop: 3 }}>
+                    <div style={{ color: "var(--dim)", fontSize: "var(--fs-label)", marginTop: 3 }}>
                       {progressLabel(r.job.progress)}
                     </div>
                   </td>

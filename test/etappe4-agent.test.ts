@@ -634,14 +634,26 @@ describe("etappe 4 — agent, chat, playbooks", () => {
     }
   });
 
-  it("8 — missing playbook in production does not fall back to fixture", async () => {
+  it("8 — without a private directory the shipped default applies, unknown slugs still fail closed", async () => {
     const previous = process.env.NODE_ENV;
     const previousDir = process.env.PLAYBOOK_DIR;
     (process.env as { NODE_ENV?: string }).NODE_ENV = "production";
     delete process.env.PLAYBOOK_DIR;
     try {
+      // A shipped slug resolves — an install without private playbooks is
+      // unconfigured, not broken.
+      const shipped = await resolvePlaybook(db.pool, {
+        tenantId: db.tenantId,
+        slug: "general",
+      });
+      expect(shipped.source).toBe("bundled");
+      expect(shipped.version.startsWith("bundled:")).toBe(true);
+      expect(shipped.files["PLAYBOOK.md"]).toBeTruthy();
+
+      // Fail-closed is unchanged where it matters: a slug nobody ships and
+      // nobody configured must not resolve to anything at all.
       await expect(
-        resolvePlaybook(db.pool, { tenantId: db.tenantId, slug: "general" }),
+        resolvePlaybook(db.pool, { tenantId: db.tenantId, slug: "no-such-playbook" }),
       ).rejects.toBeInstanceOf(PlaybookMissingError);
     } finally {
       (process.env as { NODE_ENV?: string }).NODE_ENV = previous;

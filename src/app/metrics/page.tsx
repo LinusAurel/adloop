@@ -416,7 +416,7 @@ export default function MetricsPage() {
               <div className="tbody">{JSON.stringify(resolved.metricDefinition, null, 2)}</div>
             </details>
 
-            <h2 style={{ fontSize: 13, fontWeight: 640, margin: "0 0 8px" }}>{t("ads")}</h2>
+            <h2 style={{ fontSize: "var(--fs-body)", fontWeight: 640, margin: "0 0 8px" }}>{t("ads")}</h2>
             <div className="scroller">
               <table>
                 <thead>

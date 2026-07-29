@@ -1,59 +1,58 @@
 # adloop
 
-Ein Werkzeug, das aus Anzeigendaten Handlungen macht: Es beobachtet, was auf Meta läuft,
-erkennt, wann Creatives sich abnutzen, erzeugt Nachschub und veröffentlicht ihn — jeder
-teure Schritt mit einem Menschen davor.
+Turns ad data into action: watches what runs on Meta, spots creatives wearing out,
+generates replacements, and publishes them — with a human in front of every expensive step.
 
-**Konversionsziel-unabhängig.** Purchase, Lead, Traffic, Engagement — die Leitmetrik ist
-ein Zähler/Nenner-Vertrag, kein fest verdrahtetes Ziel.
+**Conversion-goal agnostic.** Purchase, lead, traffic, engagement — the primary metric is a
+numerator/denominator contract, not a hardcoded objective.
 
-## Was drin ist
+## What's in it
 
 | | |
 |---|---|
-| **Chat** | Agent mit Werkzeugen, Freigaben und Playbooks |
-| **Creative Strategist** | Pulse-Indizes, Funnel-Position, Creative Strain, Aktionen |
-| **Bild-Werkstatt** | Generierung über austauschbare Anbieter, mit Idempotenz |
-| **Launch** | Meta-Publishing als Schritt-Kette — immer `PAUSED` |
+| **Chat** | agent with tools, approvals and playbooks |
+| **Creative Strategist** | pulse indices, funnel position, creative strain, actions |
+| **Image workshop** | generation across swappable providers, with idempotency |
+| **Launch** | Meta publishing as a step chain — always `PAUSED` |
 
-## Betreiben
+## Running it
 
 ```bash
-cp .env.example .env     # ausfüllen
+cp .env.example .env     # fill it in
 docker compose up
 pnpm migrate
 ```
 
-Vier Container: `web`, `worker`, `db`, `storage` (MinIO). Kein verwalteter Anbieter im
-Kern — wer adloop selbst betreiben will, braucht `docker compose up` und eine `.env`.
+Four containers: `web`, `worker`, `db`, `storage` (MinIO). No managed service in the core —
+self-hosting needs `docker compose up` and a `.env`, nothing else.
 
-## Zwei harte Regeln
+## Two hard rules
 
-**Es wird immer `PAUSED` veröffentlicht.** Aktivierung ist eine menschliche Entscheidung im
-Ads Manager. Es gibt keinen Schalter, keine Option und kein Werkzeug dafür.
+**Everything publishes as `PAUSED`.** Activation is a human decision in Ads Manager. There
+is no switch, no option and no tool for it — the request schema has no status field at all.
 
-**Budgets setzt ausschließlich ein Mensch.** Der Agent darf sie weder vorschlagen noch
-ergänzen noch ändern. Fehlt ein Budget, bricht der Publish ab, statt einen Standardwert zu
-setzen.
+**Only a human sets budgets.** The agent may not propose, supply or change them. Without a
+budget the publish aborts with `budget_required` instead of picking a default.
 
-## Eigenes Aussehen
+## Making it yours
 
-Farben, Schriften und Radien kommen aus `theme/default.css`. Ein Fork ersetzt diese Datei
-und hat sein eigenes Erscheinungsbild — kein Bauteil kennt einen Farbwert. Zustandsrollen
-(`--good`, `--warn`, `--crit`, `--none`) tragen Bedeutung, nicht Farbe.
+Colours, fonts and radii come from `theme/default.css`. A fork replaces that one file and
+has its own look — no component knows a colour value. State roles (`--good`, `--warn`,
+`--crit`, `--none`) carry meaning, not colour, so recolouring never changes what the UI
+says.
 
-## Zweisprachig
+## Bilingual by design
 
-Deutsch und Englisch, auf drei getrennten Achsen: Oberfläche, Agentenantworten und die
-Sprache der **erzeugten Anzeigentexte**. Ein deutscher Nutzer, der englische Anzeigen
-schaltet, ist der Normalfall.
+German and English on three independent axes: interface, agent replies, and the language of
+**generated ad copy**. A German operator running English ads for the US market is the normal
+case, not an edge case — so those are separate settings.
 
-## Entwickeln
+## Developing
 
 ```bash
-pnpm test                  # 199 Tests, sequenziell (Testcontainers)
-pnpm test:meta-contract    # Feldvertrag gegen die echte Meta-API
-pnpm test:meta-publish     # Publish gegen ein Sandbox-Werbekonto
+pnpm test                  # 199 tests, sequential (Testcontainers)
+pnpm test:meta-contract    # field contract against the live Meta API
+pnpm test:meta-publish     # publish against a Meta sandbox ad account
 ```
 
-Entscheidungen und ihre Begründungen: [`DECISIONS.md`](DECISIONS.md).
+Decisions and their reasoning: [`DECISIONS.md`](DECISIONS.md).

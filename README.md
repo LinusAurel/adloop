@@ -47,6 +47,20 @@ German and English on three independent axes: interface, agent replies, and the 
 **generated ad copy**. A German operator running English ads for the US market is the normal
 case, not an edge case — so those are separate settings.
 
+## Deploying
+
+`render.yaml` is a Render Blueprint: dashboard → New Blueprint Instance → this repo. It
+creates Postgres plus a web and a worker service, runs migrations on boot and health-checks
+`/api/health`.
+
+Two things it cannot do for you:
+
+- **Object storage.** Render has no S3-compatible service, so the local MinIO container has
+  no counterpart. Point `S3_*` at Cloudflare R2, AWS S3 or Backblaze B2.
+- **Private playbooks.** `PLAYBOOK_DIR` must resolve to a mounted directory at runtime.
+  Without it every agent run aborts with `playbook_missing` — deliberately, so a
+  misconfigured path can never silently fall back to a synthetic fixture.
+
 ## Developing
 
 ```bash

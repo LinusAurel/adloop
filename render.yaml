@@ -1,0 +1,89 @@
+# Render Blueprint for adloop.
+#
+# Deploy: https://dashboard.render.com/blueprints → New Blueprint Instance → this repo.
+# Render creates the database and both services; you fill in the secrets marked
+# `sync: false` in the dashboard afterwards.
+#
+# Object storage is NOT part of this blueprint. Render has no S3-compatible service,
+# so the local MinIO container has no counterpart here — point S3_* at Cloudflare R2,
+# AWS S3 or Backblaze B2. Without it, the image workshop cannot store assets.
+
+databases:
+  - name: adloop-db
+    databaseName: adloop
+    plan: basic-256mb
+    postgresMajorVersion: "16"
+
+services:
+  - type: web
+    name: adloop-web
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerCommand: sh -c "node dist/migrate.js && node server.js"
+    plan: starter
+    healthCheckPath: /api/health
+    envVars: &shared
+      - key: DATABASE_URL
+        fromDatabase: { name: adloop-db, property: connectionString }
+
+      # Generated once by Render, shared with the worker through the env group.
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: ENCRYPTION_KEY
+        sync: false          # 32-byte base64 — must match across deploys or tokens are unreadable
+
+      - key: PUBLIC_BASE_URL
+        sync: false          # https://<service>.onrender.com — fal webhooks need it
+      - key: AUTH_CODE_DELIVERY
+        value: log           # switch to a mail provider before real users
+
+      # Meta
+      - key: META_APP_ID
+        sync: false
+      - key: META_APP_SECRET
+        sync: false
+      - key: META_REDIRECT_URI
+        sync: false          # <PUBLIC_BASE_URL>/api/auth/meta/callback
+      - key: META_GRAPH_API_VERSION
+        value: v25.0
+      - key: SYNC_BACKFILL_DAYS
+        value: "180"
+
+      # Model + image providers
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: COPY_MODEL
+        value: claude-sonnet-5
+      - key: IMAGE_PROVIDER
+        value: fal           # the only provider with a closed crash window
+      - key: FAL_KEY
+        sync: false
+      - key: FAL_WEBHOOK_SECRET
+        sync: false          # without it the webhook route refuses every request
+      - key: OPENAI_API_KEY
+        sync: false
+
+      # Object storage — no Render equivalent, bring your own
+      - key: S3_ENDPOINT
+        sync: false
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_REGION
+        sync: false
+      - key: S3_ACCESS_KEY
+        sync: false
+      - key: S3_SECRET_KEY
+        sync: false
+
+      # Private playbooks. Without them every agent run aborts with playbook_missing —
+      # that is deliberate (fail-closed), see SPEC §7.2.
+      - key: PLAYBOOK_DIR
+        sync: false
+
+  - type: worker
+    name: adloop-worker
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerCommand: node dist/worker.js
+    plan: starter
+    envVars: *shared

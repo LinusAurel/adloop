@@ -315,7 +315,7 @@ export default function WorkshopPage() {
                   <div className="shot">
                     {c.previewUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={c.previewUrl} alt={c.name} />
+                      <img src={c.previewUrl} alt={c.name} width={512} height={640} loading="lazy" />
                     ) : (
                       <span className="data">{c.aspectRatio}</span>
                     )}

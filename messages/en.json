@@ -32,7 +32,9 @@
     "playbookHint": "Saving creates an edited version for this tenant. The shipped one stays and can be restored at any time.",
     "unsaved": "unsaved",
     "saved": "saved",
-    "menu": "Menu"
+    "menu": "Menu",
+    "language": "Language",
+    "brightness": "Brightness"
   },
   "chat": {
     "empty": "Send a message to get started.",
@@ -117,7 +119,9 @@
     "copychief_review_request": "Run a copy review for ad {adName} over {since} to {until}.",
     "cro_review_request": "Run a funnel review for ad {adName} over {since} to {until}.",
     "variations_request": "Propose variations for ad {adName} based on {since} to {until}.",
-    "noVerdict": "no verdict"
+    "noVerdict": "no verdict",
+    "view": "View",
+    "syncing": "Refreshing …"
   },
   "workshop": {
     "title": "Image workshop",

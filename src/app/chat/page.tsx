@@ -432,6 +432,8 @@ export default function ChatPage() {
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               placeholder={t("chat.placeholder")}
+              aria-label={t("chat.placeholder")}
+              autoComplete="off"
             />
             <button type="submit" className="btn pri">
               {t("app.send")}

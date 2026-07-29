@@ -32,7 +32,9 @@
     "playbookHint": "Speichern legt eine angepasste Fassung für diesen Mandanten an. Die mitgelieferte bleibt erhalten und lässt sich jederzeit wiederherstellen.",
     "unsaved": "ungespeichert",
     "saved": "gespeichert",
-    "menu": "Menü"
+    "menu": "Menü",
+    "language": "Sprache",
+    "brightness": "Helligkeit"
   },
   "chat": {
     "empty": "Schreib eine Nachricht, um zu starten.",
@@ -117,7 +119,9 @@
     "copychief_review_request": "Copy-Review für Anzeige {adName} vom {since} bis {until} starten.",
     "cro_review_request": "Funnel-Review für Anzeige {adName} vom {since} bis {until} starten.",
     "variations_request": "Varianten für Anzeige {adName} auf Basis von {since} bis {until} vorschlagen.",
-    "noVerdict": "keine Aussage"
+    "noVerdict": "keine Aussage",
+    "view": "Ansicht",
+    "syncing": "Wird aufgefrischt …"
   },
   "workshop": {
     "title": "Bild-Werkstatt",

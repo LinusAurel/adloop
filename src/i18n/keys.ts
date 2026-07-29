@@ -306,6 +306,12 @@ export const MESSAGE_KEYS = [
   "empty.goToWorkshop",
 
   "app.menu",
+
+  "app.language",
+  "app.brightness",
+
+  "strategist.view",
+  "strategist.syncing",
 ] as const;
 
 export type MessageKey = (typeof MESSAGE_KEYS)[number];

@@ -257,44 +257,51 @@ export default function StrategistPage() {
       {/* Zweite Leiste: Konto, Zeitfenster, Ansicht. Sie trägt dieselben
           Bauteile wie die Hauptleiste, damit kein zweites Formular entsteht. */}
       <div className="bar tools">
-        <select
-          className="data"
-          style={{ width: "auto", padding: "4px 9px", fontSize: "var(--fs-label)" }}
-          value={accountId}
-          onChange={(e) => setAccountId(e.target.value)}
-          aria-label={t("strategist.adAccount")}
-        >
-          {accounts.map((account) => (
-            <option key={account.id} value={account.id}>
-              {account.name}
-            </option>
-          ))}
-        </select>
-        {(["30", "90"] as const).map((value) => (
-          <button
-            key={value}
-            type="button"
-            className="chip"
-            aria-pressed={preset === value}
-            onClick={() => setPreset(value)}
+        {/* Ohne Konten wäre das ein leeres Feld, das nach einem Fehler aussieht.
+            Der Leerzustand darunter sagt bereits, was zu tun ist. */}
+        {accounts.length > 0 && (
+          <select
+            style={{ width: "auto", padding: "5px 10px", fontSize: "var(--fs-label)" }}
+            value={accountId}
+            onChange={(e) => setAccountId(e.target.value)}
+            aria-label={t("strategist.adAccount")}
           >
-            {value === "30" ? t("strategist.window30") : t("strategist.window90")}
-          </button>
-        ))}
-        <span className="right">
-          {(["list", "detail"] as const).map((value) => (
+            {accounts.map((account) => (
+              <option key={account.id} value={account.id}>
+                {account.name}
+              </option>
+            ))}
+          </select>
+        )}
+        <div className="seg" role="group" aria-label={t("strategist.timeWindow")}>
+          {(["30", "90"] as const).map((value) => (
             <button
               key={value}
               type="button"
-              className="chip"
-              aria-pressed={view === value}
-              onClick={() => setView(value)}
+              aria-pressed={preset === value}
+              onClick={() => setPreset(value)}
             >
-              {value === "list" ? t("strategist.overview") : t("strategist.detail")}
+              {value === "30" ? t("strategist.window30") : t("strategist.window90")}
             </button>
           ))}
-          <button type="button" className="chip" disabled={busy} onClick={() => void refreshSync()}>
-            {t("strategist.refreshSync")}
+        </div>
+
+        <span className="right">
+          <div className="seg" role="group" aria-label={t("strategist.view")}>
+            {(["list", "detail"] as const).map((value) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={view === value}
+                onClick={() => setView(value)}
+              >
+                {value === "list" ? t("strategist.overview") : t("strategist.detail")}
+              </button>
+            ))}
+          </div>
+          {/* Kein Segment: Auffrischen ist eine Handlung, keine Auswahl. */}
+          <button type="button" className="btn" disabled={busy} onClick={() => void refreshSync()}>
+            {busy ? t("strategist.syncing") : t("strategist.refreshSync")}
           </button>
         </span>
       </div>

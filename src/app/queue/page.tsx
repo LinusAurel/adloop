@@ -102,7 +102,12 @@ export default function QueuePage() {
         <p>{t("queue.lead")}</p>
 
         <form onSubmit={submit} style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-          <input value={text} onChange={(e) => setText(e.target.value)} />
+          <input
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            aria-label={t("queue.enqueue")}
+            autoComplete="off"
+          />
           <button type="submit" className="btn pri" disabled={submitting} style={{ flexShrink: 0 }}>
             {submitting ? "…" : t("queue.enqueue")}
           </button>

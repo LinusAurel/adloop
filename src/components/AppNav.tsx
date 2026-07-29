@@ -97,17 +97,20 @@ export function AppNav() {
         <div className="menu" ref={menuRef}>
           <button
             type="button"
-            className="chip"
+            className="menu-trigger"
             aria-expanded={openMenu}
             aria-haspopup="true"
+            aria-label={t("menu")}
             data-active={inAdmin ? "true" : undefined}
             onClick={() => setOpenMenu((open) => !open)}
           >
-            <span className="wide-only">{t("manage")} ▾</span>
+            <span className="wide-only">{t("manage")}</span>
             <span className="narrow-only" aria-hidden="true">
               ☰
             </span>
-            <span className="sr-only">{t("menu")}</span>
+            <span className="chev wide-only" aria-hidden="true">
+              ▾
+            </span>
           </button>
           {openMenu && (
             <div className="menu-list" role="menu">
@@ -141,65 +144,72 @@ export function AppNav() {
               <div className="narrow-only">
                 <hr />
                 <div className="menu-row">
-                  {locales.map((value) => (
-                    <button
-                      key={value}
-                      type="button"
-                      className="chip"
-                      aria-pressed={locale === value}
-                      onClick={() => void chooseLocale(value)}
-                    >
-                      {value.toUpperCase()}
-                    </button>
-                  ))}
+                  <div className="seg" role="group" aria-label={t("language")}>
+                    {locales.map((value) => (
+                      <button
+                        key={value}
+                        type="button"
+                        aria-pressed={locale === value}
+                        onClick={() => void chooseLocale(value)}
+                      >
+                        {value.toUpperCase()}
+                      </button>
+                    ))}
+                  </div>
                 </div>
                 <div className="menu-row">
-                  {(["system", "light", "dark"] as const).map((value) => (
-                    <button
-                      key={value}
-                      type="button"
-                      className="chip"
-                      aria-pressed={mode === value}
-                      onClick={() => setMode(value)}
-                    >
-                      {value === "system"
-                        ? t("themeSystem")
-                        : value === "light"
-                          ? t("themeLight")
-                          : t("themeDark")}
-                    </button>
-                  ))}
+                  <div className="seg" role="group" aria-label={t("brightness")}>
+                    {(["system", "light", "dark"] as const).map((value) => (
+                      <button
+                        key={value}
+                        type="button"
+                        aria-pressed={mode === value}
+                        onClick={() => setMode(value)}
+                      >
+                        {value === "system"
+                          ? t("themeSystem")
+                          : value === "light"
+                            ? t("themeLight")
+                            : t("themeDark")}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
           )}
         </div>
 
-        <span className="wide-only switches">
-          {locales.map((value) => (
-            <button
-              key={value}
-              type="button"
-              className="chip"
-              aria-pressed={locale === value}
-              onClick={() => void chooseLocale(value)}
-              title={t(value === "de" ? "localeDe" : "localeEn")}
-            >
-              {value.toUpperCase()}
-            </button>
-          ))}
+        {/* Zwei getrennte Gruppen, nicht sechs Knöpfe in einer Reihe: Sprache
+            und Helligkeit sind verschiedene Einstellungen und dürfen nicht
+            aussehen wie eine einzige Auswahl mit sechs Möglichkeiten. */}
+        <span className="wide-only switch-groups">
+          <div className="seg" role="group" aria-label={t("language")}>
+            {locales.map((value) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={locale === value}
+                onClick={() => void chooseLocale(value)}
+                title={t(value === "de" ? "localeDe" : "localeEn")}
+              >
+                {value.toUpperCase()}
+              </button>
+            ))}
+          </div>
 
-          {(["system", "light", "dark"] as const).map((value) => (
-            <button
-              key={value}
-              type="button"
-              className="chip"
-              aria-pressed={mode === value}
-              onClick={() => setMode(value)}
-            >
-              {value === "system" ? t("themeSystem") : value === "light" ? t("themeLight") : t("themeDark")}
-            </button>
-          ))}
+          <div className="seg" role="group" aria-label={t("brightness")}>
+            {(["system", "light", "dark"] as const).map((value) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={mode === value}
+                onClick={() => setMode(value)}
+              >
+                {value === "system" ? t("themeSystem") : value === "light" ? t("themeLight") : t("themeDark")}
+              </button>
+            ))}
+          </div>
         </span>
       </span>
     </div>

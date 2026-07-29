@@ -34,7 +34,11 @@
     "saved": "gespeichert",
     "menu": "Menü",
     "language": "Sprache",
-    "brightness": "Helligkeit"
+    "brightness": "Helligkeit",
+    "newProject": "Neues Projekt",
+    "newProjectPlaceholder": "Projektname …",
+    "create": "Anlegen",
+    "cancel": "Abbrechen"
   },
   "chat": {
     "empty": "Schreib eine Nachricht, um zu starten.",
@@ -121,7 +125,13 @@
     "variations_request": "Varianten für Anzeige {adName} auf Basis von {since} bis {until} vorschlagen.",
     "noVerdict": "keine Aussage",
     "view": "Ansicht",
-    "syncing": "Wird aufgefrischt …"
+    "syncing": "Wird aufgefrischt …",
+    "metricFallback": "Für dieses Konto ist keine Leitmetrik hinterlegt. Die Zahlen beruhen auf einem Rückfallwert — richte die Metrik unter Metriken ein, bevor du auf ihrer Grundlage entscheidest.",
+    "configuredBy": {
+      "user": "konfiguriert",
+      "default": "Standard",
+      "fallback": "Rückfall"
+    }
   },
   "workshop": {
     "title": "Bild-Werkstatt",
@@ -138,7 +148,11 @@
     "status": "Status",
     "needsHumanCheck": "Menschliche Prüfung nötig",
     "costImage": "Bild",
-    "costCopy": "Copy"
+    "costCopy": "Copy",
+    "provider": "Anbieter",
+    "model": "Modell",
+    "noProvider": "Kein Anbieter konfiguriert",
+    "unprotectedProvider": "Dieser Anbieter bietet keinen Schutz gegen doppelte Abrechnung nach einem Absturz."
   },
   "progress": {
     "echo_step": "Schritt {step} von {total}",
@@ -206,7 +220,70 @@
     "adSetTemplate": "Ad-Set-Vorlage",
     "adTemplate": "Ad-Vorlage",
     "save": "Speichern",
-    "saved": "Gespeichert"
+    "saved": "Gespeichert",
+    "campaign": "Kampagne",
+    "objective": "Kampagnenziel",
+    "billingEvent": "Abrechnung",
+    "bidStrategy": "Gebotsstrategie",
+    "bidAmount": "Gebotsgrenze (Cent)",
+    "targeting": "Zielgruppe",
+    "ageMin": "Alter ab",
+    "ageMax": "Alter bis",
+    "genders": "Geschlecht",
+    "male": "Männlich",
+    "female": "Weiblich",
+    "gendersHint": "Keine Auswahl bedeutet alle.",
+    "placements": "Platzierungen",
+    "placement": {
+      "advantagePlus": "Advantage+ Platzierungen",
+      "facebook": "Facebook",
+      "instagram": "Instagram",
+      "audienceNetwork": "Audience Network",
+      "messenger": "Messenger"
+    },
+    "audiences": "Zielgruppenlisten",
+    "advantageAudience": "Advantage+ Zielgruppe",
+    "includedAudiences": "Eingeschlossene Listen",
+    "excludedAudiences": "Ausgeschlossene Listen",
+    "oneIdPerLine": "eine ID je Zeile",
+    "attribution": "Attribution",
+    "attrClick": "Klickfenster",
+    "attrView": "Ansichtsfenster",
+    "attrEngaged": "Interaktionsfenster",
+    "attrHint": "Das Fenster entscheidet, welche Konversionen gezählt werden. Nach einer Änderung sind Zahlen davor und danach nicht mehr vergleichbar.",
+    "schedule": "Start",
+    "timezone": "Zeitzone",
+    "offsetDays": "Startet in (Tagen)",
+    "startTime": "Uhrzeit",
+    "defaultAdCopy": "Standard-Anzeigentexte",
+    "primaryTexts": "Primärtexte",
+    "headlines": "Überschriften",
+    "descriptions": "Beschreibungen",
+    "callToAction": "Handlungsaufruf",
+    "oneVariantPerLine": "eine Variante je Zeile",
+    "creative": "Advantage+ Creative",
+    "format": {
+      "image": "Bild",
+      "video": "Video",
+      "carousel": "Karussell"
+    },
+    "advantage": {
+      "advantagePlusCreative": "Advantage+ Creative",
+      "visualTouchUps": "Visuelle Retusche",
+      "textImprovements": "Textverbesserungen",
+      "addOverlays": "Überlagerungen",
+      "musicOverlay": "Musik",
+      "imageAnimation": "Bildanimation",
+      "generateBackgrounds": "Hintergründe erzeugen",
+      "enhanceCta": "Handlungsaufruf hervorheben",
+      "translateText": "Text übersetzen",
+      "profileAndCard": "Profil und Karte",
+      "dynamicDescription": "Dynamische Beschreibung"
+    },
+    "dsaHint": "Begünstigter und Zahler sind für Werbung in der EU verpflichtend.",
+    "saving": "Wird gespeichert …",
+    "noDefaults": "Noch keine Vorgaben",
+    "noDefaultsBody": "Für diesen Werbetreibenden sind keine Vorgaben hinterlegt. Sie entstehen beim ersten Sync des Werbekontos."
   },
   "launch": {
     "title": "Launch",

@@ -892,6 +892,98 @@ input[type="number"] {
   font-variant-numeric: tabular-nums;
 }
 
+/* ── Kontrollkästchen ──
+   Beschriftung und Kästchen teilen sich eine Trefferfläche; ein Label, das
+   nebendran liegt und nichts auslöst, ist eine tote Zone. */
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  cursor: pointer;
+  font-size: var(--fs-small);
+}
+
+.check input {
+  width: auto;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+/* Mehrere Schalter, die zusammengehören — etwa die Advantage+-Optionen eines
+   Formats. Zwei Spalten, damit elf Zeilen nicht zur Liste werden. */
+.checks {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0 18px;
+}
+
+/* ── Aufklappbarer Abschnitt in einem Formular ── */
+
+.fold {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+
+.fold > summary {
+  padding: 8px 12px;
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--fs-small);
+  font-weight: 560;
+  background: var(--bg);
+}
+
+.fold > summary::-webkit-details-marker {
+  display: none;
+}
+
+.fold > summary::before {
+  content: "▸";
+  font-size: 9px;
+  color: var(--dim);
+}
+
+.fold[open] > summary::before {
+  content: "▾";
+}
+
+.fold > summary .count {
+  margin-left: auto;
+  font-family: var(--font-data);
+  font-size: var(--fs-micro);
+  color: var(--dim);
+  font-weight: 400;
+}
+
+.fold > div {
+  padding: 10px 12px 12px;
+  border-top: 1px solid var(--line);
+}
+
+/* Eine Zeile je Eintrag — für Listen, die Meta rotiert (Texte, Titel). */
+.lines {
+  font-family: var(--font-data);
+  font-size: var(--fs-small);
+  line-height: 1.7;
+  resize: vertical;
+}
+
+.hint {
+  color: var(--dim);
+  font-size: var(--fs-micro);
+  font-family: var(--font-data);
+  margin-top: 4px;
+}
+
 /* ── Meldungen ── */
 
 .msgbox {

@@ -1,5 +1,16 @@
 import type { AdvertiserDefaults } from "./settings";
 
+/**
+ * Partial-patch merge, kept for the contract it guards: a patch must never drop
+ * a field it does not know about.
+ *
+ * NOTE: no longer on the production path. The settings page edits the full
+ * defaults object and sends it whole, because a form that knew only a subset
+ * was exactly how twelve of twenty-six fields became unreachable. Anything
+ * that reintroduces partial patches — an API client, a bulk import — should
+ * come back through here rather than merging by hand.
+ */
+
 /** Fields the Vorgaben form is allowed to edit. */
 export type DefaultsFormPatch = {
   pageId: string;

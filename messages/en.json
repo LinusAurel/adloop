@@ -34,7 +34,11 @@
     "saved": "saved",
     "menu": "Menu",
     "language": "Language",
-    "brightness": "Brightness"
+    "brightness": "Brightness",
+    "newProject": "New project",
+    "newProjectPlaceholder": "Project name …",
+    "create": "Create",
+    "cancel": "Cancel"
   },
   "chat": {
     "empty": "Send a message to get started.",
@@ -121,7 +125,13 @@
     "variations_request": "Propose variations for ad {adName} based on {since} to {until}.",
     "noVerdict": "no verdict",
     "view": "View",
-    "syncing": "Refreshing …"
+    "syncing": "Refreshing …",
+    "metricFallback": "No guiding metric is configured for this account. These figures rest on a fallback — set the metric up under Metrics before deciding on them.",
+    "configuredBy": {
+      "user": "configured",
+      "default": "default",
+      "fallback": "fallback"
+    }
   },
   "workshop": {
     "title": "Image workshop",
@@ -138,7 +148,11 @@
     "status": "Status",
     "needsHumanCheck": "Needs human check",
     "costImage": "Image",
-    "costCopy": "Copy"
+    "costCopy": "Copy",
+    "provider": "Provider",
+    "model": "Model",
+    "noProvider": "No provider configured",
+    "unprotectedProvider": "This provider has no protection against double billing after a crash."
   },
   "progress": {
     "echo_step": "Step {step} of {total}",
@@ -206,7 +220,70 @@
     "adSetTemplate": "Ad set template",
     "adTemplate": "Ad template",
     "save": "Save",
-    "saved": "Saved"
+    "saved": "Saved",
+    "campaign": "Campaign",
+    "objective": "Campaign objective",
+    "billingEvent": "Billing",
+    "bidStrategy": "Bid strategy",
+    "bidAmount": "Bid cap (cents)",
+    "targeting": "Audience",
+    "ageMin": "Age from",
+    "ageMax": "Age to",
+    "genders": "Gender",
+    "male": "Male",
+    "female": "Female",
+    "gendersHint": "No selection means all.",
+    "placements": "Placements",
+    "placement": {
+      "advantagePlus": "Advantage+ placements",
+      "facebook": "Facebook",
+      "instagram": "Instagram",
+      "audienceNetwork": "Audience Network",
+      "messenger": "Messenger"
+    },
+    "audiences": "Custom audiences",
+    "advantageAudience": "Advantage+ audience",
+    "includedAudiences": "Included lists",
+    "excludedAudiences": "Excluded lists",
+    "oneIdPerLine": "one id per line",
+    "attribution": "Attribution",
+    "attrClick": "Click window",
+    "attrView": "View window",
+    "attrEngaged": "Engaged window",
+    "attrHint": "The window decides which conversions are counted. After a change, figures from before and after are not comparable.",
+    "schedule": "Start",
+    "timezone": "Time zone",
+    "offsetDays": "Starts in (days)",
+    "startTime": "Time",
+    "defaultAdCopy": "Default ad copy",
+    "primaryTexts": "Primary texts",
+    "headlines": "Headlines",
+    "descriptions": "Descriptions",
+    "callToAction": "Call to action",
+    "oneVariantPerLine": "one variant per line",
+    "creative": "Advantage+ creative",
+    "format": {
+      "image": "Image",
+      "video": "Video",
+      "carousel": "Carousel"
+    },
+    "advantage": {
+      "advantagePlusCreative": "Advantage+ creative",
+      "visualTouchUps": "Visual touch-ups",
+      "textImprovements": "Text improvements",
+      "addOverlays": "Overlays",
+      "musicOverlay": "Music",
+      "imageAnimation": "Image animation",
+      "generateBackgrounds": "Generate backgrounds",
+      "enhanceCta": "Enhance CTA",
+      "translateText": "Translate text",
+      "profileAndCard": "Profile and card",
+      "dynamicDescription": "Dynamic description"
+    },
+    "dsaHint": "Beneficiary and payer are mandatory for advertising in the EU.",
+    "saving": "Saving …",
+    "noDefaults": "No defaults yet",
+    "noDefaultsBody": "This advertiser has no defaults stored. They are created on the first sync of the ad account."
   },
   "launch": {
     "title": "Launch",

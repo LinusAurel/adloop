@@ -40,6 +40,11 @@ export default function WorkshopPage() {
   const [aspectRatio, setAspectRatio] = useState<(typeof ASPECTS)[number]>("4:5");
   const [count, setCount] = useState(3);
   const [filterAspect, setFilterAspect] = useState<string>("");
+  const [providers, setProviders] = useState<
+    Array<{ id: string; models: string[]; recovery: string }>
+  >([]);
+  const [provider, setProvider] = useState("");
+  const [model, setModel] = useState("");
   const [creatives, setCreatives] = useState<CreativeRow[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [approval, setApproval] = useState<PendingApproval | null>(null);
@@ -57,6 +62,18 @@ export default function WorkshopPage() {
     if (data.advertisers[0] && !advertiserId) setAdvertiserId(data.advertisers[0].id);
   }, [advertiserId]);
 
+  // Die Anbieter kommen vom Server, weil nur er weiß, welche Schlüssel gesetzt
+  // sind. Ein Anbieter ohne Schlüssel gehört nicht in die Auswahl.
+  const loadProviders = useCallback(async () => {
+    const res = await fetch("/api/images/providers", { cache: "no-store" });
+    if (!res.ok) return;
+    const data = (await res.json()) as {
+      providers: Array<{ id: string; models: string[]; recovery: string }>;
+    };
+    setProviders(data.providers);
+    setProvider((current) => current || data.providers[0]?.id || "");
+  }, []);
+
   const loadCreatives = useCallback(async () => {
     const params = new URLSearchParams();
     if (advertiserId) params.set("advertiserId", advertiserId);
@@ -69,7 +86,15 @@ export default function WorkshopPage() {
 
   useEffect(() => {
     void loadAdvertisers();
-  }, [loadAdvertisers]);
+    void loadProviders();
+  }, [loadAdvertisers, loadProviders]);
+
+  // Modelle gehören zum Anbieter: wechselt er, ist das bisherige Modell
+  // ungültig und wird durch dessen erstes ersetzt.
+  const models = providers.find((p) => p.id === provider)?.models ?? [];
+  useEffect(() => {
+    setModel((current) => (models.includes(current) ? current : (models[0] ?? "")));
+  }, [models]);
 
   useEffect(() => {
     void loadCreatives();
@@ -89,6 +114,8 @@ export default function WorkshopPage() {
           prompt: prompt.trim(),
           aspectRatio,
           count,
+          ...(provider ? { provider } : {}),
+          ...(model ? { model } : {}),
           clientRequestId: uuidv7(),
         }),
       });
@@ -165,6 +192,42 @@ export default function WorkshopPage() {
               rows={5}
               style={{ resize: "vertical" }}
             />
+          </label>
+
+          <label className="field">
+            <span>{t("workshop.provider")}</span>
+            <select
+              className="data"
+              value={provider}
+              onChange={(e) => setProvider(e.target.value)}
+            >
+              {providers.length === 0 && <option value="">{t("workshop.noProvider")}</option>}
+              {providers.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.id}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="field">
+            <span>{t("workshop.model")}</span>
+            <select className="data" value={model} onChange={(e) => setModel(e.target.value)}>
+              {models.length === 0 && <option value="">—</option>}
+              {models.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </select>
+            {/* Ein Anbieter ohne Idempotenzschutz kann nach einem Absturz ein
+                zweites Mal abrechnen. Das gehört vor die Freigabe, nicht
+                dahinter. */}
+            {providers.find((p) => p.id === provider)?.recovery === "unprotected" && (
+              <div className="hint" style={{ color: "var(--warn)" }}>
+                {t("workshop.unprotectedProvider")}
+              </div>
+            )}
           </label>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>

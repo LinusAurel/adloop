@@ -346,12 +346,31 @@ export default function StrategistPage() {
             })}
           </div>
 
+          {/* SPEC §6.3: Beruht die Leitmetrik auf einem Rückfall statt auf einer
+              Konfiguration, sagt die Oberfläche das — statt eine Zahl zu
+              behaupten, die auf einer Vermutung steht. */}
+          {overview.metricDefinition.configuredBy === "fallback" && (
+            <div className="msgbox warn" style={{ margin: "12px 16px 0" }}>
+              {t("strategist.metricFallback")}
+            </div>
+          )}
+
           <div
             className="crumb"
             style={{ padding: "8px 16px", borderBottom: "1px solid var(--line)" }}
           >
             {overview.windowStart} → {overview.windowEnd} · dataAsOf {overview.dataAsOf} ·{" "}
-            {overview.metricDefinition.label} v{overview.metricDefinition.version}
+            {overview.metricDefinition.label} v{overview.metricDefinition.version} ·{" "}
+            <span
+              style={{
+                color:
+                  overview.metricDefinition.configuredBy === "user"
+                    ? "var(--dim)"
+                    : "var(--warn)",
+              }}
+            >
+              {t(`strategist.configuredBy.${overview.metricDefinition.configuredBy}` as never)}
+            </span>
           </div>
 
           {view === "list" ? (

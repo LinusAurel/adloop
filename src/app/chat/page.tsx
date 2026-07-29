@@ -82,6 +82,26 @@ export default function ChatPage() {
     void loadProjects().then(() => loadChats());
   }, [loadProjects, loadChats]);
 
+  /** null = Eingabe geschlossen; "" = offen und noch leer. */
+  const [newProject, setNewProject] = useState<string | null>(null);
+
+  async function createProject() {
+    // Ein leerer Name legt nichts an — ein namenloser Ordner ist kein Ordner.
+    const name = (newProject ?? "").trim();
+    if (!name) return;
+    const res = await fetch("/api/projects", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    if (!res.ok) {
+      setError("project_create_failed");
+      return;
+    }
+    setNewProject(null);
+    await loadProjects();
+  }
+
   async function ensureChat(): Promise<string> {
     if (activeChatId) return activeChatId;
     const projectId = projects[0]?.id ?? null;
@@ -294,11 +314,10 @@ export default function ChatPage() {
                 ))}
             </div>
           ))}
-          <div style={{ padding: "10px 14px 0" }}>
+          <div style={{ padding: "10px 14px 0", display: "grid", gap: 6 }}>
             <button
               type="button"
-              className="btn"
-              style={{ width: "100%" }}
+              className="btn pri"
               onClick={() => {
                 setActiveChatId(null);
                 setMessages([]);
@@ -307,6 +326,41 @@ export default function ChatPage() {
             >
               {t("app.newChat")}
             </button>
+            {/* Ohne dies blieb die Projektgliederung leer: das API konnte
+                Projekte anlegen, die Oberfläche hat es nie angeboten. */}
+            {newProject === null ? (
+              <button type="button" className="btn" onClick={() => setNewProject("")}>
+                {t("app.newProject")}
+              </button>
+            ) : (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void createProject();
+                }}
+                style={{ display: "grid", gap: 6 }}
+              >
+                <input
+                  value={newProject}
+                  onChange={(e) => setNewProject(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") setNewProject(null);
+                  }}
+                  placeholder={t("app.newProjectPlaceholder")}
+                  aria-label={t("app.newProject")}
+                  autoComplete="off"
+                  autoFocus
+                />
+                <div style={{ display: "flex", gap: 6 }}>
+                  <button type="submit" className="btn pri" disabled={!newProject.trim()}>
+                    {t("app.create")}
+                  </button>
+                  <button type="button" className="btn" onClick={() => setNewProject(null)}>
+                    {t("app.cancel")}
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </aside>
 

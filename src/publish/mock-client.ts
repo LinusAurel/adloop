@@ -19,6 +19,7 @@ export class MockMetaWriteClient implements Pick<
   | "createAd"
   | "getObjectStatus"
   | "getCampaign"
+  | "getAdSet"
   | "searchByName"
   | "deleteObject"
 > {
@@ -84,8 +85,10 @@ export class MockMetaWriteClient implements Pick<
       meta: {
         ...params,
         status: "PAUSED",
+        objective: params.objective,
         dailyBudget: params.dailyBudget ?? null,
         lifetimeBudget: null,
+        createdTime: new Date().toISOString(),
       },
     });
     this.afterSuccess("create_campaign");
@@ -116,7 +119,13 @@ export class MockMetaWriteClient implements Pick<
       kind: "adset",
       name: params.name,
       status: "PAUSED",
-      meta: { ...params, status: "PAUSED" },
+      meta: {
+        ...params,
+        status: "PAUSED",
+        optimizationGoal: params.optimizationGoal,
+        campaignId: params.campaignId,
+        createdTime: new Date().toISOString(),
+      },
     });
     this.afterSuccess("create_adset");
     return { id };
@@ -153,7 +162,7 @@ export class MockMetaWriteClient implements Pick<
       kind: "creative",
       name: params.name,
       status: "PAUSED",
-      meta: { ...params },
+      meta: { ...params, createdTime: new Date().toISOString() },
     });
     this.afterSuccess("create_creative");
     return { id };
@@ -173,7 +182,7 @@ export class MockMetaWriteClient implements Pick<
       kind: "ad",
       name: params.name,
       status: "PAUSED",
-      meta: { ...params, status: "PAUSED" },
+      meta: { ...params, status: "PAUSED", createdTime: new Date().toISOString() },
     });
     this.afterSuccess("create_ad");
     return { id };
@@ -193,8 +202,10 @@ export class MockMetaWriteClient implements Pick<
   async getCampaign(campaignId: string): Promise<{
     id: string;
     name?: string;
+    objective?: string;
     dailyBudget: number | null;
     lifetimeBudget: number | null;
+    createdTime?: string;
   }> {
     this.calls.push({ operation: "get_status", args: { getCampaign: campaignId } });
     const obj = this.objects.get(campaignId);
@@ -206,8 +217,37 @@ export class MockMetaWriteClient implements Pick<
     return {
       id: campaignId,
       name: obj.name,
+      objective: typeof obj.meta.objective === "string" ? obj.meta.objective : undefined,
       dailyBudget: typeof daily === "number" ? daily : null,
       lifetimeBudget: typeof lifetime === "number" ? lifetime : null,
+      createdTime:
+        typeof obj.meta.createdTime === "string" ? obj.meta.createdTime : undefined,
+    };
+  }
+
+  async getAdSet(adSetId: string): Promise<{
+    id: string;
+    name?: string;
+    optimizationGoal?: string;
+    campaignId?: string;
+    createdTime?: string;
+  }> {
+    this.calls.push({ operation: "get_status", args: { getAdSet: adSetId } });
+    const obj = this.objects.get(adSetId);
+    if (!obj || obj.kind !== "adset") {
+      throw new Error(`mock_adset_missing_${adSetId}`);
+    }
+    return {
+      id: adSetId,
+      name: obj.name,
+      optimizationGoal:
+        typeof obj.meta.optimizationGoal === "string"
+          ? obj.meta.optimizationGoal
+          : undefined,
+      campaignId:
+        typeof obj.meta.campaignId === "string" ? obj.meta.campaignId : undefined,
+      createdTime:
+        typeof obj.meta.createdTime === "string" ? obj.meta.createdTime : undefined,
     };
   }
 
@@ -232,7 +272,10 @@ export class MockMetaWriteClient implements Pick<
           id,
           name: obj.name,
           status: obj.status,
-          created_time: new Date().toISOString(),
+          created_time:
+            typeof obj.meta.createdTime === "string"
+              ? obj.meta.createdTime
+              : new Date().toISOString(),
         });
       }
     }
@@ -252,7 +295,7 @@ export class MockMetaWriteClient implements Pick<
     return n;
   }
 
-  /** Seed an existing object (for "existing campaign" tests). */
+  /** Seed an existing object (for "existing campaign" / foreign-reconcile tests). */
   seed(
     id: string,
     kind: string,
@@ -260,6 +303,14 @@ export class MockMetaWriteClient implements Pick<
     status = "PAUSED",
     meta: Record<string, unknown> = {},
   ): void {
-    this.objects.set(id, { kind, name, status, meta });
+    this.objects.set(id, {
+      kind,
+      name,
+      status,
+      meta: {
+        createdTime: new Date().toISOString(),
+        ...meta,
+      },
+    });
   }
 }

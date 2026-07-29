@@ -48,8 +48,8 @@ export const metaPublishFamily: JobFamilyDefinition<Input, Result> = {
   resultSchema: ResultSchema,
   maxAttempts: 10,
   timeoutMs: 5 * 60 * 1_000,
-  backoffBaseMs: 5_000,
-  backoffMaxMs: 60_000,
+  backoffBaseMs: env.NODE_ENV === "test" ? 50 : 5_000,
+  backoffMaxMs: env.NODE_ENV === "test" ? 200 : 60_000,
 
   async handler(ctx) {
     const payload = ctx.input.resolved;
@@ -88,8 +88,15 @@ export const metaPublishFamily: JobFamilyDefinition<Input, Result> = {
       signal: ctx.signal,
     });
 
-    if (outcome.status === "failed" && outcome.code === "step_in_flight") {
-      throw new HandlerError("step_in_flight", "step_in_flight", true);
+    if (outcome.status === "failed") {
+      if (
+        outcome.code === "post_dispatch_uncertain" ||
+        outcome.code === "step_in_flight"
+      ) {
+        // Retryable: next attempt must enter reconcile, not end the job.
+        throw new HandlerError(outcome.code, outcome.code, true);
+      }
+      return outcome;
     }
 
     if (outcome.status === "needs_human_review") {

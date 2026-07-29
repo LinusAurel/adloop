@@ -29,7 +29,11 @@ import {
 import { applyUtmParams } from "@/publish/utm";
 import { resolveBudgetPlacement, requireBudgetSource } from "@/publish/budget";
 import type { AdvertiserDefaults } from "@/publish/settings";
-import { AdvertiserDefaultsSchema } from "@/publish/settings";
+import {
+  AdvertiserDefaultsSchema,
+  BindingAttributionSpecSchema,
+} from "@/publish/settings";
+import { mergeDefaultsFormPatch } from "@/publish/defaults-form";
 
 const PNG_1X1 = Buffer.from([
   0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49,
@@ -441,15 +445,19 @@ describe("etappe 7 — launch", () => {
     );
     const step = adStep.rows[0]!;
     // Pretend Meta create succeeded under our correlation name, then lease expired.
-    mock.seed("ad_orphaned", "ad", step.object_name, "PAUSED");
+    const dispatchedAt = new Date(Date.now() - 60_000).toISOString();
+    mock.seed("ad_orphaned", "ad", step.object_name, "PAUSED", {
+      createdTime: new Date(Date.now() - 30_000).toISOString(),
+    });
     await db.pool.query(
       `UPDATE publication_step
        SET status = 'in_flight',
            attempt = 1,
+           dispatched_at = $2::timestamptz,
            lease_expires_at = now() - interval '1 minute',
            updated_at = now()
        WHERE id = $1`,
-      [step.id],
+      [step.id, dispatchedAt],
     );
     await db.pool.query(
       `UPDATE publication SET status = 'in_progress' WHERE id = $1`,
@@ -1019,5 +1027,217 @@ describe("etappe 7 — launch", () => {
     });
     // This demonstrates the failure mode the production path prevents:
     expect(mock.countByKind("campaign")).toBe(2);
+  });
+
+  it("R19-1 — foreign object with matching name is NOT adopted", async () => {
+    const human = PublishHumanInputSchema.parse({
+      advertiserId,
+      metaAdAccountId: accountId,
+      creativeIds: [creativeId],
+      campaign: { mode: "new", budgetMode: "ABO" },
+      adSet: { mode: "new" },
+      idempotencyKey: uuidv7(),
+      budget: { amount: 1000, currency: "EUR" },
+    });
+    const resolved = await resolvePublishPayload(db.pool, {
+      tenantId: db.tenantId,
+      userId,
+      input: human,
+      allowHumanBudget: true,
+    });
+    const runId = uuidv7();
+    await db.pool.query(
+      `INSERT INTO run (id, tenant_id, kind, status, input, created_at, updated_at)
+       VALUES ($1, $2, 'publish_request', 'queued', '{}'::jsonb, now(), now())`,
+      [runId, db.tenantId],
+    );
+    const { publicationId } = await createPublication(db.pool, {
+      tenantId: db.tenantId,
+      runId,
+      payload: resolved,
+    });
+
+    const campStep = await db.pool.query<{
+      id: string;
+      object_name: string;
+      external_correlation: string;
+    }>(
+      `SELECT id, object_name, external_correlation FROM publication_step
+       WHERE publication_id = $1 AND operation = 'create_campaign'`,
+      [publicationId],
+    );
+    const step = campStep.rows[0]!;
+    const dispatchedAt = new Date(Date.now() - 30_000).toISOString();
+
+    // Foreign campaign: matching name marker, but wrong objective + old created_time.
+    mock.seed("camp_foreign", "campaign", step.object_name, "PAUSED", {
+      objective: "OUTCOME_SALES",
+      createdTime: new Date(Date.now() - 86_400_000).toISOString(),
+    });
+    await db.pool.query(
+      `UPDATE publication_step
+       SET status = 'in_flight',
+           attempt = 1,
+           dispatched_at = $2::timestamptz,
+           reconcile_state = 'pending',
+           lease_expires_at = now() - interval '1 minute'
+       WHERE id = $1`,
+      [step.id, dispatchedAt],
+    );
+    await db.pool.query(
+      `UPDATE publication SET status = 'failed' WHERE id = $1`,
+      [publicationId],
+    );
+
+    const outcome = await runPublication(db.pool, {
+      publicationId,
+      tenantId: db.tenantId,
+      client: mock,
+      store,
+    });
+    expect(outcome.status).toBe("needs_human_review");
+
+    const final = await db.pool.query<{
+      status: string;
+      external_id: string | null;
+      reconcile_state: string;
+      error: { reason?: string } | null;
+    }>(
+      `SELECT status, external_id, reconcile_state, error FROM publication_step WHERE id = $1`,
+      [step.id],
+    );
+    expect(final.rows[0]?.external_id).toBeNull();
+    expect(final.rows[0]?.reconcile_state).toBe("needs_human_review");
+    expect(final.rows[0]?.error).toMatchObject({
+      reason: expect.stringMatching(
+        /created_time_outside_dispatch_window|objective_mismatch/,
+      ),
+    });
+  });
+
+  it("R19-1b — correlation is opaque 128-bit hex, not a uuidv7", async () => {
+    const { publicationId } = await resolveAndPublish({
+      budget: { amount: 1000, currency: "EUR" },
+    });
+    const rows = await db.pool.query<{ external_correlation: string }>(
+      `SELECT external_correlation FROM publication_step WHERE publication_id = $1`,
+      [publicationId],
+    );
+    for (const row of rows.rows) {
+      expect(row.external_correlation).toMatch(/^[0-9a-f]{32}$/);
+      // uuidv7 has dashes and a version nibble pattern — ours must not.
+      expect(row.external_correlation).not.toContain("-");
+    }
+  });
+
+  it("R19-3 — form patch preserves undisplayed targeting and attribution", () => {
+    const base = AdvertiserDefaultsSchema.parse({
+      identity: {
+        pageId: "page_1",
+        beneficiaryName: "Old GmbH",
+        payerName: "Old GmbH",
+      },
+      adSet: {
+        optimizationGoal: "LINK_CLICKS",
+        budgetMode: "ABO",
+        targeting: {
+          countries: ["DE"],
+          ageMin: 30,
+          ageMax: 40,
+          genders: [1],
+        },
+        placements: {
+          advantagePlus: false,
+          facebook: false,
+          instagram: true,
+          audienceNetwork: false,
+          messenger: false,
+        },
+        attribution: {
+          click: "1d_click",
+          view: "none",
+          engaged: "none",
+        },
+      },
+      website: { url: "https://example.com", utmParams: "utm_source=meta" },
+      autoNaming: {
+        creativeTemplate: "{advertiser}",
+        adSetTemplate: "{advertiser}",
+        adTemplate: "{creative}",
+      },
+    });
+    const merged = mergeDefaultsFormPatch(base, {
+      pageId: "page_1",
+      instagramActorId: "",
+      beneficiaryName: "Old GmbH",
+      payerName: "New Pay GmbH",
+      optimizationGoal: "LINK_CLICKS",
+      budgetMode: "ABO",
+      countries: "DE",
+      websiteUrl: "https://example.com",
+      utmParams: "utm_source=meta",
+      creativeTemplate: "{advertiser}",
+      adSetTemplate: "{advertiser}",
+      adTemplate: "{creative}",
+    });
+    expect(merged.identity.payerName).toBe("New Pay GmbH");
+    expect(merged.adSet.targeting.ageMin).toBe(30);
+    expect(merged.adSet.targeting.ageMax).toBe(40);
+    expect(merged.adSet.targeting.genders).toEqual([1]);
+    expect(merged.adSet.placements.facebook).toBe(false);
+    expect(merged.adSet.placements.instagram).toBe(true);
+    expect(merged.adSet.attribution.click).toBe("1d_click");
+    expect(merged.adSet.attribution.view).toBe("none");
+  });
+
+  it("R19-4 — DSA fails before any Meta campaign read", async () => {
+    await db.pool.query(`DELETE FROM publication_step`);
+    await db.pool.query(`DELETE FROM publication`);
+    await db.pool.query(`DELETE FROM metric_optimization_binding`);
+    await db.pool.query(`DELETE FROM ad_account_metric_assignment`);
+    await db.pool.query(`DELETE FROM conversion_metric`);
+    await db.pool.query(`DELETE FROM advertiser_defaults`);
+    await db.pool.query(`DELETE FROM creative`);
+    await db.pool.query(`DELETE FROM asset`);
+    await db.pool.query(`DELETE FROM meta_ad_account`);
+    await db.pool.query(`DELETE FROM meta_connection`);
+    await db.pool.query(`DELETE FROM advertiser WHERE tenant_id = $1`, [
+      db.tenantId,
+    ]);
+    await seedFixture({ omitDsa: true, countries: ["DE"] });
+    mock.seed("camp_cbo", "campaign", "CBO", "PAUSED", { dailyBudget: 5000 });
+
+    let readerCalls = 0;
+    await expect(
+      resolvePublishPayload(db.pool, {
+        tenantId: db.tenantId,
+        userId,
+        input: PublishHumanInputSchema.parse({
+          advertiserId,
+          metaAdAccountId: accountId,
+          creativeIds: [creativeId],
+          campaign: { mode: "existing", existingCampaignId: "camp_cbo" },
+          adSet: { mode: "new" },
+          idempotencyKey: uuidv7(),
+        }),
+        allowHumanBudget: true,
+        campaignReader: {
+          getCampaign: async (id) => {
+            readerCalls += 1;
+            return mock.getCampaign(id);
+          },
+        },
+      }),
+    ).rejects.toMatchObject({ code: "dsa_details_required" });
+    expect(readerCalls).toBe(0);
+  });
+
+  it("R19-5 — unknown binding attribution is rejected by schema", () => {
+    expect(
+      BindingAttributionSpecSchema.safeParse(["7d_click", "30d_click"]).success,
+    ).toBe(false);
+    expect(BindingAttributionSpecSchema.safeParse(["1d_click"]).success).toBe(
+      true,
+    );
   });
 });

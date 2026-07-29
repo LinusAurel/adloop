@@ -607,6 +607,25 @@ costs a build run that the current budget does not justify.
   set. Mutation: skipping that fence (always `markStepFailed` + claim ignores
   `dispatched_at`) makes `R18-1` expect `post_dispatch_uncertain` and fail with
   `step_failed` — restored immediately after.
+- **Reconcile ownership (Review 19 / Finding 1).** Correlation is 128-bit
+  `randomBytes` hex, never exposed via the publications API (marker stripped
+  from `object_name`). A name match is adopted only when `created_time` falls
+  in `[dispatched_at, now]` and core fields match (campaign `objective`, ad set
+  `optimization_goal`). Otherwise `needs_human_review`. Mutation: dropping the
+  extra checks makes `R19-1` adopt a foreign object (`succeeded` instead of
+  `needs_human_review`) — restored immediately after.
+- **Queue retries post-dispatch uncertainty (Review 19 / Finding 2).**
+  `meta_publish` throws `HandlerError(post_dispatch_uncertain, retryable)` so
+  the worker reschedules; the next claim enters reconcile. Proven with
+  `startWorker` in `test/review19-postfix-etappe7.test.ts` — not a manual
+  second `runPublication` call.
+- **Defaults form is a patch (Review 19 / Finding 3).** Loaded settings are the
+  base; only displayed fields are overwritten (`mergeDefaultsFormPatch`).
+- **Local gates before Meta (Review 19 / Finding 4).** DSA + binding (+ new-
+  campaign budget) run before any `getCampaign` read.
+- **Binding attribution enums (Review 19 / Finding 5).**
+  `BindingAttributionSpecSchema` rejects unknown labels at save; publish never
+  silently drops them.
 - **Crash-after-persist must not mark the step failed.** The Meta object exists
   and the id is stored; resume continues at the next step. Tests inject the crash
   via `setCrashAfterPersistForTests`.

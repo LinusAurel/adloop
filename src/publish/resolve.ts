@@ -249,48 +249,18 @@ export async function resolvePublishPayload(
   if (!defaultsRow) throw new PublishError("defaults_missing");
   const defaults = defaultsRow.settings;
 
-  let existingCampaignIsCbo: boolean | undefined;
-  let budgetMode: BudgetMode =
-    input.campaign.mode === "new"
-      ? (input.campaign.budgetMode ?? defaults.adSet.budgetMode)
-      : defaults.adSet.budgetMode;
-
-  if (input.campaign.mode === "existing") {
-    if (!params.campaignReader) {
-      throw new PublishError("validation_error", {
-        reason: "campaign_reader_required",
-      });
+  // Local gates first — never call Meta before these (Review 19 / Finding 4).
+  if (
+    input.adSet.mode === "new" &&
+    targetingRequiresDsa(defaults.adSet.targeting.countries)
+  ) {
+    if (
+      !defaults.identity.beneficiaryName?.trim() ||
+      !defaults.identity.payerName?.trim()
+    ) {
+      throw new PublishError("dsa_details_required");
     }
-    let budgets: { dailyBudget: number | null; lifetimeBudget: number | null };
-    try {
-      budgets = await params.campaignReader.getCampaign(
-        input.campaign.existingCampaignId,
-      );
-    } catch {
-      throw new PublishError("campaign_not_found");
-    }
-    existingCampaignIsCbo = campaignIsCbo(budgets);
-    budgetMode = existingCampaignIsCbo ? "CBO" : "ABO";
   }
-
-  const placement = resolveBudgetPlacement({
-    campaignMode: input.campaign.mode,
-    adSetMode: input.adSet.mode,
-    budgetMode,
-    existingCampaignIsCbo,
-  });
-
-  const budgetSource = requireBudgetSource({
-    placement,
-    humanBudget: humanBudget
-      ? {
-          amount: humanBudget.amount,
-          currency: humanBudget.currency ?? accountRow.currency ?? "EUR",
-        }
-      : undefined,
-    decidedBy: params.userId,
-    decidedAt: new Date().toISOString(),
-  });
 
   const metric = await resolveAssignedMetricId(
     db,
@@ -308,7 +278,6 @@ export async function resolvePublishPayload(
     if (!active) {
       throw new PublishError("metric_binding_missing");
     }
-    // Bindings pin a metric version — must match the assigned version in publish.
     if (active.conversion_metric_version !== metric.version) {
       throw new PublishError("metric_binding_missing", {
         reason: "version_mismatch",
@@ -347,19 +316,6 @@ export async function resolvePublishPayload(
     }
   }
 
-  // EU targeting requires DSA beneficiary + payor before any Meta create.
-  if (
-    input.adSet.mode === "new" &&
-    targetingRequiresDsa(defaults.adSet.targeting.countries)
-  ) {
-    if (
-      !defaults.identity.beneficiaryName?.trim() ||
-      !defaults.identity.payerName?.trim()
-    ) {
-      throw new PublishError("dsa_details_required");
-    }
-  }
-
   const creatives = await db.query<{
     id: string;
     name: string;
@@ -382,6 +338,65 @@ export async function resolvePublishPayload(
   );
   if (creatives.rowCount !== input.creativeIds.length) {
     throw new PublishError("creative_not_found");
+  }
+
+  let existingCampaignIsCbo: boolean | undefined;
+  let budgetMode: BudgetMode =
+    input.campaign.mode === "new"
+      ? (input.campaign.budgetMode ?? defaults.adSet.budgetMode)
+      : defaults.adSet.budgetMode;
+  let budgetSource: ReturnType<typeof requireBudgetSource>;
+
+  if (input.campaign.mode === "new") {
+    const placement = resolveBudgetPlacement({
+      campaignMode: "new",
+      adSetMode: input.adSet.mode,
+      budgetMode,
+    });
+    budgetSource = requireBudgetSource({
+      placement,
+      humanBudget: humanBudget
+        ? {
+            amount: humanBudget.amount,
+            currency: humanBudget.currency ?? accountRow.currency ?? "EUR",
+          }
+        : undefined,
+      decidedBy: params.userId,
+      decidedAt: new Date().toISOString(),
+    });
+  } else {
+    if (!params.campaignReader) {
+      throw new PublishError("validation_error", {
+        reason: "campaign_reader_required",
+      });
+    }
+    let budgets: { dailyBudget: number | null; lifetimeBudget: number | null };
+    try {
+      budgets = await params.campaignReader.getCampaign(
+        input.campaign.existingCampaignId,
+      );
+    } catch {
+      throw new PublishError("campaign_not_found");
+    }
+    existingCampaignIsCbo = campaignIsCbo(budgets);
+    budgetMode = existingCampaignIsCbo ? "CBO" : "ABO";
+    const placement = resolveBudgetPlacement({
+      campaignMode: "existing",
+      adSetMode: input.adSet.mode,
+      budgetMode,
+      existingCampaignIsCbo,
+    });
+    budgetSource = requireBudgetSource({
+      placement,
+      humanBudget: humanBudget
+        ? {
+            amount: humanBudget.amount,
+            currency: humanBudget.currency ?? accountRow.currency ?? "EUR",
+          }
+        : undefined,
+      decidedBy: params.userId,
+      decidedAt: new Date().toISOString(),
+    });
   }
 
   const dateToken = new Date().toISOString().slice(0, 10);

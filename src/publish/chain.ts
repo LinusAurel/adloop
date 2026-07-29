@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { uuidv7 } from "uuidv7";
 import type { Queryable } from "@/db/queryable";
 import { sha256Canonical } from "@/lib/canonical-json";
@@ -17,6 +18,11 @@ import {
 
 export const DEFAULT_STEP_LEASE_MS = 120_000;
 
+/** 128-bit opaque correlation — not derived from publication/step ids. */
+export function newExternalCorrelation(): string {
+  return randomBytes(16).toString("hex");
+}
+
 export type WriteClient = Pick<
   MetaWriteClient,
   | "createCampaign"
@@ -26,6 +32,7 @@ export type WriteClient = Pick<
   | "createAd"
   | "getObjectStatus"
   | "getCampaign"
+  | "getAdSet"
   | "searchByName"
   | "deleteObject"
 >;
@@ -148,7 +155,7 @@ export async function createPublication(
   }> = [];
 
   if (params.payload.campaign.mode === "existing") {
-    const correlation = uuidv7();
+    const correlation = newExternalCorrelation();
     steps.push({
       operation: "create_campaign",
       correlation,
@@ -161,7 +168,7 @@ export async function createPublication(
       externalId: params.payload.campaign.existingCampaignId,
     });
   } else {
-    const correlation = uuidv7();
+    const correlation = newExternalCorrelation();
     const name = formatCorrelatedName(params.payload.campaign.name, correlation);
     steps.push({
       operation: "create_campaign",
@@ -179,7 +186,7 @@ export async function createPublication(
   }
 
   if (params.payload.adSet.mode === "existing") {
-    const correlation = uuidv7();
+    const correlation = newExternalCorrelation();
     steps.push({
       operation: "create_adset",
       correlation,
@@ -192,7 +199,7 @@ export async function createPublication(
       externalId: params.payload.adSet.existingAdSetId,
     });
   } else {
-    const correlation = uuidv7();
+    const correlation = newExternalCorrelation();
     const name = formatCorrelatedName(params.payload.adSet.name, correlation);
     steps.push({
       operation: "create_adset",
@@ -212,7 +219,7 @@ export async function createPublication(
   // for the chain; multi-creative expands to additional create_creative/create_ad
   // pairs keeping index order).
   for (const creative of params.payload.creatives) {
-    const creativeCorrelation = uuidv7();
+    const creativeCorrelation = newExternalCorrelation();
     const creativeName = formatCorrelatedName(creative.name, creativeCorrelation);
     steps.push({
       operation: "create_creative",
@@ -228,7 +235,7 @@ export async function createPublication(
       externalId: null,
     });
 
-    const adCorrelation = uuidv7();
+    const adCorrelation = newExternalCorrelation();
     const adName = formatCorrelatedName(creative.adName, adCorrelation);
     steps.push({
       operation: "create_ad",
@@ -398,15 +405,17 @@ async function markStepNeedsReconcile(
 }
 
 /**
- * Expired in_flight → reconcile, never blind retry. If the object is found
- * via correlation in the name, mark succeeded. If not found and lease
- * expired: needs_human_review (prefer hung publish over a duplicate).
+ * Expired in_flight → reconcile, never blind retry. Name match alone is not
+ * ownership: created_time must fall in [dispatched_at, now] and core payload
+ * fields must match. A wrong match → needs_human_review (worse to adopt a
+ * foreign object than to hang).
  */
 async function reconcileExpiredStep(
   db: Queryable,
   client: WriteClient,
   publication: PublicationRow,
   step: StepRow,
+  steps: StepRow[],
 ): Promise<"resolved" | "needs_human_review"> {
   await db.query(
     `UPDATE publication_step
@@ -423,6 +432,26 @@ async function reconcileExpiredStep(
   });
 
   if (found.length === 1) {
+    const candidate = found[0]!;
+    const campaignStep = steps.find((s) => s.operation === "create_campaign");
+    const accepted = await candidateMatchesExpected({
+      client,
+      payload: publication.resolved_payload,
+      operation: step.operation,
+      dispatchedAt: step.dispatched_at,
+      candidate,
+      expectedCampaignId: campaignStep?.external_id ?? null,
+    });
+    if (!accepted.ok) {
+      await markReconcileNeedsHuman(
+        db,
+        publication.id,
+        step.id,
+        accepted.reason,
+        { externalId: candidate.id },
+      );
+      return "needs_human_review";
+    }
     await db.query(
       `UPDATE publication_step
        SET status = 'succeeded',
@@ -432,38 +461,35 @@ async function reconcileExpiredStep(
            lease_expires_at = NULL,
            updated_at = now()
        WHERE id = $1`,
-      [step.id, found[0]!.id],
+      [step.id, candidate.id],
     );
     return "resolved";
   }
 
   if (found.length > 1) {
-    // Ambiguous — human must decide.
-    await db.query(
-      `UPDATE publication_step
-       SET reconcile_state = 'needs_human_review',
-           error = $2::jsonb,
-           updated_at = now()
-       WHERE id = $1`,
-      [
-        step.id,
-        JSON.stringify({
-          code: "needs_human_review",
-          reason: "ambiguous_reconcile",
-          count: found.length,
-        }),
-      ],
-    );
-    await db.query(
-      `UPDATE publication
-       SET status = 'needs_human_review', updated_at = now()
-       WHERE id = $1`,
-      [publication.id],
-    );
+    await markReconcileNeedsHuman(db, publication.id, step.id, "ambiguous_reconcile", {
+      count: found.length,
+    });
     return "needs_human_review";
   }
 
   // Nothing found after lease expiry — do NOT retry. Prefer hung publish.
+  await markReconcileNeedsHuman(
+    db,
+    publication.id,
+    step.id,
+    "lease_expired_no_object",
+  );
+  return "needs_human_review";
+}
+
+async function markReconcileNeedsHuman(
+  db: Queryable,
+  publicationId: string,
+  stepId: string,
+  reason: string,
+  extra: Record<string, string | number> = {},
+): Promise<void> {
   await db.query(
     `UPDATE publication_step
      SET reconcile_state = 'needs_human_review',
@@ -471,10 +497,11 @@ async function reconcileExpiredStep(
          updated_at = now()
      WHERE id = $1`,
     [
-      step.id,
+      stepId,
       JSON.stringify({
         code: "needs_human_review",
-        reason: "lease_expired_no_object",
+        reason,
+        ...extra,
       }),
     ],
   );
@@ -482,9 +509,79 @@ async function reconcileExpiredStep(
     `UPDATE publication
      SET status = 'needs_human_review', updated_at = now()
      WHERE id = $1`,
-    [publication.id],
+    [publicationId],
   );
-  return "needs_human_review";
+}
+
+/**
+ * Extra gates beyond the name marker. Exported for the mutation proof that
+ * removing them would adopt a foreign object.
+ */
+export async function candidateMatchesExpected(params: {
+  client: WriteClient;
+  payload: ResolvedPublishPayload;
+  operation: PublishStepOperation;
+  dispatchedAt: string | null;
+  candidate: { id: string; name: string; created_time?: string };
+  /** Campaign Meta id already confirmed on a prior step (new or existing). */
+  expectedCampaignId?: string | null;
+}): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const { client, payload, operation, candidate } = params;
+  const dispatchedAt = params.dispatchedAt
+    ? new Date(params.dispatchedAt).getTime()
+    : null;
+  const createdMs = candidate.created_time
+    ? Date.parse(candidate.created_time)
+    : NaN;
+  const nowMs = publishNow().getTime();
+
+  if (
+    dispatchedAt === null ||
+    !Number.isFinite(createdMs) ||
+    createdMs < dispatchedAt ||
+    createdMs > nowMs + 5_000
+  ) {
+    return { ok: false, reason: "created_time_outside_dispatch_window" };
+  }
+
+  switch (operation) {
+    case "create_campaign": {
+      if (payload.campaign.mode !== "new") {
+        return { ok: false, reason: "unexpected_campaign_mode" };
+      }
+      const details = await client.getCampaign(candidate.id);
+      if (!details.objective) {
+        return { ok: false, reason: "objective_missing_on_candidate" };
+      }
+      if (details.objective !== payload.campaign.objective) {
+        return { ok: false, reason: "objective_mismatch" };
+      }
+      return { ok: true };
+    }
+    case "create_adset": {
+      if (payload.adSet.mode !== "new") {
+        return { ok: false, reason: "unexpected_adset_mode" };
+      }
+      const details = await client.getAdSet(candidate.id);
+      if (!details.optimizationGoal) {
+        return { ok: false, reason: "optimization_goal_missing_on_candidate" };
+      }
+      if (details.optimizationGoal !== payload.adSet.optimizationGoal) {
+        return { ok: false, reason: "optimization_goal_mismatch" };
+      }
+      if (
+        params.expectedCampaignId &&
+        details.campaignId &&
+        details.campaignId !== params.expectedCampaignId
+      ) {
+        return { ok: false, reason: "adset_campaign_mismatch" };
+      }
+      return { ok: true };
+    }
+    case "create_creative":
+    case "create_ad":
+      return { ok: true };
+  }
 }
 
 function campaignIdFromSteps(steps: StepRow[]): string {
@@ -736,6 +833,7 @@ export async function runPublication(
         params.client,
         publication,
         step,
+        steps,
       );
       if (outcome === "needs_human_review") {
         return {

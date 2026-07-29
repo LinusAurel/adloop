@@ -228,6 +228,7 @@ export class MetaWriteClient {
   /**
    * Read campaign budget fields to decide CBO vs ABO for an existing campaign.
    * Presence of daily_budget or lifetime_budget ⇒ CBO.
+   * Also returns objective for reconcile ownership checks.
    */
   async getCampaign(
     campaignId: string,
@@ -235,17 +236,21 @@ export class MetaWriteClient {
   ): Promise<{
     id: string;
     name?: string;
+    objective?: string;
     dailyBudget: number | null;
     lifetimeBudget: number | null;
+    createdTime?: string;
   }> {
     const CampaignBudgetSchema = z.object({
       id: z.string().min(1),
       name: z.string().optional(),
+      objective: z.string().optional(),
       daily_budget: z.union([z.string(), z.number()]).optional().nullable(),
       lifetime_budget: z.union([z.string(), z.number()]).optional().nullable(),
+      created_time: z.string().optional(),
     });
     const response = await this.graph.request(
-      `/${campaignId}?fields=id,name,daily_budget,lifetime_budget`,
+      `/${campaignId}?fields=id,name,objective,daily_budget,lifetime_budget,created_time`,
       CampaignBudgetSchema,
       { signal },
     );
@@ -258,8 +263,42 @@ export class MetaWriteClient {
     return {
       id: row.id,
       name: row.name,
+      objective: row.objective,
       dailyBudget: toNumber(row.daily_budget),
       lifetimeBudget: toNumber(row.lifetime_budget),
+      createdTime: row.created_time,
+    };
+  }
+
+  async getAdSet(
+    adSetId: string,
+    signal?: AbortSignal,
+  ): Promise<{
+    id: string;
+    name?: string;
+    optimizationGoal?: string;
+    campaignId?: string;
+    createdTime?: string;
+  }> {
+    const AdSetSchema = z.object({
+      id: z.string().min(1),
+      name: z.string().optional(),
+      optimization_goal: z.string().optional(),
+      campaign_id: z.string().optional(),
+      created_time: z.string().optional(),
+    });
+    const response = await this.graph.request(
+      `/${adSetId}?fields=id,name,optimization_goal,campaign_id,created_time`,
+      AdSetSchema,
+      { signal },
+    );
+    const row = response.data;
+    return {
+      id: row.id,
+      name: row.name,
+      optimizationGoal: row.optimization_goal,
+      campaignId: row.campaign_id,
+      createdTime: row.created_time,
     };
   }
 

@@ -67,6 +67,10 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
   return NextResponse.json({
     advertiserId: parsed.data.advertiserId,
     version: saved.version,
-    settings: parsed.data.settings,
+    settings: (await loadLatestDefaults(
+      pool,
+      auth.session.tenantId,
+      parsed.data.advertiserId,
+    ))?.settings ?? parsed.data.settings,
   });
 }

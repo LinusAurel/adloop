@@ -46,9 +46,27 @@ export const CampaignObjectiveSchema = z.enum([
   "OUTCOME_AWARENESS",
 ]);
 
-export const AttributionClickSchema = z.enum(["1d_click", "7d_click"]);
-export const AttributionViewSchema = z.enum(["1d_view", "none"]);
+export const AttributionClickSchema = z.enum(["1d_click", "7d_click", "28d_click"]);
+export const AttributionViewSchema = z.enum(["1d_view", "7d_view", "28d_view", "none"]);
 export const AttributionEngagedSchema = z.enum(["1d_engaged", "none"]);
+
+/**
+ * Labels allowed on metric_optimization_binding.attribution_spec.
+ * Rejected at save time — never silently dropped at publish.
+ */
+export const BindingAttributionLabelSchema = z.enum([
+  "1d_view",
+  "7d_view",
+  "28d_view",
+  "1d_click",
+  "7d_click",
+  "28d_click",
+  "1d_engaged",
+]);
+
+export const BindingAttributionSpecSchema = z
+  .array(BindingAttributionLabelSchema)
+  .min(1);
 
 export const AdvantageCreativeTogglesSchema = z.object({
   advantagePlusCreative: z.boolean().default(false),
@@ -167,19 +185,7 @@ export type PromotedObject = z.infer<typeof PromotedObjectSchema>;
 export function attributionToMetaSpec(
   attribution: AdvertiserDefaults["adSet"]["attribution"],
 ): Array<{ event_type: string; window_days: number }> {
-  const spec: Array<{ event_type: string; window_days: number }> = [];
-  if (attribution.click === "7d_click") {
-    spec.push({ event_type: "CLICK_THROUGH", window_days: 7 });
-  } else {
-    spec.push({ event_type: "CLICK_THROUGH", window_days: 1 });
-  }
-  if (attribution.view === "1d_view") {
-    spec.push({ event_type: "VIEW_THROUGH", window_days: 1 });
-  }
-  if (attribution.engaged === "1d_engaged") {
-    spec.push({ event_type: "ENGAGED_VIDEO_VIEW", window_days: 1 });
-  }
-  return spec;
+  return bindingAttributionToMetaSpec(attributionToLabels(attribution));
 }
 
 /** Labels as stored on conversion metrics / bindings (e.g. 1d_click). */
@@ -201,20 +207,31 @@ export function bindingAttributionToMetaSpec(
 ): Array<{ event_type: string; window_days: number }> {
   const spec: Array<{ event_type: string; window_days: number }> = [];
   for (const label of labels) {
-    switch (label) {
+    const parsed = BindingAttributionLabelSchema.safeParse(label);
+    if (!parsed.success) {
+      throw new Error(`unknown_attribution_label:${label}`);
+    }
+    switch (parsed.data) {
       case "1d_click":
         spec.push({ event_type: "CLICK_THROUGH", window_days: 1 });
         break;
       case "7d_click":
         spec.push({ event_type: "CLICK_THROUGH", window_days: 7 });
         break;
+      case "28d_click":
+        spec.push({ event_type: "CLICK_THROUGH", window_days: 28 });
+        break;
       case "1d_view":
         spec.push({ event_type: "VIEW_THROUGH", window_days: 1 });
         break;
+      case "7d_view":
+        spec.push({ event_type: "VIEW_THROUGH", window_days: 7 });
+        break;
+      case "28d_view":
+        spec.push({ event_type: "VIEW_THROUGH", window_days: 28 });
+        break;
       case "1d_engaged":
         spec.push({ event_type: "ENGAGED_VIDEO_VIEW", window_days: 1 });
-        break;
-      default:
         break;
     }
   }

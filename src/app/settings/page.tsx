@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { AppNav } from "@/components/AppNav";
+import type { AdvertiserDefaults } from "@/publish/settings";
+import { mergeDefaultsFormPatch } from "@/publish/defaults-form";
 
 interface AdvertiserOption {
   id: string;
@@ -39,11 +41,32 @@ const emptyForm: DefaultsForm = {
   adTemplate: "{creative} / {date}",
 };
 
+function formFromSettings(settings: AdvertiserDefaults): DefaultsForm {
+  return {
+    pageId: settings.identity.pageId,
+    instagramActorId: settings.identity.instagramActorId ?? "",
+    beneficiaryName: settings.identity.beneficiaryName ?? "",
+    payerName: settings.identity.payerName ?? "",
+    optimizationGoal: settings.adSet.optimizationGoal,
+    budgetMode: settings.adSet.budgetMode,
+    countries: settings.adSet.targeting.countries.join(","),
+    websiteUrl: settings.website.url,
+    utmParams: settings.website.utmParams,
+    creativeTemplate: settings.autoNaming.creativeTemplate,
+    adSetTemplate: settings.autoNaming.adSetTemplate,
+    adTemplate: settings.autoNaming.adTemplate,
+  };
+}
+
 export default function SettingsPage() {
   const t = useTranslations();
   const [advertisers, setAdvertisers] = useState<AdvertiserOption[]>([]);
   const [advertiserId, setAdvertiserId] = useState("");
   const [form, setForm] = useState<DefaultsForm>(emptyForm);
+  /** Full loaded defaults — source of truth for fields the form does not show. */
+  const [baseSettings, setBaseSettings] = useState<AdvertiserDefaults | null>(
+    null,
+  );
   const [version, setVersion] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -69,42 +92,15 @@ export default function SettingsPage() {
     if (!res.ok) return;
     const data = (await res.json()) as {
       version: number | null;
-      settings: {
-        identity: {
-          pageId: string;
-          instagramActorId?: string;
-          beneficiaryName?: string;
-          payerName?: string;
-        };
-        adSet: {
-          optimizationGoal: string;
-          budgetMode: "CBO" | "ABO";
-          targeting: { countries: string[] };
-        };
-        website: { url: string; utmParams: string };
-        autoNaming: {
-          creativeTemplate: string;
-          adSetTemplate: string;
-          adTemplate: string;
-        };
-      } | null;
+      settings: AdvertiserDefaults | null;
     };
     setVersion(data.version);
     if (data.settings) {
-      setForm({
-        pageId: data.settings.identity.pageId,
-        instagramActorId: data.settings.identity.instagramActorId ?? "",
-        beneficiaryName: data.settings.identity.beneficiaryName ?? "",
-        payerName: data.settings.identity.payerName ?? "",
-        optimizationGoal: data.settings.adSet.optimizationGoal,
-        budgetMode: data.settings.adSet.budgetMode,
-        countries: data.settings.adSet.targeting.countries.join(","),
-        websiteUrl: data.settings.website.url,
-        utmParams: data.settings.website.utmParams,
-        creativeTemplate: data.settings.autoNaming.creativeTemplate,
-        adSetTemplate: data.settings.autoNaming.adSetTemplate,
-        adTemplate: data.settings.autoNaming.adTemplate,
-      });
+      setBaseSettings(data.settings);
+      setForm(formFromSettings(data.settings));
+    } else {
+      setBaseSettings(null);
+      setForm(emptyForm);
     }
   }, [advertiserId]);
 
@@ -119,64 +115,11 @@ export default function SettingsPage() {
   async function save() {
     setError(null);
     setSaved(false);
-    const settings = {
-      identity: {
-        pageId: form.pageId,
-        ...(form.instagramActorId
-          ? { instagramActorId: form.instagramActorId }
-          : {}),
-        ...(form.beneficiaryName.trim()
-          ? { beneficiaryName: form.beneficiaryName.trim() }
-          : {}),
-        ...(form.payerName.trim() ? { payerName: form.payerName.trim() } : {}),
-      },
-      adSet: {
-        optimizationGoal: form.optimizationGoal,
-        billingEvent: "IMPRESSIONS",
-        placements: {
-          advantagePlus: true,
-          facebook: true,
-          instagram: true,
-          audienceNetwork: false,
-          messenger: false,
-        },
-        targeting: {
-          countries: form.countries
-            .split(",")
-            .map((c) => c.trim())
-            .filter(Boolean),
-          ageMin: 18,
-          ageMax: 65,
-          genders: [],
-        },
-        audiences: {
-          advantagePlusEnabled: true,
-          includedCustomAudienceIds: [],
-          excludedCustomAudienceIds: [],
-        },
-        schedule: {
-          timezone: "Europe/Berlin",
-          offsetDays: 1,
-          time: "00:00",
-        },
-        attribution: {
-          click: "7d_click",
-          view: "1d_view",
-          engaged: "none",
-        },
-        bidStrategy: "LOWEST_COST_WITHOUT_CAP",
-        budgetMode: form.budgetMode,
-      },
-      creative: { image: {}, video: {}, carousel: {} },
-      website: { url: form.websiteUrl, utmParams: form.utmParams },
-      autoNaming: {
-        creativeTemplate: form.creativeTemplate,
-        adSetTemplate: form.adSetTemplate,
-        adTemplate: form.adTemplate,
-      },
-      defaultAdCopy: { callToAction: "LEARN_MORE" },
-      campaignObjective: "OUTCOME_TRAFFIC",
-    };
+    if (!baseSettings) {
+      setError("defaults_missing");
+      return;
+    }
+    const settings = mergeDefaultsFormPatch(baseSettings, form);
 
     const res = await fetch("/api/meta/ad-account-settings", {
       method: "PUT",
@@ -190,8 +133,13 @@ export default function SettingsPage() {
       setError(body?.error ?? "validation_error");
       return;
     }
-    const data = (await res.json()) as { version: number };
+    const data = (await res.json()) as {
+      version: number;
+      settings: AdvertiserDefaults;
+    };
     setVersion(data.version);
+    setBaseSettings(data.settings);
+    setForm(formFromSettings(data.settings));
     setSaved(true);
   }
 
@@ -350,6 +298,7 @@ export default function SettingsPage() {
         <button
           type="button"
           onClick={() => void save()}
+          disabled={!baseSettings}
           style={{
             background: "var(--accent)",
             color: "var(--on-accent)",

@@ -8,6 +8,7 @@ import { errorResponse } from "@/lib/api-error";
 import {
   OptimizationGoalSchema,
   PromotedObjectSchema,
+  BindingAttributionSpecSchema,
 } from "@/publish/settings";
 
 const QuerySchema = z.object({
@@ -19,7 +20,7 @@ const BodySchema = z.object({
   conversionMetricVersion: z.number().int().positive(),
   optimizationGoal: OptimizationGoalSchema,
   promotedObject: PromotedObjectSchema,
-  attributionSpec: z.array(z.string().min(1)).min(1),
+  attributionSpec: BindingAttributionSpecSchema,
 });
 
 export async function GET(request: NextRequest): Promise<NextResponse> {

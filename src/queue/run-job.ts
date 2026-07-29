@@ -108,6 +108,8 @@ export async function runJob(deps: RunJobDeps): Promise<void> {
     input: parsedInput.data,
     tenantId: job.tenant_id,
     runId: job.run_id,
+    attempts: job.attempts,
+    maxAttempts: family.maxAttempts,
     signal: controller.signal,
     isCancelled: () => controller.signal.aborted,
     progress: async (p: JobProgress) => {

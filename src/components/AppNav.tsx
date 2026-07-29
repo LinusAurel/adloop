@@ -35,6 +35,12 @@ export function AppNav() {
       <Link href="/workshop" style={linkStyle}>
         {t("workshop")}
       </Link>
+      <Link href="/launch" style={linkStyle}>
+        {t("launch")}
+      </Link>
+      <Link href="/settings" style={linkStyle}>
+        {t("settings")}
+      </Link>
       <Link href="/connectors" style={linkStyle}>
         {t("connectors")}
       </Link>

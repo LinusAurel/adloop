@@ -14,7 +14,11 @@ export default defineConfig({
     // 128s parallel. The containers contend for resources instead of overlapping.
     fileParallelism: false,
     maxWorkers: 1,
-    exclude: [...configDefaults.exclude, "test/meta/field-contract.test.ts"],
+    exclude: [
+      ...configDefaults.exclude,
+      "test/meta/field-contract.test.ts",
+      "test/meta/publish-sandbox.test.ts",
+    ],
     env: {
       DATABASE_URL: "postgres://test:test@127.0.0.1:1/test",
       SESSION_SECRET: "test-session-secret-at-least-32-characters",

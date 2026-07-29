@@ -159,6 +159,8 @@ describe("etappe 4 — agent, chat, playbooks", () => {
       input,
       tenantId: db.tenantId,
       runId: input.runId,
+      attempts: 1,
+      maxAttempts: 3,
       signal,
       progress: async () => {},
       withLease: async () => ({ acquired: false }),

@@ -579,3 +579,93 @@ costs a build run that the current budget does not justify.
   webhook and the polling adapter. Chunk size is checked before append;
   `Content-Length` over the cap never opens a reader. `Allow`+`NotAction`
   without excluding reads is treated as public.
+
+## Etappe 7 — Launch
+
+- **Write paths live in `MetaWriteClient`**, on top of the read-only Graph client.
+  Every create sets `status=PAUSED` explicitly. There is no status field on the
+  request schema (agent or human) and no ACTIVE assignment in the publish path
+  (source scan + sealed-payload gate + mutation test).
+- **`is_adset_budget_sharing_enabled` is required** when creating a campaign
+  (Meta `error_subcode 4834011` without it — verified 29.07.2026 on the sandbox
+  account). True = CBO, false = ABO.
+- **Budget provenance:** the agent tool schema has no budget field at all. Human
+  budget enters only via `POST /api/meta/publish` and is sealed as
+  `budget_source: { kind: human_input, decidedBy, decidedAt, amount, level }`.
+  Missing required budget → `budget_required`. Wrong level → `budget_wrong_level`.
+  CBO matrix as in the Auftrag §0.2.
+- **Step lease + correlation fencing.** `publication_step` carries
+  `lease_expires_at`, `attempt`, `reconcile_state`, `external_correlation`,
+  `dispatched_at`. Meta object names embed `[adloop:<correlation>]`. Expired
+  `in_flight` goes to reconcile (search by correlation), never a blind retry.
+  No object found after lease expiry → `needs_human_review` (prefer hung
+  publish over a duplicate).
+- **Dispatch-before-call (Review 18 / Finding 1).** `dispatched_at` is written
+  immediately before the Meta create. Pre-send failures → `failed` (safe retry).
+  Post-send / uncertain failures → `reconcile_state = pending`, never `failed`.
+  Resume reconciles by correlation; claim refuses any step with `dispatched_at`
+  set. Mutation: skipping that fence (always `markStepFailed` + claim ignores
+  `dispatched_at`) makes `R18-1` expect `post_dispatch_uncertain` and fail with
+  `step_failed` — restored immediately after.
+- **Reconcile ownership (Review 19 / Finding 1).** Correlation is 128-bit
+  `randomBytes` hex, never exposed via the publications API (marker stripped
+  from `object_name`). A name match is adopted only when `created_time` falls
+  in `[dispatched_at, now]` and core fields match (campaign `objective`, ad set
+  `optimization_goal`). Otherwise `needs_human_review`. Mutation: dropping the
+  extra checks makes `R19-1` adopt a foreign object (`succeeded` instead of
+  `needs_human_review`) — restored immediately after.
+- **Queue retries post-dispatch uncertainty (Review 19 / Finding 2).**
+  `meta_publish` throws `HandlerError(post_dispatch_uncertain, retryable)` so
+  the worker reschedules; the next claim enters reconcile. Proven with
+  `startWorker` in `test/review19-postfix-etappe7.test.ts` — not a manual
+  second `runPublication` call.
+- **Defaults form is a patch (Review 19 / Finding 3).** Loaded settings are the
+  base; only displayed fields are overwritten (`mergeDefaultsFormPatch`).
+- **Local gates before Meta (Review 19 / Finding 4).** DSA + binding (+ new-
+  campaign budget) run before any `getCampaign` read.
+- **Binding attribution enums (Review 19 / Finding 5).**
+  `BindingAttributionSpecSchema` rejects unknown labels at save; publish never
+  silently drops them.
+- **Crash-after-persist must not mark the step failed.** The Meta object exists
+  and the id is stored; resume continues at the next step. Tests inject the crash
+  via `setCrashAfterPersistForTests`.
+- **`metric_optimization_binding`** pins `(conversion_metric_id, version)` plus
+  `optimization_goal`, `promoted_object`, `attribution_spec`. Missing active
+  binding → `metric_binding_missing`. Goal **or attribution** mismatch requires
+  `deviation_reason`. Binding attribution is what Meta receives (Review 18 / F2).
+- **Existing-campaign CBO is read from Meta** (`daily_budget` /
+  `lifetime_budget` via `getCampaign`), not guessed from defaults (Review 18 /
+  F3). Launch form queries `/api/meta/campaign-budget` and hides the budget
+  field for CBO.
+- **EU DSA** (`beneficiaryName` / `payerName`) is editable in Vorgaben; save
+  preserves omitted values. Publish with EU targeting and missing DSA →
+  `dsa_details_required` before any Meta create (Review 18 / F4).
+- **`start_time` uses `meta_ad_account.timezone_name`** (DST via Intl), not UTC
+  wall-clock (Review 18 / F5).
+- **Publish always goes through Freigabe** (`costClass: expensive`,
+  `sideEffect: external`). POST creates the approval only; the worker executes
+  the sealed payload.
+- **Sandbox limits (29.07.2026, `act_861604393480918`):**
+  - Campaign + Ad Set create/delete work; status confirms `PAUSED`.
+  - No usable page identity (`can_post: false`), no pixel, no Instagram actor →
+    Creative and Ad are **not** acceptably testable live. Covered by the mock
+    Graph client in `pnpm test`. `pnpm test:meta-publish` covers
+    campaign+adset only.
+  - EU targeting (DE) requires `dsa_beneficiary` / `dsa_payor` on ad sets
+    (`error_subcode 3858081`). Defaults carry optional `beneficiaryName` /
+    `payerName`; sandbox test uses US to avoid that gate.
+  - `OUTCOME_TRAFFIC` + `LINK_CLICKS` only accepts 1-day click attribution
+    (`error_subcode 1885423` for 7d).
+- **Not acceptably verifiable without page/pixel:** Creative upload, Ad
+  Creative, Ad create, end-to-end Ads Manager visual for Creative/Ad on the
+  sandbox. Real-account acceptance is a single PAUSED publish after mock tests
+  are green — not done in this worktree run.
+- **Mutation proofs** (see `test/etappe7-launch.test.ts`):
+  - Sealed payload with `status: ACTIVE` → `createPublication` refuses.
+  - Agent schema silently drops a smuggled `budget` field; resolve still
+    requires human budget via `budget_required`.
+  - Resetting a succeeded campaign step to `pending` (and clearing
+    `dispatched_at`) and re-running creates a second campaign — documenting the
+    failure mode the lease/persist/dispatch path prevents.
+  - Review 18 F1: wipe `dispatched_at` + force `failed` after lost response →
+    second campaign on resume (`R18-1 mutation`).

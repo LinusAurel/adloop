@@ -17,6 +17,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:meta-contract": "vitest run --config vitest.meta-contract.config.ts",
+    "test:meta-publish": "vitest run --config vitest.meta-publish.config.ts",
     "test:watch": "vitest",
     "prepare": "lefthook install"
   },

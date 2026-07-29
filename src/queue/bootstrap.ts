@@ -9,6 +9,7 @@ import {
   variationsFamily,
 } from "./families/strategist-review";
 import { imageGenerationFamily } from "./families/image-generation";
+import { metaPublishFamily } from "./families/meta-publish";
 import { ensureToolsBootstrapped } from "@/agent/tools/bootstrap";
 
 /**
@@ -48,5 +49,8 @@ export function ensureQueueBootstrapped(): void {
   }
   if (!isFamilyRegistered(imageGenerationFamily.name)) {
     registerFamily(imageGenerationFamily);
+  }
+  if (!isFamilyRegistered(metaPublishFamily.name)) {
+    registerFamily(metaPublishFamily);
   }
 }

@@ -4,6 +4,7 @@ import { getPool } from "@/db/pool";
 import { errorResponse } from "@/lib/api-error";
 import { AdvertiserDefaultsSchema } from "@/publish/settings";
 import { loadLatestDefaults, saveDefaults } from "@/publish/resolve";
+import { PublishError } from "@/publish/schemas";
 import { z } from "zod";
 
 const QuerySchema = z.object({
@@ -12,6 +13,8 @@ const QuerySchema = z.object({
 
 const BodySchema = z.object({
   advertiserId: z.string().uuid(),
+  /** Optimistic concurrency — must match the loaded version (or null if none). */
+  expectedVersion: z.number().int().nonnegative().nullable(),
   settings: AdvertiserDefaultsSchema,
 });
 
@@ -57,20 +60,31 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
   );
   if (owned.rowCount !== 1) return errorResponse(404, "not_found");
 
-  const saved = await saveDefaults(pool, {
-    tenantId: auth.session.tenantId,
-    advertiserId: parsed.data.advertiserId,
-    settings: parsed.data.settings,
-    createdBy: auth.session.userId,
-  });
+  try {
+    const saved = await saveDefaults(pool, {
+      tenantId: auth.session.tenantId,
+      advertiserId: parsed.data.advertiserId,
+      settings: parsed.data.settings,
+      createdBy: auth.session.userId,
+      expectedVersion: parsed.data.expectedVersion,
+    });
 
-  return NextResponse.json({
-    advertiserId: parsed.data.advertiserId,
-    version: saved.version,
-    settings: (await loadLatestDefaults(
-      pool,
-      auth.session.tenantId,
-      parsed.data.advertiserId,
-    ))?.settings ?? parsed.data.settings,
-  });
+    return NextResponse.json({
+      advertiserId: parsed.data.advertiserId,
+      version: saved.version,
+      settings: (await loadLatestDefaults(
+        pool,
+        auth.session.tenantId,
+        parsed.data.advertiserId,
+      ))?.settings ?? parsed.data.settings,
+    });
+  } catch (error) {
+    if (
+      error instanceof PublishError &&
+      error.code === "settings_version_conflict"
+    ) {
+      return errorResponse(409, "settings_version_conflict", error.params);
+    }
+    throw error;
+  }
 }

@@ -42,7 +42,23 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
      LIMIT 1`,
     [auth.session.tenantId, parsed.data.conversionMetricId],
   );
-  return NextResponse.json({ binding: result.rows[0] ?? null });
+  const row = result.rows[0];
+  if (!row) return NextResponse.json({ binding: null });
+
+  const attr = BindingAttributionSpecSchema.safeParse(row.attribution_spec);
+  if (!attr.success) {
+    return errorResponse(422, "binding_data_corrupt", { bindingId: row.id });
+  }
+  const promoted = PromotedObjectSchema.safeParse(row.promoted_object);
+  if (!promoted.success) {
+    return errorResponse(422, "binding_data_corrupt", { bindingId: row.id });
+  }
+  const goal = OptimizationGoalSchema.safeParse(row.optimization_goal);
+  if (!goal.success) {
+    return errorResponse(422, "binding_data_corrupt", { bindingId: row.id });
+  }
+
+  return NextResponse.json({ binding: row });
 }
 
 export async function PUT(request: NextRequest): Promise<NextResponse> {

@@ -67,6 +67,13 @@ export interface JobContext<TInput> {
   readonly tenantId: string;
   /** The run this job belongs to (Etappe 6+ handlers need it for FKs). */
   readonly runId: string;
+  /**
+   * Claim count for this job (1 on first run). When `attempts >= maxAttempts`,
+   * a retryable failure is terminal — handlers that own domain state must
+   * transition it before returning.
+   */
+  readonly attempts: number;
+  readonly maxAttempts: number;
   readonly signal: AbortSignal;
   progress(p: JobProgress): Promise<void>;
   withLease<T>(

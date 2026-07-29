@@ -302,6 +302,82 @@ export class MetaWriteClient {
     };
   }
 
+  async getAdCreative(
+    creativeId: string,
+    signal?: AbortSignal,
+  ): Promise<{
+    id: string;
+    accountId?: string;
+    pageId?: string;
+    createdTime?: string;
+  }> {
+    const CreativeSchema = z.object({
+      id: z.string().min(1),
+      account_id: z.union([z.string(), z.number()]).optional(),
+      object_story_spec: z
+        .object({
+          page_id: z.union([z.string(), z.number()]).optional(),
+        })
+        .optional(),
+      created_time: z.string().optional(),
+    });
+    const response = await this.graph.request(
+      `/${creativeId}?fields=id,account_id,object_story_spec,created_time`,
+      CreativeSchema,
+      { signal },
+    );
+    const row = response.data;
+    const account =
+      row.account_id === undefined || row.account_id === null
+        ? undefined
+        : String(row.account_id);
+    const page =
+      row.object_story_spec?.page_id === undefined ||
+      row.object_story_spec?.page_id === null
+        ? undefined
+        : String(row.object_story_spec.page_id);
+    return {
+      id: row.id,
+      accountId: account,
+      pageId: page,
+      createdTime: row.created_time,
+    };
+  }
+
+  async getAd(
+    adId: string,
+    signal?: AbortSignal,
+  ): Promise<{
+    id: string;
+    adSetId?: string;
+    creativeId?: string;
+    createdTime?: string;
+  }> {
+    const AdSchema = z.object({
+      id: z.string().min(1),
+      adset_id: z.string().optional(),
+      creative: z
+        .object({
+          id: z.string().optional(),
+          creative_id: z.string().optional(),
+        })
+        .optional(),
+      created_time: z.string().optional(),
+    });
+    const response = await this.graph.request(
+      `/${adId}?fields=id,adset_id,creative{id},created_time`,
+      AdSchema,
+      { signal },
+    );
+    const row = response.data;
+    return {
+      id: row.id,
+      adSetId: row.adset_id,
+      creativeId: row.creative?.id ?? row.creative?.creative_id,
+      createdTime: row.created_time,
+    };
+  }
+
   async searchByName(params: {
     adAccountId: string;
     edge: "campaigns" | "adsets" | "ads" | "adcreatives";

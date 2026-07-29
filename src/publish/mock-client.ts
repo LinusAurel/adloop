@@ -20,6 +20,8 @@ export class MockMetaWriteClient implements Pick<
   | "getObjectStatus"
   | "getCampaign"
   | "getAdSet"
+  | "getAdCreative"
+  | "getAd"
   | "searchByName"
   | "deleteObject"
 > {
@@ -32,6 +34,8 @@ export class MockMetaWriteClient implements Pick<
   private seq = 1;
   private failNext = new Set<PublishStepOperation | "upload_image">();
   private failAfterSuccess = new Set<PublishStepOperation>();
+  /** When true, every searchByName throws (Meta timeout / 5xx). */
+  searchAlwaysFails = false;
 
   failOn(operation: PublishStepOperation | "upload_image"): void {
     this.failNext.add(operation);
@@ -162,7 +166,12 @@ export class MockMetaWriteClient implements Pick<
       kind: "creative",
       name: params.name,
       status: "PAUSED",
-      meta: { ...params, createdTime: new Date().toISOString() },
+      meta: {
+        ...params,
+        accountId: params.adAccountId,
+        pageId: params.pageId,
+        createdTime: new Date().toISOString(),
+      },
     });
     this.afterSuccess("create_creative");
     return { id };
@@ -182,7 +191,13 @@ export class MockMetaWriteClient implements Pick<
       kind: "ad",
       name: params.name,
       status: "PAUSED",
-      meta: { ...params, status: "PAUSED", createdTime: new Date().toISOString() },
+      meta: {
+        ...params,
+        status: "PAUSED",
+        adSetId: params.adSetId,
+        creativeId: params.creativeId,
+        createdTime: new Date().toISOString(),
+      },
     });
     this.afterSuccess("create_ad");
     return { id };
@@ -251,6 +266,52 @@ export class MockMetaWriteClient implements Pick<
     };
   }
 
+  async getAdCreative(creativeId: string): Promise<{
+    id: string;
+    accountId?: string;
+    pageId?: string;
+    createdTime?: string;
+  }> {
+    this.calls.push({ operation: "get_status", args: { getAdCreative: creativeId } });
+    const obj = this.objects.get(creativeId);
+    if (!obj || obj.kind !== "creative") {
+      throw new Error(`mock_creative_missing_${creativeId}`);
+    }
+    return {
+      id: creativeId,
+      accountId:
+        typeof obj.meta.accountId === "string"
+          ? obj.meta.accountId
+          : typeof obj.meta.adAccountId === "string"
+            ? obj.meta.adAccountId
+            : undefined,
+      pageId: typeof obj.meta.pageId === "string" ? obj.meta.pageId : undefined,
+      createdTime:
+        typeof obj.meta.createdTime === "string" ? obj.meta.createdTime : undefined,
+    };
+  }
+
+  async getAd(adId: string): Promise<{
+    id: string;
+    adSetId?: string;
+    creativeId?: string;
+    createdTime?: string;
+  }> {
+    this.calls.push({ operation: "get_status", args: { getAd: adId } });
+    const obj = this.objects.get(adId);
+    if (!obj || obj.kind !== "ad") {
+      throw new Error(`mock_ad_missing_${adId}`);
+    }
+    return {
+      id: adId,
+      adSetId: typeof obj.meta.adSetId === "string" ? obj.meta.adSetId : undefined,
+      creativeId:
+        typeof obj.meta.creativeId === "string" ? obj.meta.creativeId : undefined,
+      createdTime:
+        typeof obj.meta.createdTime === "string" ? obj.meta.createdTime : undefined,
+    };
+  }
+
   async searchByName(params: {
     adAccountId: string;
     edge: "campaigns" | "adsets" | "ads" | "adcreatives";
@@ -258,6 +319,9 @@ export class MockMetaWriteClient implements Pick<
     signal?: AbortSignal;
   }): Promise<MetaNamedObject[]> {
     this.calls.push({ operation: "search", args: params });
+    if (this.searchAlwaysFails) {
+      throw new Error("injected_search_timeout");
+    }
     const kindMap = {
       campaigns: "campaign",
       adsets: "adset",

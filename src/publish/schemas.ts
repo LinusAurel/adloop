@@ -188,7 +188,9 @@ export type PublishErrorCode =
   | "idempotency_conflict"
   | "validation_error"
   | "dsa_details_required"
-  | "campaign_not_found";
+  | "campaign_not_found"
+  | "settings_version_conflict"
+  | "binding_data_corrupt";
 
 export class PublishError extends Error {
   constructor(

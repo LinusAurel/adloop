@@ -6,6 +6,7 @@ import { HandlerError } from "../errors";
 import type { JobFamilyDefinition } from "../types";
 import {
   createPublication,
+  markPublicationNeedsHumanReview,
   runPublication,
 } from "@/publish/chain";
 import { getWriteClientOrThrow } from "@/publish/client-factory";
@@ -80,19 +81,53 @@ export const metaPublishFamily: JobFamilyDefinition<Input, Result> = {
     const client = getWriteClientOrThrow(live);
     const store = getObjectStore();
 
-    const outcome = await runPublication(pool, {
-      publicationId,
-      tenantId: ctx.tenantId,
-      client,
-      store,
-      signal: ctx.signal,
-    });
+    let outcome: Awaited<ReturnType<typeof runPublication>>;
+    try {
+      outcome = await runPublication(pool, {
+        publicationId,
+        tenantId: ctx.tenantId,
+        client,
+        store,
+        signal: ctx.signal,
+      });
+    } catch (error) {
+      // Uncaught Meta/reconcile failures: retry until exhausted, then human.
+      if (ctx.attempts >= ctx.maxAttempts) {
+        await markPublicationNeedsHumanReview(
+          pool,
+          publicationId,
+          "attempts_exhausted",
+        );
+        return {
+          status: "needs_human_review" as const,
+          publicationId,
+          code: "needs_human_review" as const,
+        };
+      }
+      throw new HandlerError(
+        "reconcile_unavailable",
+        error instanceof Error ? error.message : "reconcile_unavailable",
+        true,
+      );
+    }
 
     if (outcome.status === "failed") {
       if (
         outcome.code === "post_dispatch_uncertain" ||
         outcome.code === "step_in_flight"
       ) {
+        if (ctx.attempts >= ctx.maxAttempts) {
+          await markPublicationNeedsHumanReview(
+            pool,
+            publicationId,
+            "attempts_exhausted",
+          );
+          return {
+            status: "needs_human_review" as const,
+            publicationId,
+            code: "needs_human_review" as const,
+          };
+        }
         // Retryable: next attempt must enter reconcile, not end the job.
         throw new HandlerError(outcome.code, outcome.code, true);
       }

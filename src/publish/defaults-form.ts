@@ -19,6 +19,9 @@ export type DefaultsFormPatch = {
 /**
  * Apply only form-visible fields onto loaded defaults. Undisplayed
  * targeting / placement / attribution values stay untouched.
+ *
+ * Empty DSA / Instagram fields become `null` (explicit clear). The save
+ * path treats `null` as delete and `undefined` as unchanged.
  */
 export function mergeDefaultsFormPatch(
   base: AdvertiserDefaults,
@@ -29,15 +32,13 @@ export function mergeDefaultsFormPatch(
     identity: {
       ...base.identity,
       pageId: form.pageId,
-      ...(form.instagramActorId.trim()
-        ? { instagramActorId: form.instagramActorId.trim() }
-        : { instagramActorId: undefined }),
-      ...(form.beneficiaryName.trim()
-        ? { beneficiaryName: form.beneficiaryName.trim() }
-        : { beneficiaryName: undefined }),
-      ...(form.payerName.trim()
-        ? { payerName: form.payerName.trim() }
-        : { payerName: undefined }),
+      instagramActorId: form.instagramActorId.trim()
+        ? form.instagramActorId.trim()
+        : null,
+      beneficiaryName: form.beneficiaryName.trim()
+        ? form.beneficiaryName.trim()
+        : null,
+      payerName: form.payerName.trim() ? form.payerName.trim() : null,
     },
     adSet: {
       ...base.adSet,

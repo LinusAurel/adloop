@@ -756,6 +756,8 @@ describe("review-6 adversarial fixes", () => {
       },
       tenantId: db.tenantId,
       runId: syncA,
+      attempts: 1,
+      maxAttempts: 3,
       signal: new AbortController().signal,
       progress: async () => {},
       withLease: async () => ({ acquired: false }),

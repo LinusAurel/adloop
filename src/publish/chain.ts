@@ -33,6 +33,8 @@ export type WriteClient = Pick<
   | "getObjectStatus"
   | "getCampaign"
   | "getAdSet"
+  | "getAdCreative"
+  | "getAd"
   | "searchByName"
   | "deleteObject"
 >;
@@ -416,7 +418,7 @@ async function reconcileExpiredStep(
   publication: PublicationRow,
   step: StepRow,
   steps: StepRow[],
-): Promise<"resolved" | "needs_human_review"> {
+): Promise<"resolved" | "needs_human_review" | "unavailable"> {
   await db.query(
     `UPDATE publication_step
      SET reconcile_state = 'pending', updated_at = now()
@@ -425,15 +427,34 @@ async function reconcileExpiredStep(
   );
 
   const marker = `[adloop:${step.external_correlation}]`;
-  const found = await client.searchByName({
-    adAccountId: publication.resolved_payload.metaAdAccountExternalId,
-    edge: edgeForOperation(step.operation),
-    nameContains: marker,
-  });
+  let found: Awaited<ReturnType<WriteClient["searchByName"]>>;
+  try {
+    found = await client.searchByName({
+      adAccountId: publication.resolved_payload.metaAdAccountExternalId,
+      edge: edgeForOperation(step.operation),
+      nameContains: marker,
+    });
+  } catch {
+    // Meta timeout/5xx — keep pending so the queue can retry.
+    return "unavailable";
+  }
 
   if (found.length === 1) {
     const candidate = found[0]!;
     const campaignStep = steps.find((s) => s.operation === "create_campaign");
+    const adSetStep = steps.find((s) => s.operation === "create_adset");
+    let expectedPageId: string | null = null;
+    let expectedCreativeId: string | null = null;
+    if (step.operation === "create_creative") {
+      expectedPageId = creativePayloadForStep(
+        publication.resolved_payload,
+        steps,
+        step.step_index,
+      ).pageId;
+    }
+    if (step.operation === "create_ad") {
+      expectedCreativeId = creativeIdForAdStep(steps, step.step_index);
+    }
     const accepted = await candidateMatchesExpected({
       client,
       payload: publication.resolved_payload,
@@ -441,6 +462,9 @@ async function reconcileExpiredStep(
       dispatchedAt: step.dispatched_at,
       candidate,
       expectedCampaignId: campaignStep?.external_id ?? null,
+      expectedAdSetId: adSetStep?.external_id ?? null,
+      expectedCreativeId,
+      expectedPageId,
     });
     if (!accepted.ok) {
       await markReconcileNeedsHuman(
@@ -513,6 +537,11 @@ async function markReconcileNeedsHuman(
   );
 }
 
+function sameAdAccountId(a: string, b: string): boolean {
+  const norm = (s: string) => s.replace(/^act_/, "");
+  return norm(a) === norm(b);
+}
+
 /**
  * Extra gates beyond the name marker. Exported for the mutation proof that
  * removing them would adopt a foreign object.
@@ -525,6 +554,9 @@ export async function candidateMatchesExpected(params: {
   candidate: { id: string; name: string; created_time?: string };
   /** Campaign Meta id already confirmed on a prior step (new or existing). */
   expectedCampaignId?: string | null;
+  expectedAdSetId?: string | null;
+  expectedCreativeId?: string | null;
+  expectedPageId?: string | null;
 }): Promise<{ ok: true } | { ok: false; reason: string }> {
   const { client, payload, operation, candidate } = params;
   const dispatchedAt = params.dispatchedAt
@@ -569,19 +601,86 @@ export async function candidateMatchesExpected(params: {
       if (details.optimizationGoal !== payload.adSet.optimizationGoal) {
         return { ok: false, reason: "optimization_goal_mismatch" };
       }
-      if (
-        params.expectedCampaignId &&
-        details.campaignId &&
-        details.campaignId !== params.expectedCampaignId
-      ) {
-        return { ok: false, reason: "adset_campaign_mismatch" };
+      if (params.expectedCampaignId) {
+        if (
+          !details.campaignId ||
+          details.campaignId !== params.expectedCampaignId
+        ) {
+          return { ok: false, reason: "adset_campaign_mismatch" };
+        }
       }
       return { ok: true };
     }
-    case "create_creative":
-    case "create_ad":
+    case "create_creative": {
+      const details = await client.getAdCreative(candidate.id);
+      if (!details.accountId) {
+        return { ok: false, reason: "creative_account_missing" };
+      }
+      if (
+        !sameAdAccountId(
+          details.accountId,
+          payload.metaAdAccountExternalId,
+        )
+      ) {
+        return { ok: false, reason: "creative_account_mismatch" };
+      }
+      if (params.expectedPageId) {
+        if (!details.pageId || details.pageId !== params.expectedPageId) {
+          return { ok: false, reason: "creative_page_mismatch" };
+        }
+      }
       return { ok: true };
+    }
+    case "create_ad": {
+      const details = await client.getAd(candidate.id);
+      if (params.expectedAdSetId) {
+        if (!details.adSetId || details.adSetId !== params.expectedAdSetId) {
+          return { ok: false, reason: "ad_adset_mismatch" };
+        }
+      }
+      if (params.expectedCreativeId) {
+        if (
+          !details.creativeId ||
+          details.creativeId !== params.expectedCreativeId
+        ) {
+          return { ok: false, reason: "ad_creative_mismatch" };
+        }
+      }
+      return { ok: true };
+    }
   }
+}
+
+/**
+ * After queue attempts are exhausted on a post-dispatch uncertain path,
+ * park the publication for a human — not only the job dead-letter.
+ */
+export async function markPublicationNeedsHumanReview(
+  db: Queryable,
+  publicationId: string,
+  reason: string,
+): Promise<void> {
+  const open = await db.query<{ id: string }>(
+    `SELECT id FROM publication_step
+     WHERE publication_id = $1
+       AND (
+         status IN ('pending', 'in_flight', 'failed')
+         OR reconcile_state = 'pending'
+       )
+     ORDER BY step_index ASC
+     LIMIT 1`,
+    [publicationId],
+  );
+  if (open.rows[0]) {
+    await markReconcileNeedsHuman(db, publicationId, open.rows[0].id, reason);
+    return;
+  }
+  await db.query(
+    `UPDATE publication
+     SET status = 'needs_human_review', updated_at = now()
+     WHERE id = $1`,
+    [publicationId],
+  );
 }
 
 function campaignIdFromSteps(steps: StepRow[]): string {
@@ -840,6 +939,13 @@ export async function runPublication(
           status: "needs_human_review",
           publicationId: publication.id,
           code: "needs_human_review",
+        };
+      }
+      if (outcome === "unavailable") {
+        return {
+          status: "failed",
+          publicationId: publication.id,
+          code: "post_dispatch_uncertain",
         };
       }
       // Reload after reconcile.

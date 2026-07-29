@@ -2,6 +2,9 @@ import type { Queryable } from "@/db/queryable";
 import { uuidv7 } from "uuidv7";
 import {
   AdvertiserDefaultsSchema,
+  BindingAttributionSpecSchema,
+  OptimizationGoalSchema,
+  PromotedObjectSchema,
   attributionToLabels,
   bindingAttributionToMetaSpec,
   sameLabelSet,
@@ -23,7 +26,6 @@ import {
   META_PUBLISH_STATUS,
 } from "./schemas";
 import { applyUtmParams, expandNamingTemplate, formatCorrelatedName } from "./utm";
-import { PromotedObjectSchema } from "./settings";
 import { publishNow } from "./fault";
 
 export interface BindingRow {
@@ -73,6 +75,21 @@ export async function loadLatestDefaults(
   return { version: row.version, settings: parsed.data };
 }
 
+/**
+ * `null` clears the field; `undefined` keeps the previous value;
+ * a string sets it. Distinguishes intentional clear from partial omit.
+ */
+function mergeNullableString(
+  incoming: string | null | undefined,
+  previous: string | null | undefined,
+): string | undefined {
+  if (incoming === null) return undefined;
+  if (incoming === undefined) {
+    return previous === null || previous === undefined ? undefined : previous;
+  }
+  return incoming;
+}
+
 export async function saveDefaults(
   db: Queryable,
   params: {
@@ -80,6 +97,11 @@ export async function saveDefaults(
     advertiserId: string;
     settings: AdvertiserDefaults;
     createdBy: string;
+    /**
+     * Optimistic concurrency. `null` = expect no prior row.
+     * Omit to skip the check (seed / internal helpers).
+     */
+    expectedVersion?: number | null;
   },
 ): Promise<{ version: number; id: string }> {
   const parsed = AdvertiserDefaultsSchema.parse(params.settings);
@@ -88,17 +110,32 @@ export async function saveDefaults(
     params.tenantId,
     params.advertiserId,
   );
-  // Preserve DSA identity fields when the incoming payload omits them
-  // (UI that does not know the fields must not wipe API-set values).
+  if (params.expectedVersion !== undefined) {
+    const current = previous?.version ?? null;
+    if (current !== params.expectedVersion) {
+      throw new PublishError("settings_version_conflict", {
+        expected: params.expectedVersion ?? "null",
+        actual: current ?? "null",
+      });
+    }
+  }
+  // Preserve DSA / Instagram when omitted (`undefined`); honour `null` as clear.
   const merged: AdvertiserDefaults = {
     ...parsed,
     identity: {
       ...parsed.identity,
-      beneficiaryName:
-        parsed.identity.beneficiaryName ??
+      instagramActorId: mergeNullableString(
+        parsed.identity.instagramActorId,
+        previous?.settings.identity.instagramActorId,
+      ),
+      beneficiaryName: mergeNullableString(
+        parsed.identity.beneficiaryName,
         previous?.settings.identity.beneficiaryName,
-      payerName:
-        parsed.identity.payerName ?? previous?.settings.identity.payerName,
+      ),
+      payerName: mergeNullableString(
+        parsed.identity.payerName,
+        previous?.settings.identity.payerName,
+      ),
     },
   };
   const version = (previous?.version ?? 0) + 1;
@@ -132,7 +169,27 @@ export async function loadActiveBinding(
      LIMIT 1`,
     [tenantId, conversionMetricId],
   );
-  return result.rows[0] ?? null;
+  const row = result.rows[0];
+  if (!row) return null;
+  // Bestandsdaten prüfen — Schreiben allein schützt nicht vor Legacy-Zeilen.
+  const attr = BindingAttributionSpecSchema.safeParse(row.attribution_spec);
+  if (!attr.success) {
+    throw new PublishError("binding_data_corrupt", { bindingId: row.id });
+  }
+  const promoted = PromotedObjectSchema.safeParse(row.promoted_object);
+  if (!promoted.success) {
+    throw new PublishError("binding_data_corrupt", { bindingId: row.id });
+  }
+  const goal = OptimizationGoalSchema.safeParse(row.optimization_goal);
+  if (!goal.success) {
+    throw new PublishError("binding_data_corrupt", { bindingId: row.id });
+  }
+  return {
+    ...row,
+    attribution_spec: attr.data,
+    promoted_object: promoted.data,
+    optimization_goal: goal.data,
+  };
 }
 
 export async function resolveAssignedMetricId(
@@ -316,6 +373,14 @@ export async function resolvePublishPayload(
     }
   }
 
+  // Binding attribution conversion is a local gate — must run before any Meta read.
+  const attributionSpec =
+    binding !== null
+      ? bindingAttributionToMetaSpec(binding.attributionSpec)
+      : bindingAttributionToMetaSpec(
+          attributionToLabels(defaults.adSet.attribution),
+        );
+
   const creatives = await db.query<{
     id: string;
     name: string;
@@ -430,7 +495,7 @@ export async function resolvePublishPayload(
       description: row.description,
       callToAction: row.call_to_action,
       pageId: defaults.identity.pageId,
-      instagramActorId: defaults.identity.instagramActorId,
+      instagramActorId: defaults.identity.instagramActorId ?? undefined,
       linkUrl,
       storageKey: row.storage_key,
       mime: row.mime,
@@ -460,14 +525,6 @@ export async function resolvePublishPayload(
     input.campaign.mode === "new"
       ? (input.campaign.objective ?? defaults.campaignObjective)
       : defaults.campaignObjective;
-
-  // Binding attribution wins — defaults only apply when there is no binding.
-  const attributionSpec =
-    binding !== null
-      ? bindingAttributionToMetaSpec(binding.attributionSpec)
-      : bindingAttributionToMetaSpec(
-          attributionToLabels(defaults.adSet.attribution),
-        );
 
   const payload: ResolvedPublishPayload = {
     advertiserId: input.advertiserId,
@@ -504,8 +561,8 @@ export async function resolvePublishPayload(
             attributionSpec,
             promotedObject: binding?.promotedObject,
             startTime: scheduleStartTime(defaults, accountRow.timezone_name),
-            dsaBeneficiary: defaults.identity.beneficiaryName,
-            dsaPayor: defaults.identity.payerName,
+            dsaBeneficiary: defaults.identity.beneficiaryName ?? undefined,
+            dsaPayor: defaults.identity.payerName ?? undefined,
           },
     creatives: resolvedCreatives,
     budgetSource,

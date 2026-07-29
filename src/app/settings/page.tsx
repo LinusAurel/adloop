@@ -124,13 +124,21 @@ export default function SettingsPage() {
     const res = await fetch("/api/meta/ad-account-settings", {
       method: "PUT",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ advertiserId, settings }),
+      body: JSON.stringify({
+        advertiserId,
+        expectedVersion: version,
+        settings,
+      }),
     });
     if (!res.ok) {
       const body = (await res.json().catch(() => null)) as {
         error?: string;
       } | null;
-      setError(body?.error ?? "validation_error");
+      const code = body?.error ?? "validation_error";
+      setError(code);
+      if (code === "settings_version_conflict") {
+        await loadDefaults();
+      }
       return;
     }
     const data = (await res.json()) as {

@@ -89,10 +89,13 @@ export const AdvantageCreativeTogglesSchema = z.object({
 export const AdvertiserDefaultsSchema = z.object({
   identity: z.object({
     pageId: z.string().min(1),
-    instagramActorId: z.string().min(1).optional(),
-    /** EU DSA — required when targeting EU countries (DACH). */
-    beneficiaryName: z.string().min(1).optional(),
-    payerName: z.string().min(1).optional(),
+    instagramActorId: z.string().min(1).nullish(),
+    /**
+     * EU DSA — required when targeting EU countries (DACH).
+     * `null` = clear; omit/`undefined` = leave previous value on save.
+     */
+    beneficiaryName: z.string().min(1).nullish(),
+    payerName: z.string().min(1).nullish(),
   }),
   adSet: z.object({
     optimizationGoal: OptimizationGoalSchema,

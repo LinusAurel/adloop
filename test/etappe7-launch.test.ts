@@ -444,10 +444,27 @@ describe("etappe 7 — launch", () => {
       [publicationId],
     );
     const step = adStep.rows[0]!;
+    const siblingIds = await db.pool.query<{
+      operation: string;
+      external_id: string | null;
+    }>(
+      `SELECT operation, external_id FROM publication_step
+       WHERE publication_id = $1 AND operation IN ('create_adset', 'create_creative')`,
+      [publicationId],
+    );
+    const adSetId = siblingIds.rows.find((r) => r.operation === "create_adset")
+      ?.external_id;
+    const creativeMetaId = siblingIds.rows.find(
+      (r) => r.operation === "create_creative",
+    )?.external_id;
+    expect(adSetId).toBeTruthy();
+    expect(creativeMetaId).toBeTruthy();
     // Pretend Meta create succeeded under our correlation name, then lease expired.
     const dispatchedAt = new Date(Date.now() - 60_000).toISOString();
     mock.seed("ad_orphaned", "ad", step.object_name, "PAUSED", {
       createdTime: new Date(Date.now() - 30_000).toISOString(),
+      adSetId,
+      creativeId: creativeMetaId,
     });
     await db.pool.query(
       `UPDATE publication_step

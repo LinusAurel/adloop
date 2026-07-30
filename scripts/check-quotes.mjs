@@ -5,16 +5,16 @@
 //
 //   node scripts/check-quotes.mjs [--fix] [dateien...]
 //
-// Ohne Dateiliste wird der ganze Baum gescannt; --fix korrigiert in place
-// (es wird nur der Closer-Glyph getauscht, sonst nichts).
-import { readFileSync, writeFileSync, readdirSync } from "node:fs";
-import { join, extname } from "node:path";
+// Ohne Dateiliste werden die von Git getrackten Dateien gescannt; --fix
+// korrigiert in place (es wird nur der Closer-Glyph getauscht, sonst nichts).
+import { readFileSync, writeFileSync } from "node:fs";
+import { extname } from "node:path";
+import { execFileSync } from "node:child_process";
 
 const LOW9 = "„", LEFT = "“", RIGHT = "”", ASCII = '"';
 const SPECIALS = new Set([LOW9, LEFT, RIGHT, ASCII]);
 const WORD = /[0-9A-Za-zäöüÄÖÜß]/;
 const EXTS = new Set([".md", ".mdx", ".ts", ".tsx", ".js", ".jsx", ".html"]);
-const SKIP = new Set(["node_modules", ".git", ".next", ".worktrees", "dist", "data"]);
 
 // Zeichen-Offsets innerhalb von ```-Fences (dort wird nie angefasst).
 function fencedPositions(content) {
@@ -51,19 +51,21 @@ function scan(content) {
   return { fixedContent: chars.join(""), findings };
 }
 
-function walk(dir, out = []) {
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    if (entry.isDirectory()) {
-      if (!SKIP.has(entry.name)) walk(join(dir, entry.name), out);
-    } else if (EXTS.has(extname(entry.name))) out.push(join(dir, entry.name));
-  }
-  return out;
+// Die Dateiliste kommt von Git, nicht aus einem Baum-Walk: ein Walk erfasst
+// auch ignorierte Verzeichnisse (_local/ und andere Notizen), die nie ins Repo
+// wandern — im pre-push blockierten deren Anführungszeichen sonst den Push.
+function trackedFiles() {
+  const out = execFileSync("git", ["ls-files", "-z"], {
+    encoding: "utf8",
+    maxBuffer: 64 * 1024 * 1024,
+  });
+  return out.split("\0").filter((f) => f !== "" && EXTS.has(extname(f)));
 }
 
 const args = process.argv.slice(2);
 const fix = args.includes("--fix");
 const named = args.filter((a) => a !== "--fix");
-const files = named.length > 0 ? named.filter((f) => EXTS.has(extname(f))) : walk(".");
+const files = named.length > 0 ? named.filter((f) => EXTS.has(extname(f))) : trackedFiles();
 
 let total = 0;
 for (const file of files) {

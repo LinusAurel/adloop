@@ -20,6 +20,9 @@ const eslintConfig = [
       "next-env.d.ts",
       // Worktrees are separate checkouts with their own build artifacts.
       ".worktrees/**",
+      // Git-ignored scratch space: specs, notes and a vendored reference product.
+      // None of it ships, and linting it drowned the real findings.
+      "_local/**",
     ],
   },
 ];

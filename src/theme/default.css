@@ -1326,6 +1326,20 @@ input[type="number"] {
   overflow-y: auto;
 }
 
+/* Leerer Verlauf: Die Aufforderung steht dort, wo der Blick ohnehin hinfällt,
+   und nicht oben angeklebt mit siebenhundert Pixeln Nichts bis zur Eingabe.
+   Sobald die erste Nachricht da ist, gilt wieder die normale Ordnung —
+   Verlauf oben, Eingabe unten. */
+.msgs.vacant {
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+}
+
+.msgs.vacant .empty {
+  padding-bottom: 0;
+}
+
 .msg {
   display: grid;
   grid-template-columns: 56px minmax(0, 1fr);

@@ -21,8 +21,15 @@ export function LocaleSwitch() {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ locale: next }),
     });
-    // Die Kataloge kommen vom Server, deshalb reicht kein Zustandswechsel.
-    router.refresh();
+    // Vollständiges Neuladen statt router.refresh().
+    //
+    // Die Kataloge hängen am NextIntlClientProvider im Wurzel-Layout. Ein
+    // refresh() erneuert die Server-Komponenten des aktuellen Zweigs, lässt den
+    // Provider darüber aber stehen — auf der Anmeldeseite, die vollständig
+    // Client-Komponente ist, änderte sich deshalb erst nach einem manuellen
+    // Neuladen etwas. Ein Sprachwechsel passiert ein- oder zweimal, ein
+    // Neuladen ist dafür der richtige Preis.
+    window.location.reload();
   }
 
   return (

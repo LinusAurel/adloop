@@ -367,7 +367,7 @@ export default function ChatPage() {
 
         <main className="thread">
           <SetupHint style={{ margin: "12px 20px 0" }} />
-          <div className="msgs">
+          <div className={`msgs${messages.length === 0 && !streaming ? " vacant" : ""}`}>
             {messages.length === 0 && !streaming && (
               <div className="empty">
                 <h3>{t("empty.chatTitle")}</h3>

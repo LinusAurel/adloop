@@ -324,7 +324,18 @@
     "errValidation": "Please check your input.",
     "errInvalidCode": "That code is invalid or has expired.",
     "errRateLimited": "Too many attempts. Please wait 15 minutes.",
-    "errUnknown": "Sign-in failed ({code})."
+    "errUnknown": "Sign-in failed ({code}).",
+    "password": "Password",
+    "signingIn": "Signing in …",
+    "continueWithSso": "Continue with your company account",
+    "or": "or",
+    "loading": "Loading …",
+    "noMethods": "No sign-in method is set up. Set AUTH_METHODS and the variables it needs.",
+    "errInvalidCredentials": "That email and password do not match.",
+    "errMethodNotEnabled": "This sign-in method is not set up.",
+    "errOidcState": "The sign-in attempt expired. Please try again.",
+    "errOidcNoEmail": "The identity provider did not return an email address.",
+    "errOidcDomain": "This email domain is not allowed to sign in."
   },
   "queue": {
     "lead": "Queue diagnostics. An echo job runs through the same chain as any other.",

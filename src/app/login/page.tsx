@@ -1,18 +1,23 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState, type FormEvent } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { LocaleSwitch } from "@/components/LocaleSwitch";
 
-type Step = "email" | "code";
+type Method = "env" | "password" | "oidc" | "code";
 
 // Fehlercodes des Servers auf Übersetzungsschlüssel — der Server schickt Codes,
 // nie fertigen Text (SPEC §8.2).
 const ERROR_KEY: Readonly<Record<string, string>> = {
   validation_error: "errValidation",
+  invalid_credentials: "errInvalidCredentials",
   invalid_login_code: "errInvalidCode",
   login_rate_limited: "errRateLimited",
+  method_not_enabled: "errMethodNotEnabled",
+  oidc_state_mismatch: "errOidcState",
+  oidc_no_email: "errOidcNoEmail",
+  oidc_domain_not_allowed: "errOidcDomain",
 };
 
 async function errorCode(response: Response): Promise<string> {
@@ -23,20 +28,62 @@ async function errorCode(response: Response): Promise<string> {
 export default function LoginPage() {
   const t = useTranslations("login");
   const router = useRouter();
-  const [step, setStep] = useState<Step>("email");
+  const params = useSearchParams();
+
+  const [methods, setMethods] = useState<Method[] | null>(null);
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
+  const [step, setStep] = useState<"credentials" | "code">("credentials");
+  const [delivery, setDelivery] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  /** Wie der Server zugestellt hat — nur er weiß es. */
-  const [delivery, setDelivery] = useState<string | null>(null);
 
-  function describe(key: string): string {
-    const mapped = ERROR_KEY[key];
-    return mapped ? t(mapped) : t("errUnknown", { code: key });
+  function describe(value: string): string {
+    const mapped = ERROR_KEY[value];
+    return mapped ? t(mapped as never) : t("errUnknown", { code: value });
   }
 
-  async function submitEmail(event: FormEvent) {
+  // Welche Wege es gibt, weiß nur der Server. Ein Bildschirm, der ein Verfahren
+  // anbietet, das an einer fehlenden Variablen scheitert, ist schlimmer als
+  // einer, der es gar nicht zeigt.
+  useEffect(() => {
+    void fetch("/api/auth/password", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : { methods: [] }))
+      .then((data: { methods: Method[] }) => setMethods(data.methods))
+      .catch(() => setMethods([]));
+  }, []);
+
+  // Ein Fehler aus dem OIDC-Rücklauf steht in der Adresse, nicht in einer Antwort.
+  const urlError = params.get("error");
+  useEffect(() => {
+    if (urlError) setError(describe(urlError));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlError]);
+
+  function goNext() {
+    const next = params.get("next");
+    router.push(next && next.startsWith("/") && !next.startsWith("//") ? next : "/chat");
+  }
+
+  async function submitPassword(event: FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    setError(null);
+    const response = await fetch("/api/auth/password", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+    setBusy(false);
+    if (!response.ok) {
+      setError(describe(await errorCode(response)));
+      return;
+    }
+    goNext();
+  }
+
+  async function requestCode(event: FormEvent) {
     event.preventDefault();
     setBusy(true);
     setError(null);
@@ -69,20 +116,18 @@ export default function LoginPage() {
       setError(describe(await errorCode(response)));
       return;
     }
-    router.push("/connectors");
+    goNext();
   }
+
+  const hasPassword = methods?.some((m) => m === "env" || m === "password") ?? false;
+  const hasOidc = methods?.includes("oidc") ?? false;
+  const hasCode = methods?.includes("code") ?? false;
+  const nextParam = params.get("next");
 
   return (
     <main className="page" style={{ paddingTop: "12vh" }}>
       <div className="narrow">
-        <div
-          style={{
-            marginBottom: 18,
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-          }}
-        >
+        <div style={{ marginBottom: 18, display: "flex", alignItems: "center", gap: 8 }}>
           <span className="mark" style={{ fontSize: "var(--fs-head)" }}>
             ad<span>loop</span>
           </span>
@@ -96,75 +141,134 @@ export default function LoginPage() {
         <div className="panel">
           <h2>{t("title")}</h2>
 
-          {step === "email" ? (
-            <form onSubmit={submitEmail}>
-              <p style={{ color: "var(--dim)", fontSize: "var(--fs-small)", margin: "0 0 14px" }}>{t("lead")}</p>
-              <label className="field">
-                <span>{t("email")}</span>
-                <input
-                  type="email"
-                  required
-                  autoFocus
-                  autoComplete="email"
-                  placeholder="name@firma.de"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                />
-              </label>
-              <button className="btn pri" disabled={busy} type="submit">
-                {busy ? t("requesting") : t("requestCode")}
-              </button>
-            </form>
-          ) : (
-            <form onSubmit={submitCode}>
-              <p style={{ color: "var(--dim)", fontSize: "var(--fs-small)", margin: "0 0 14px" }}>
-                {t("codeSent", { email })}
-              </p>
-              <label className="field">
-                <span>{t("code")}</span>
-                <input
-                  inputMode="numeric"
-                  pattern="[0-9]{6}"
-                  maxLength={6}
-                  required
-                  autoFocus
-                  autoComplete="one-time-code"
-                  placeholder="······"
-                  // Der Code steht später in keiner Spalte, aber er ist eine
-                  // Ziffernfolge, die man Zeichen für Zeichen abgleicht.
-                  style={{ letterSpacing: "0.4em", fontSize: "var(--fs-lead)" }}
-                  className="data"
-                  value={code}
-                  onChange={(event) => setCode(event.target.value)}
-                />
-              </label>
-              <div className="acts">
-                <button className="btn pri" disabled={busy} type="submit">
-                  {busy ? t("verifying") : t("signIn")}
-                </button>
-                <button
-                  className="btn"
-                  type="button"
-                  disabled={busy}
-                  onClick={() => {
-                    setStep("email");
-                    setCode("");
-                    setError(null);
-                  }}
-                >
-                  {t("otherEmail")}
-                </button>
-              </div>
-            </form>
-          )}
-
-          {/* Der Hinweis, wo der Code steht, gilt nur für die Log-Zustellung
-              und erst, nachdem einer angefordert wurde. Vorher ist er eine
-              Notiz an Entwickler auf einer Seite für Nutzer. */}
-          {step === "code" && delivery === "log" && (
-            <div className="msgbox warn data" style={{ marginTop: 14, marginBottom: 0 }}>
-              {t("devHint")}
+          {methods === null ? (
+            <p style={{ color: "var(--dim)", fontSize: "var(--fs-small)", margin: 0 }}>
+              {t("loading")}
+            </p>
+          ) : methods.length === 0 ? (
+            // Kein Verfahren aktiv heißt: niemand kommt hinein. Das ist eine
+            // Fehlkonfiguration und gehört benannt, nicht als leeres Formular
+            // dargestellt.
+            <div className="msgbox err" role="alert">
+              {t("noMethods")}
             </div>
+          ) : (
+            <>
+              {hasOidc && (
+                <>
+                  <a
+                    className="btn pri"
+                    style={{ width: "100%", justifyContent: "center" }}
+                    href={`/api/auth/oidc/start${
+                      nextParam ? `?next=${encodeURIComponent(nextParam)}` : ""
+                    }`}
+                  >
+                    {t("continueWithSso")}
+                  </a>
+                  {(hasPassword || hasCode) && <div className="or">{t("or")}</div>}
+                </>
+              )}
+
+              {hasPassword && (
+                <form onSubmit={submitPassword}>
+                  <label className="field">
+                    <span>{t("email")}</span>
+                    <input
+                      type="email"
+                      required
+                      autoComplete="username"
+                      spellCheck={false}
+                      placeholder="name@firma.de"
+                      value={email}
+                      onChange={(event) => setEmail(event.target.value)}
+                    />
+                  </label>
+                  <label className="field">
+                    <span>{t("password")}</span>
+                    <input
+                      type="password"
+                      required
+                      autoComplete="current-password"
+                      value={password}
+                      onChange={(event) => setPassword(event.target.value)}
+                    />
+                  </label>
+                  <button className="btn pri" disabled={busy} type="submit">
+                    {busy ? t("signingIn") : t("signIn")}
+                  </button>
+                </form>
+              )}
+
+              {hasCode && !hasPassword && step === "credentials" && (
+                <form onSubmit={requestCode}>
+                  <label className="field">
+                    <span>{t("email")}</span>
+                    <input
+                      type="email"
+                      required
+                      autoComplete="username"
+                      spellCheck={false}
+                      placeholder="name@firma.de"
+                      value={email}
+                      onChange={(event) => setEmail(event.target.value)}
+                    />
+                  </label>
+                  <button className="btn pri" disabled={busy} type="submit">
+                    {busy ? t("requesting") : t("requestCode")}
+                  </button>
+                </form>
+              )}
+
+              {hasCode && step === "code" && (
+                <form onSubmit={submitCode}>
+                  <p style={{ color: "var(--dim)", fontSize: "var(--fs-small)", margin: "0 0 14px" }}>
+                    {t("codeSent", { email })}
+                  </p>
+                  <label className="field">
+                    <span>{t("code")}</span>
+                    <input
+                      inputMode="numeric"
+                      pattern="[0-9]{6}"
+                      maxLength={6}
+                      required
+                      autoFocus
+                      autoComplete="one-time-code"
+                      spellCheck={false}
+                      placeholder="······"
+                      className="data"
+                      style={{ letterSpacing: "0.4em", fontSize: "var(--fs-lead)" }}
+                      value={code}
+                      onChange={(event) => setCode(event.target.value)}
+                    />
+                  </label>
+                  <div className="acts">
+                    <button className="btn pri" disabled={busy} type="submit">
+                      {busy ? t("verifying") : t("signIn")}
+                    </button>
+                    <button
+                      className="btn"
+                      type="button"
+                      disabled={busy}
+                      onClick={() => {
+                        setStep("credentials");
+                        setCode("");
+                        setError(null);
+                      }}
+                    >
+                      {t("otherEmail")}
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* Der Hinweis, wo der Code steht, gilt nur für die Log-Zustellung
+                  und erst, nachdem einer angefordert wurde. */}
+              {step === "code" && delivery === "log" && (
+                <div className="msgbox warn data" style={{ marginTop: 14, marginBottom: 0 }}>
+                  {t("devHint")}
+                </div>
+              )}
+            </>
           )}
 
           {error && (

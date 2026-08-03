@@ -19,7 +19,8 @@
     "test:meta-contract": "vitest run --config vitest.meta-contract.config.ts",
     "test:meta-publish": "vitest run --config vitest.meta-publish.config.ts",
     "test:watch": "vitest",
-    "prepare": "lefthook install"
+    "prepare": "lefthook install",
+    "hash-password": "esbuild scripts/hash-password.ts --bundle --platform=node --target=node22 --format=cjs --outfile=dist/hash-password.js && node dist/hash-password.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",

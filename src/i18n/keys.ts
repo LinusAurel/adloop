@@ -384,6 +384,18 @@ export const MESSAGE_KEYS = [
   "workshop.model",
   "workshop.noProvider",
   "workshop.unprotectedProvider",
+
+  "login.password",
+  "login.signingIn",
+  "login.continueWithSso",
+  "login.or",
+  "login.loading",
+  "login.noMethods",
+  "login.errInvalidCredentials",
+  "login.errMethodNotEnabled",
+  "login.errOidcState",
+  "login.errOidcNoEmail",
+  "login.errOidcDomain",
 ] as const;
 
 export type MessageKey = (typeof MESSAGE_KEYS)[number];

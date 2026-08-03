@@ -20,6 +20,12 @@ describe("API authentication boundary", () => {
     const publicRoutes = new Set([
       "auth/email/request/route.ts",
       "auth/email/verify/route.ts",
+      // Die Anmeldewege selbst: sie erzeugen die Sitzung, die alle anderen
+      // Routen voraussetzen. Eine Anmeldung, die eine Anmeldung verlangt,
+      // wäre eine geschlossene Tür ohne Klinke.
+      "auth/password/route.ts",
+      "auth/oidc/start/route.ts",
+      "auth/oidc/callback/route.ts",
       "health/route.ts",
       // Provider callback — authenticated by HMAC signature, not session.
       "webhooks/fal/[correlationId]/route.ts",

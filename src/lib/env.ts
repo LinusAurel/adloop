@@ -28,6 +28,34 @@ const envSchema = z
 
   SESSION_SECRET: z.string().min(32).default(DEVELOPMENT_SESSION_SECRET),
   AUTH_CODE_DELIVERY: z.enum(["log", "disabled"]).default("disabled"),
+
+  /**
+   * Anmeldeverfahren. Mehrere dürfen gleichzeitig aktiv sein — wer OIDC
+   * einrichtet, will oft trotzdem einen lokalen Notzugang behalten.
+   *
+   * `env`      ein einziges Konto aus Umgebungsvariablen; braucht weder
+   *            Datenbank noch Mailversand. Für den Einzelbetrieb.
+   * `password` Konten mit Passwort in der Datenbank. Zurücksetzen läuft über
+   *            die Kommandozeile, nicht über Mail.
+   * `oidc`     gegen einen vorhandenen Identitätsanbieter.
+   * `code`     Einmalcode per Mail — braucht einen Zustelladapter, den es
+   *            noch nicht gibt. Nur mit AUTH_CODE_DELIVERY=log brauchbar.
+   */
+  AUTH_METHODS: z.string().default("env,password"),
+
+  /** Weg "env": ein Konto ohne Datenbankeintrag. */
+  ADLOOP_ADMIN_EMAIL: z.string().email().optional(),
+  /** Ausgabe von `pnpm hash-password`. Niemals das Klartextpasswort. */
+  ADLOOP_ADMIN_PASSWORD_HASH: z.string().min(1).optional(),
+
+  /** Weg "oidc": Aussteller und Zugangsdaten des Identitätsanbieters. */
+  OIDC_ISSUER: z.string().url().optional(),
+  OIDC_CLIENT_ID: z.string().min(1).optional(),
+  OIDC_CLIENT_SECRET: z.string().min(1).optional(),
+  /** Standard: <PUBLIC_BASE_URL>/api/auth/oidc/callback */
+  OIDC_REDIRECT_URI: z.string().url().optional(),
+  /** Nur diese Mail-Domänen dürfen sich anmelden. Leer = alle, die der Anbieter durchlässt. */
+  OIDC_ALLOWED_DOMAINS: z.string().optional(),
   ENCRYPTION_KEY: z.string().min(1).optional(),
   META_APP_ID: z.string().min(1).optional(),
   META_APP_SECRET: z.string().min(1).optional(),

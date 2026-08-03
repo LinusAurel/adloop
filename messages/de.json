@@ -324,7 +324,18 @@
     "errValidation": "Bitte prüfe deine Eingabe.",
     "errInvalidCode": "Der Code ist ungültig oder abgelaufen.",
     "errRateLimited": "Zu viele Versuche. Bitte warte 15 Minuten.",
-    "errUnknown": "Anmeldung fehlgeschlagen ({code})."
+    "errUnknown": "Anmeldung fehlgeschlagen ({code}).",
+    "password": "Passwort",
+    "signingIn": "Wird angemeldet …",
+    "continueWithSso": "Mit Unternehmenskonto anmelden",
+    "or": "oder",
+    "loading": "Wird geladen …",
+    "noMethods": "Es ist kein Anmeldeverfahren eingerichtet. Setze AUTH_METHODS und die zugehörigen Variablen.",
+    "errInvalidCredentials": "E-Mail oder Passwort stimmen nicht.",
+    "errMethodNotEnabled": "Dieses Anmeldeverfahren ist nicht eingerichtet.",
+    "errOidcState": "Die Anmeldung ist abgelaufen. Bitte erneut versuchen.",
+    "errOidcNoEmail": "Der Identitätsanbieter hat keine E-Mail-Adresse übermittelt.",
+    "errOidcDomain": "Diese E-Mail-Domäne ist für die Anmeldung nicht freigegeben."
   },
   "queue": {
     "lead": "Diagnoseseite für die Warteschlange. Ein echo-Job durchläuft dieselbe Kette wie jeder andere.",

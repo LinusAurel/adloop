@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { uuidv7 } from "uuidv7";
 import { AppNav } from "@/components/AppNav";
+import { SetupHint } from "@/components/SetupHint";
 
 interface AdAccount {
   id: string;
@@ -423,6 +424,8 @@ export default function StrategistPage() {
           </button>
         </span>
       </div>
+
+      <SetupHint style={{ margin: "12px 20px 0" }} />
 
       {error ? (
         <div className="page">

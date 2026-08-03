@@ -4,6 +4,7 @@ import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { uuidv7 } from "uuidv7";
 import { AppNav } from "@/components/AppNav";
+import { SetupHint } from "@/components/SetupHint";
 
 interface Project {
   id: string;
@@ -365,6 +366,7 @@ export default function ChatPage() {
         </aside>
 
         <main className="thread">
+          <SetupHint style={{ margin: "12px 20px 0" }} />
           <div className="msgs">
             {messages.length === 0 && !streaming && (
               <div className="empty">

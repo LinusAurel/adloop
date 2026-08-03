@@ -20,6 +20,7 @@
     "resetOverride": "Reset to shipped",
     "launch": "Launch",
     "settings": "Settings",
+    "setup": "Setup",
     "manage": "Manage",
     "localeDe": "German",
     "localeEn": "English",
@@ -285,7 +286,9 @@
     "dsaHint": "Beneficiary and payer are mandatory for advertising in the EU.",
     "saving": "Saving …",
     "noDefaults": "No defaults yet",
-    "noDefaultsBody": "This advertiser has no defaults stored. They are created on the first sync of the ad account."
+    "noDefaultsBody": "Nothing has been stored for this advertiser yet. Start a draft and fill in at least the page id, a country and the website URL — without those three the server will not accept the settings.",
+    "createDefaults": "Start a draft",
+    "createDefaultsHint": "The draft is only stored once you press Save at the bottom."
   },
   "launch": {
     "title": "Launch",
@@ -406,6 +409,62 @@
     "ads": "Ads",
     "gate": "Gate",
     "noGateReason": "no gate"
+  },
+  "setup": {
+    "title": "Setup",
+    "lead": "What adloop needs in order to work, and how much of it is already in place. Every step is checked against the stored data rather than ticked off by hand. Skipping a step is allowed, and the consequence of skipping it is written next to it.",
+    "progress": "{done} of {total} complete",
+    "allDone": "Everything is set up. adloop is working with your own figures.",
+    "loading": "Checking the current state …",
+    "loadFailed": "The setup state could not be loaded ({code}).",
+    "essential": "essential",
+    "pending": "Affects: {accounts}",
+    "status": {
+      "done": "Complete",
+      "todo": "Open",
+      "blocked": "Not possible yet"
+    },
+    "step": {
+      "meta_connection": {
+        "title": "Connect Meta and select an ad account",
+        "why": "Without a connection adloop sees no ads at all. The account you select determines which figures the entire interface is talking about."
+      },
+      "insight_sync": {
+        "title": "Run the first sync",
+        "why": "The sync pulls daily values, window values and actions from Meta. Until it has run, the strategist has nothing to compute and the agent has nothing to read."
+      },
+      "conversion_metric": {
+        "title": "Create a conversion metric and assign it to the account",
+        "why": "The conversion metric decides what counts as a conversion. Without an assignment, CPA, ROAS and funnel position all rest on a fallback definition, and the interface says so instead of asserting a figure."
+      },
+      "advertiser_defaults": {
+        "title": "Fill in the ad account defaults",
+        "why": "Page, targeting, attribution and naming. The publishing path requires them and the agent receives them as context. Until they exist, Launch stays closed."
+      },
+      "image_provider": {
+        "title": "Configure an image provider",
+        "why": "Without a provider and its key the workshop cannot generate creatives. Everything else keeps working."
+      }
+    },
+    "reason": {
+      "meta_credentials_missing": "The app id, app secret, redirect URI or encryption key are missing from the environment. This cannot be fixed from here — those values belong in the server configuration.",
+      "no_connection": "There is no Meta connection yet.",
+      "connection_expired": "The Meta connection has expired and needs to be renewed.",
+      "no_account_selected": "No ad account has been selected.",
+      "sync_missing": "No sync has completed successfully for this account yet.",
+      "metric_unassigned": "This account has no conversion metric assigned to it.",
+      "defaults_missing": "The advertiser behind this account has no defaults stored, not even a page id.",
+      "provider_missing": "No image provider has a key. Set IMAGE_PROVIDER together with the matching key, either FAL_KEY or OPENAI_API_KEY."
+    },
+    "goto": {
+      "connectors": "Go to connectors",
+      "metrics": "Go to metrics",
+      "settings": "Go to settings"
+    },
+    "hintTitle": "adloop is not set up yet",
+    "hintOpen": "{count, plural, one {One essential step is missing.} other {# essential steps are missing.}}",
+    "hintLink": "Review the setup",
+    "hintDismiss": "Hide"
   },
   "empty": {
     "workshopTitle": "No creatives yet",

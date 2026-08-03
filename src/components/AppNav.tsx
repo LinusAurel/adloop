@@ -23,6 +23,9 @@ const WORK = [
 ] as const;
 
 const ADMIN = [
+  // Zuerst, weil es die Seite ist, die man am Anfang braucht und danach nie
+  // wieder — sie soll auffindbar sein, ohne die tägliche Arbeit zu belegen.
+  ["/setup", "setup"],
   ["/settings", "settings"],
   ["/brand", "brand"],
   ["/connectors", "connectors"],

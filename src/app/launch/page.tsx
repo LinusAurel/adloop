@@ -4,6 +4,7 @@ import { Fragment, useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { uuidv7 } from "uuidv7";
 import { AppNav } from "@/components/AppNav";
+import { SetupHint } from "@/components/SetupHint";
 
 interface AdvertiserOption {
   id: string;
@@ -228,6 +229,8 @@ export default function LaunchPage() {
       <main className="page" style={{ maxWidth: 860 }}>
         <h1>{t("launch.title")}</h1>
         <p>{t("launch.subtitle")}</p>
+
+        <SetupHint />
 
         <div className="panel">
           <label className="row">

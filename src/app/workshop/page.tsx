@@ -4,6 +4,7 @@ import { Fragment, useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { uuidv7 } from "uuidv7";
 import { AppNav } from "@/components/AppNav";
+import { SetupHint } from "@/components/SetupHint";
 
 interface AdvertiserOption {
   id: string;
@@ -171,6 +172,8 @@ export default function WorkshopPage() {
           <p style={{ color: "var(--dim)", fontSize: "var(--fs-label)", margin: "0 0 14px" }}>
             {t("workshop.subtitle")}
           </p>
+
+          <SetupHint />
 
           <label className="field">
             <span>{t("workshop.advertiser")}</span>

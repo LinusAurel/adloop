@@ -39,7 +39,8 @@
     "newProject": "Neues Projekt",
     "newProjectPlaceholder": "Projektname …",
     "create": "Anlegen",
-    "cancel": "Abbrechen"
+    "cancel": "Abbrechen",
+    "setup": "Einrichtung"
   },
   "chat": {
     "empty": "Schreib eine Nachricht, um zu starten.",
@@ -288,7 +289,9 @@
     "dsaHint": "Begünstigter und Zahler sind für Werbung in der EU verpflichtend.",
     "saving": "Wird gespeichert …",
     "noDefaults": "Noch keine Vorgaben",
-    "noDefaultsBody": "Für diesen Werbetreibenden sind keine Vorgaben hinterlegt. Sie entstehen beim ersten Sync des Werbekontos."
+    "noDefaultsBody": "Für diesen Werbetreibenden ist noch nichts hinterlegt. Leg einen Entwurf an und trage mindestens Seiten-ID, Land und Website-URL ein — ohne diese drei nimmt der Server nichts an.",
+    "createDefaults": "Vorgaben anlegen",
+    "createDefaultsHint": "Der Entwurf ist erst gespeichert, wenn du unten auf Speichern drückst."
   },
   "brand": {
     "title": "Marke und Produkte",
@@ -462,5 +465,61 @@
     "launchNoCreativeBody": "Zum Veröffentlichen braucht es ein fertiges Motiv. Erzeuge eines in der Werkstatt.",
     "goToConnectors": "Zu den Anbindungen",
     "goToWorkshop": "Zur Werkstatt"
+  },
+  "setup": {
+    "title": "Einrichtung",
+    "lead": "Was adloop braucht, um zu arbeiten — und was davon schon steht. Jeder Schritt wird am Datenbestand geprüft, nicht abgehakt. Überspringen ist erlaubt; die Folgen stehen daneben.",
+    "progress": "{done} von {total} erledigt",
+    "allDone": "Alles eingerichtet. adloop rechnet mit deinen eigenen Zahlen.",
+    "loading": "Zustand wird geprüft …",
+    "loadFailed": "Der Einrichtungsstand konnte nicht geladen werden ({code}).",
+    "essential": "wesentlich",
+    "pending": "Betrifft: {accounts}",
+    "status": {
+      "done": "Erledigt",
+      "todo": "Offen",
+      "blocked": "Noch nicht möglich"
+    },
+    "step": {
+      "meta_connection": {
+        "title": "Meta verbinden und ein Werbekonto wählen",
+        "why": "Ohne Verbindung sieht adloop keine Anzeigen. Das gewählte Konto bestimmt, über welche Zahlen die ganze Oberfläche spricht."
+      },
+      "insight_sync": {
+        "title": "Ersten Sync laufen lassen",
+        "why": "Der Sync holt Tageswerte, Fensterwerte und Aktionen von Meta. Vorher hat der Strategist nichts zu rechnen und der Agent nichts zu lesen."
+      },
+      "conversion_metric": {
+        "title": "Leitmetrik anlegen und dem Konto zuordnen",
+        "why": "Die Leitmetrik entscheidet, was als Konversion zählt. Ohne Zuordnung beruhen CPA, ROAS und Funnel-Position auf einem Rückfallwert — die Oberfläche schreibt das dann dazu, statt eine Zahl zu behaupten."
+      },
+      "advertiser_defaults": {
+        "title": "Werbekonto-Vorgaben pflegen",
+        "why": "Seite, Zielgruppe, Attribution und Benennung. Der Publish-Pfad braucht sie, und der Agent bekommt sie als Kontext. Ohne sie bleibt Launch verschlossen."
+      },
+      "image_provider": {
+        "title": "Bildanbieter einrichten",
+        "why": "Ohne Anbieter mit Schlüssel erzeugt die Werkstatt keine Motive. Alles andere funktioniert trotzdem."
+      }
+    },
+    "reason": {
+      "meta_credentials_missing": "App-Kennung, App-Geheimnis, Redirect-URI oder Verschlüsselungsschlüssel fehlen in der Umgebung. Das lässt sich hier nicht nachholen — die Werte gehören in die Konfiguration des Servers.",
+      "no_connection": "Es besteht noch keine Meta-Verbindung.",
+      "connection_expired": "Die Meta-Verbindung ist abgelaufen und muss erneuert werden.",
+      "no_account_selected": "Es ist kein Werbekonto ausgewählt.",
+      "sync_missing": "Für dieses Konto ist noch kein Sync erfolgreich durchgelaufen.",
+      "metric_unassigned": "Diesem Konto ist keine Leitmetrik zugeordnet.",
+      "defaults_missing": "Für den Werbetreibenden dieses Kontos fehlen die Vorgaben, mindestens die Seiten-ID.",
+      "provider_missing": "Kein Bildanbieter mit Schlüssel. Setze IMAGE_PROVIDER und den zugehörigen Schlüssel, FAL_KEY oder OPENAI_API_KEY."
+    },
+    "goto": {
+      "connectors": "Zu den Anbindungen",
+      "metrics": "Zu den Metriken",
+      "settings": "Zu den Vorgaben"
+    },
+    "hintTitle": "adloop ist noch nicht eingerichtet",
+    "hintOpen": "{count, plural, one {Ein wesentlicher Schritt fehlt.} other {# wesentliche Schritte fehlen.}}",
+    "hintLink": "Einrichtung ansehen",
+    "hintDismiss": "Ausblenden"
   }
 }

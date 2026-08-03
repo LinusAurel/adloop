@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { AppNav } from "@/components/AppNav";
 import {
+  AdvertiserDefaultsSchema,
   AttributionClickSchema,
   AttributionEngagedSchema,
   AttributionViewSchema,
@@ -72,6 +73,30 @@ function read(source: unknown, path: readonly (string | number)[]): unknown {
     (acc, key) => (acc === null || acc === undefined ? acc : (acc as Record<string, unknown>)[key as string]),
     source,
   );
+}
+
+/**
+ * Ein leerer Entwurf, den das Formular anzeigen kann.
+ *
+ * Ohne ihn war diese Seite eine Sackgasse: Wer noch keine Vorgaben hatte, sah
+ * nur den Leerzustand, und es gab in der ganzen Oberfläche keinen Weg, welche
+ * anzulegen — der Server schreibt sie nirgends von selbst.
+ *
+ * Zod füllt alle Felder mit Vorgabewerten; die drei Pflichtangaben ohne
+ * sinnvollen Standard werden danach wieder geleert. Eine erfundene Seiten-ID
+ * oder URL wäre schlimmer als ein leeres Feld: Sie ließe sich speichern.
+ */
+function draftDefaults(): AdvertiserDefaults {
+  const filled = AdvertiserDefaultsSchema.parse({
+    identity: { pageId: "x" },
+    adSet: { optimizationGoal: "LINK_CLICKS", targeting: { countries: ["DE"] } },
+    website: { url: "https://example.com" },
+  });
+  return {
+    ...filled,
+    identity: { ...filled.identity, pageId: "" },
+    website: { ...filled.website, url: "" },
+  };
 }
 
 /** Zeilenweise Liste ↔ Array. Leere Zeilen zählen nicht als Eintrag. */
@@ -273,6 +298,16 @@ export default function SettingsPage() {
           <div className="empty">
             <h3>{t("settings.noDefaults")}</h3>
             <p>{t("settings.noDefaultsBody")}</p>
+            <div className="acts">
+              <button
+                type="button"
+                className="btn pri"
+                disabled={!advertiserId}
+                onClick={() => setSettings(draftDefaults())}
+              >
+                {t("settings.createDefaults")}
+              </button>
+            </div>
           </div>
         ) : (
           <>
@@ -446,6 +481,10 @@ export default function SettingsPage() {
                 {textRow(["autoNaming", "adTemplate"], t("settings.adTemplate"))}
               </>
             ))}
+
+            {/* Ein Entwurf steht nur im Browser. Das muss dastehen, sonst
+                verlässt sich jemand auf Werte, die nirgends liegen. */}
+            {version === null && <div className="hint">{t("settings.createDefaultsHint")}</div>}
 
             <div className="acts" style={{ alignItems: "center" }}>
               <button type="button" className="btn pri" onClick={() => void save()} disabled={busy}>

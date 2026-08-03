@@ -131,7 +131,9 @@
       "user": "configured",
       "default": "default",
       "fallback": "fallback"
-    }
+    },
+    "total": "Total · {count} ads",
+    "filterPlaceholder": "Find an ad …"
   },
   "workshop": {
     "title": "Image workshop",

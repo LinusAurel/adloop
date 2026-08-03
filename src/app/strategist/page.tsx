@@ -127,6 +127,28 @@ function deltaTone(metric: string, changePct: number | null): string {
 
 type View = "list" | "detail";
 
+type SortKey = "name" | "funnel" | "spend" | "conversions" | "cpa" | "impressions" | "netNewReach";
+
+/** Der Wert, nach dem eine Spalte sortiert. `null` heißt "kein Wert". */
+function sortValue(ad: OverviewResponse["ads"][number], key: SortKey): number | string | null {
+  switch (key) {
+    case "name":
+      return (ad.name ?? ad.metaAdId).toLowerCase();
+    case "funnel":
+      return ad.funnelPosition.gateStatus === "ok" ? (ad.funnelPosition.score ?? null) : null;
+    case "spend":
+      return ad.spend.value;
+    case "conversions":
+      return ad.conversions.value;
+    case "cpa":
+      return ad.cpa.value;
+    case "impressions":
+      return ad.impressions.value;
+    case "netNewReach":
+      return ad.netNewReach.value;
+  }
+}
+
 export default function StrategistPage() {
   const t = useTranslations();
   const router = useRouter();
@@ -139,6 +161,11 @@ export default function StrategistPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [view, setView] = useState<View>("list");
+  const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({
+    key: "spend",
+    dir: "desc",
+  });
+  const [filter, setFilter] = useState("");
 
   const windowEnd = useMemo(() => new Date().toISOString().slice(0, 10), []);
   const bounds = useMemo(() => windowForPreset(preset, windowEnd), [preset, windowEnd]);
@@ -190,6 +217,55 @@ export default function StrategistPage() {
   }, [loadOverview]);
 
   const selectedAd = overview?.ads.find((ad) => ad.metaAdId === selectedAdId) ?? null;
+
+  // Filtern, dann sortieren. Anzeigen ohne Wert in der Sortierspalte landen
+  // immer am Ende — eine gesperrte Anzeige ist keine mit dem Wert null, und
+  // sie soll die Spitze der Liste nicht besetzen.
+  const rows = (() => {
+    if (!overview) return [];
+    const needle = filter.trim().toLowerCase();
+    const filtered = needle
+      ? overview.ads.filter((ad) => (ad.name ?? ad.metaAdId).toLowerCase().includes(needle))
+      : overview.ads;
+
+    return [...filtered].sort((a, b) => {
+      const left = sortValue(a, sort.key);
+      const right = sortValue(b, sort.key);
+      if (left === null && right === null) return 0;
+      if (left === null) return 1;
+      if (right === null) return -1;
+      const order =
+        typeof left === "string" && typeof right === "string"
+          ? left.localeCompare(right)
+          : Number(left) - Number(right);
+      return sort.dir === "asc" ? order : -order;
+    });
+  })();
+
+  // Summen über das, was gerade sichtbar ist — ein Filter, der die Summe nicht
+  // mitzieht, beantwortet die Frage "was kostet diese Auswahl" falsch.
+  const totals = rows.reduce(
+    (acc, ad) => ({
+      spend: acc.spend + (ad.spend.value ?? 0),
+      conversions: acc.conversions + (ad.conversions.value ?? 0),
+      impressions: acc.impressions + (ad.impressions.value ?? 0),
+    }),
+    { spend: 0, conversions: 0, impressions: 0 },
+  );
+  // Gewichteter CPA, nicht das Mittel der Spalte: der Durchschnitt von
+  // Durchschnitten gewichtet eine Anzeige mit zwei Konversionen so stark wie
+  // eine mit zweihundert.
+  const totalCpa = totals.conversions > 0 ? totals.spend / totals.conversions : null;
+
+  function toggleSort(key: SortKey) {
+    setSort((current) =>
+      current.key === key
+        ? { key, dir: current.dir === "asc" ? "desc" : "asc" }
+        : // Zahlen fangen groß an, Namen alphabetisch — was man beim ersten
+          // Klick erwartet, ist je nach Spalte verschieden.
+          { key, dir: key === "name" ? "asc" : "desc" },
+    );
+  }
 
   async function runReview(mode: "copychief" | "cro" | "variations", execute: boolean) {
     if (!overview || !selectedAd) return;
@@ -305,6 +381,16 @@ export default function StrategistPage() {
             ))}
           </select>
         )}
+        <input
+          className="filter"
+          type="search"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          placeholder={t("strategist.filterPlaceholder")}
+          aria-label={t("strategist.filterPlaceholder")}
+          autoComplete="off"
+        />
+
         <div className="seg" role="group" aria-label={t("strategist.timeWindow")}>
           {(["30", "90"] as const).map((value) => (
             <button
@@ -408,43 +494,83 @@ export default function StrategistPage() {
           {view === "list" ? (
             <div className="scroller">
               <table>
+                {/* Feste Spaltenbreiten: ohne sie verteilt der Browser die
+                    Breite nach Inhalt, und zwischen Anzeigenname und Urteil
+                    entsteht ein leerer Korridor von mehreren hundert Pixeln,
+                    den das Auge bei jeder Zeile überqueren muss. */}
+                <colgroup>
+                  <col style={{ width: "auto", minWidth: 260 }} />
+                  <col style={{ width: 140 }} />
+                  {["spend", "conversions", "cpa", "impressions", "netNewReach"].map((key) => (
+                    <col key={key} style={{ width: 116 }} />
+                  ))}
+                </colgroup>
                 <thead>
                   <tr>
-                    <th>{t("strategist.col.ad")}</th>
-                    <th>{t("strategist.col.funnel")}</th>
-                    <th>{t("strategist.col.spend")}</th>
-                    <th>{t("strategist.col.conversions")}</th>
-                    <th>{t("strategist.col.cpa")}</th>
-                    <th>{t("strategist.col.impressions")}</th>
-                    <th>{t("strategist.col.netNewReach")}</th>
+                    {(
+                      [
+                        ["name", "ad"],
+                        ["funnel", "funnel"],
+                        ["spend", "spend"],
+                        ["conversions", "conversions"],
+                        ["cpa", "cpa"],
+                        ["impressions", "impressions"],
+                        ["netNewReach", "netNewReach"],
+                      ] as const
+                    ).map(([key, label]) => (
+                      <th
+                        key={key}
+                        aria-sort={
+                          sort.key === key
+                            ? sort.dir === "asc"
+                              ? "ascending"
+                              : "descending"
+                            : undefined
+                        }
+                      >
+                        <button type="button" className="sortable" onClick={() => toggleSort(key)}>
+                          {t(`strategist.col.${label}` as never)}
+                          <span aria-hidden="true">
+                            {sort.key === key ? (sort.dir === "asc" ? "↑" : "↓") : ""}
+                          </span>
+                        </button>
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {overview.ads.map((ad) => {
+                  {rows.map((ad) => {
                     const gated = ad.funnelPosition.gateStatus !== "ok";
                     return (
                       <tr
                         key={ad.metaAdId}
-                        className="pick"
-                        aria-current={selectedAdId === ad.metaAdId ? "true" : "false"}
-                        onClick={() => {
-                          setSelectedAdId(ad.metaAdId);
-                          setView("detail");
-                        }}
+                        aria-current={selectedAdId === ad.metaAdId ? "true" : undefined}
                       >
                         <td className="name">
-                          <i
-                            className={`stripe${adColor(ad) === "var(--none)" ? " none" : ""}`}
-                            style={{ background: adColor(ad) }}
-                          />
-                          {ad.name ?? ad.metaAdId}
+                          {/* Der Knopf trägt die Auswahl, nicht die Zeile: eine
+                              <tr> mit onClick ist per Tastatur nicht erreichbar,
+                              und genau das ist die Haupthandlung dieser Ansicht. */}
+                          <button
+                            type="button"
+                            className="rowlink"
+                            onClick={() => {
+                              setSelectedAdId(ad.metaAdId);
+                              setView("detail");
+                            }}
+                          >
+                            <i
+                              className={`stripe${adColor(ad) === "var(--none)" ? " none" : ""}`}
+                              style={{ background: adColor(ad) }}
+                            />
+                            {ad.name ?? ad.metaAdId}
+                          </button>
                         </td>
                         <td>
                           {gated ? (
                             <span className="nogate">{gateText(ad)}</span>
                           ) : (
                             <span className="band" style={{ color: adColor(ad) }}>
-                              {ad.funnelPosition.band}
+                              {t(`strategist.pulseBand.${ad.funnelPosition.band}` as never)}
                             </span>
                           )}
                         </td>
@@ -464,6 +590,21 @@ export default function StrategistPage() {
                     );
                   })}
                 </tbody>
+                {rows.length > 0 && (
+                  <tfoot>
+                    <tr>
+                      <td className="name">
+                        {t("strategist.total", { count: rows.length })}
+                      </td>
+                      <td />
+                      <td>{fmt(totals.spend)}</td>
+                      <td>{fmt(totals.conversions, 0)}</td>
+                      <td>{totalCpa === null ? "—" : fmt(totalCpa)}</td>
+                      <td>{fmt(totals.impressions, 0)}</td>
+                      <td />
+                    </tr>
+                  </tfoot>
+                )}
               </table>
             </div>
           ) : (
@@ -542,7 +683,7 @@ export default function StrategistPage() {
                               {fmt(selectedAd.funnelPosition.score, 0)}
                             </span>
                             <span style={{ color: "var(--dim)", fontWeight: 400 }}>
-                              {selectedAd.funnelPosition.band}
+                              {t(`strategist.pulseBand.${selectedAd.funnelPosition.band}` as never)}
                             </span>
                           </h4>
                           <div className="signals">

@@ -131,7 +131,9 @@
       "user": "konfiguriert",
       "default": "Standard",
       "fallback": "Rückfall"
-    }
+    },
+    "total": "Summe · {count} Anzeigen",
+    "filterPlaceholder": "Anzeige suchen …"
   },
   "workshop": {
     "title": "Bild-Werkstatt",

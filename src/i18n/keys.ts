@@ -396,6 +396,9 @@ export const MESSAGE_KEYS = [
   "login.errOidcState",
   "login.errOidcNoEmail",
   "login.errOidcDomain",
+
+  "strategist.total",
+  "strategist.filterPlaceholder",
 ] as const;
 
 export type MessageKey = (typeof MESSAGE_KEYS)[number];

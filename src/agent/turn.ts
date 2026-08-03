@@ -3,7 +3,8 @@ import { getPool } from "@/db/pool";
 import {
   assembleContextPacket,
   computePromptHash,
-  loadAdvertiserContentLocale,
+  DEFAULT_CONTENT_LOCALE,
+  loadPrimaryAdvertiser,
 } from "@/agent/context-packet";
 import { getAgentModel } from "@/agent/model";
 import { playbookBody, resolvePlaybook, PlaybookMissingError } from "@/agent/playbooks/resolve";
@@ -120,7 +121,8 @@ export const agentTurnFamily: JobFamilyDefinition<Input, Result> = {
         throw error;
       }
 
-      const contentLocale = await loadAdvertiserContentLocale(pool, ctx.tenantId);
+      const advertiser = await loadPrimaryAdvertiser(pool, ctx.tenantId);
+      const contentLocale = advertiser?.contentLocale ?? DEFAULT_CONTENT_LOCALE;
       const windowEnd =
         ctx.input.analysisWindow?.until ??
         new Date().toISOString().slice(0, 10);
@@ -202,6 +204,7 @@ export const agentTurnFamily: JobFamilyDefinition<Input, Result> = {
         tenantId: ctx.tenantId,
         agentLocale: ctx.input.agentLocale,
         contentLocale,
+        advertiserId: advertiser?.id,
         windowStart,
         windowEnd,
         metaAdAccountId: ctx.input.metaAdAccountId,

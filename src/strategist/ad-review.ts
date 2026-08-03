@@ -2,7 +2,8 @@ import { uuidv7 } from "uuidv7";
 import { z } from "zod";
 import {
   assembleContextPacket,
-  loadAdvertiserContentLocale,
+  DEFAULT_CONTENT_LOCALE,
+  loadPrimaryAdvertiser,
 } from "@/agent/context-packet";
 import { appendRunEvent, setTurnPhase } from "@/agent/run-events";
 import { withTransaction, type Queryable } from "@/db/queryable";
@@ -273,11 +274,13 @@ export async function previewAdReview(
   }
 
   const agentLocale = await resolveAgentLocale(db, params);
-  const contentLocale = await loadAdvertiserContentLocale(db, params.tenantId);
+  const advertiser = await loadPrimaryAdvertiser(db, params.tenantId);
+  const contentLocale = advertiser?.contentLocale ?? DEFAULT_CONTENT_LOCALE;
   const assembled = await assembleContextPacket(db, {
     tenantId: params.tenantId,
     agentLocale,
     contentLocale,
+    advertiserId: advertiser?.id,
     windowStart: params.request.analysisWindow.since,
     windowEnd: params.request.analysisWindow.until,
     metaAdAccountId: params.request.adAccountId,

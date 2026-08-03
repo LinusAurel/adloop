@@ -3,10 +3,18 @@ import { sha256Canonical, sha256Text } from "@/lib/canonical-json";
 import { resolveMetrics } from "@/metrics/resolve";
 import { computeFunnelPosition } from "@/metrics/funnel-position";
 import { computeCreativeStrain } from "@/metrics/creative-strain";
+import { brandProfileMarkdown, type BrandProfile } from "@/brand/profile";
+import { loadLatestBrandProfile } from "@/brand/store";
 
 export interface ContextPacketInput {
   agentLocale: "de" | "en";
   contentLocale: string;
+  /**
+   * Required, not optional: `null` is the "no profile on file" case and gets
+   * said out loud. An optional field would let a caller leave the brand out
+   * altogether, and the model fills silence with a brand of its own invention.
+   */
+  brand: BrandProfile | null;
   windowStart: string;
   windowEnd: string;
   performance: {
@@ -39,8 +47,9 @@ export interface ContextPacketInput {
 
 /**
  * Markdown context packet (SPEC §6.6). Absolute date bounds, disclosed
- * formulas, metric definitions, next-step metadata. Includes agent_locale
- * and content_locale as facts (auftrag §0.8 / §5).
+ * formulas, metric definitions, next-step metadata. Includes agent_locale,
+ * content_locale and the advertiser's brand profile as facts
+ * (auftrag §0.8 / §5).
  */
 export function buildContextPacketMarkdown(input: ContextPacketInput): string {
   const p = input.performance;
@@ -50,6 +59,11 @@ export function buildContextPacketMarkdown(input: ContextPacketInput): string {
     ``,
     `- Agent locale: ${input.agentLocale}`,
     `- Content locale: ${input.contentLocale}`,
+    ``,
+    // Before the numbers: the playbooks ask for "the advertiser's tone, terms
+    // and claims from the context packet", and who the copy is for decides more
+    // about it than how last month performed.
+    brandProfileMarkdown(input.brand),
     ``,
     `## Performance`,
     ``,
@@ -139,23 +153,33 @@ export function computePromptHash(parts: {
   });
 }
 
-export async function loadAdvertiserContentLocale(
+/**
+ * The tenant's first advertiser. Content locale and brand profile both hang
+ * off the advertiser, and both are read here, so they can never end up
+ * describing two different ones.
+ */
+export async function loadPrimaryAdvertiser(
   db: Queryable,
   tenantId: string,
-): Promise<string> {
-  const result = await db.query<{ content_locale: string }>(
-    `SELECT content_locale FROM advertiser
+): Promise<{ id: string; contentLocale: string } | null> {
+  const result = await db.query<{ id: string; content_locale: string }>(
+    `SELECT id, content_locale FROM advertiser
      WHERE tenant_id = $1
      ORDER BY created_at ASC
      LIMIT 1`,
     [tenantId],
   );
-  return result.rows[0]?.content_locale ?? "de-DE";
+  const row = result.rows[0];
+  return row ? { id: row.id, contentLocale: row.content_locale } : null;
 }
+
+/** Mirrors the `advertiser.content_locale` column default. */
+export const DEFAULT_CONTENT_LOCALE = "de-DE";
 
 export function emptyContextPacket(params: {
   agentLocale: "de" | "en";
   contentLocale: string;
+  brand: BrandProfile | null;
   windowStart: string;
   windowEnd: string;
   dataGateReasons?: string[];
@@ -163,6 +187,7 @@ export function emptyContextPacket(params: {
   return buildContextPacketMarkdown({
     agentLocale: params.agentLocale,
     contentLocale: params.contentLocale,
+    brand: params.brand,
     windowStart: params.windowStart,
     windowEnd: params.windowEnd,
     performance: {
@@ -207,6 +232,8 @@ export async function assembleContextPacket(
     tenantId: string;
     agentLocale: "de" | "en";
     contentLocale: string;
+    /** Whose brand profile to read. Defaults to the tenant's first advertiser. */
+    advertiserId?: string;
     windowStart: string;
     windowEnd: string;
     metaAdAccountId?: string;
@@ -227,6 +254,16 @@ export async function assembleContextPacket(
     };
   },
 ): Promise<{ packet: string; dataAsOf: string | null; metricDefinitionVersion: number | null }> {
+  // Read before any early return: a tenant without an ad account or without a
+  // completed sync still has a brand, and that is exactly when the model is
+  // most tempted to make one up.
+  const advertiserId =
+    params.advertiserId ?? (await loadPrimaryAdvertiser(pool, params.tenantId))?.id;
+  const brand = advertiserId
+    ? ((await loadLatestBrandProfile(pool, params.tenantId, advertiserId))?.profile ??
+      null)
+    : null;
+
   let adAccountId = params.metaAdAccountId;
   if (!adAccountId) {
     const account = await pool.query<{ id: string }>(
@@ -242,6 +279,7 @@ export async function assembleContextPacket(
     return {
       packet: emptyContextPacket({
         ...params,
+        brand,
         dataGateReasons: ["no_ad_account_selected"],
       }),
       dataAsOf: null,
@@ -268,6 +306,7 @@ export async function assembleContextPacket(
     return {
       packet: emptyContextPacket({
         ...params,
+        brand,
         dataGateReasons: ["no_sync_completed"],
       }),
       dataAsOf: null,
@@ -417,6 +456,7 @@ export async function assembleContextPacket(
   const packetLines = buildContextPacketMarkdown({
     agentLocale: params.agentLocale,
     contentLocale: params.contentLocale,
+    brand,
     windowStart: params.windowStart,
     windowEnd: params.windowEnd,
     performance: {

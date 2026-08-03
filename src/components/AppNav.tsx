@@ -24,6 +24,7 @@ const WORK = [
 
 const ADMIN = [
   ["/settings", "settings"],
+  ["/brand", "brand"],
   ["/connectors", "connectors"],
   ["/playbooks", "playbooks"],
   ["/metrics", "metrics"],

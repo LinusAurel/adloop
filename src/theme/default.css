@@ -10,7 +10,7 @@
   --raised: #1c222c;
   --fg: #d5dce6;
   --dim: #7e8899;
-  --line: #232a35;
+  --line: #2e3745;
 
   --accent: #8b84f7;
   --on-accent: #10101e;
@@ -18,7 +18,7 @@
   --good: #4fb477;
   --warn: #f0921b;
   --crit: #e2585b;
-  --none: #3a424f;
+  --none: #5a6472;
 
   --font-ui: system-ui, sans-serif;
   --font-data: ui-monospace, monospace;
@@ -45,37 +45,37 @@
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) {
     color-scheme: light;
-    --bg: #f5f6f9;
+    --bg: #eef0f5;
     --surface: #ffffff;
     --raised: #ebeef3;
     --fg: #161a21;
     --dim: #5c6672;
-    --line: #dce0e7;
+    --line: #ccd2dc;
 
     --accent: #4f46b8;
     --on-accent: #ffffff;
     --good: #157347;
-    --warn: #f0921b;
+    --warn: #9a5b00;
     --crit: #c22b30;
-    --none: #aeb6c1;
+    --none: #8a94a2;
   }
 }
 
 :root[data-theme="light"] {
   color-scheme: light;
-  --bg: #f5f6f9;
+  --bg: #eef0f5;
   --surface: #ffffff;
   --raised: #ebeef3;
   --fg: #161a21;
   --dim: #5c6672;
-  --line: #dce0e7;
+  --line: #ccd2dc;
 
   --accent: #4f46b8;
   --on-accent: #ffffff;
   --good: #157347;
-  --warn: #f0921b;
+  --warn: #9a5b00;
   --crit: #c22b30;
-  --none: #aeb6c1;
+  --none: #8a94a2;
 }
 
 :root[data-theme="dark"] {
@@ -85,14 +85,14 @@
   --raised: #1c222c;
   --fg: #d5dce6;
   --dim: #7e8899;
-  --line: #232a35;
+  --line: #2e3745;
 
   --accent: #8b84f7;
   --on-accent: #10101e;
   --good: #4fb477;
   --warn: #f0921b;
   --crit: #e2585b;
-  --none: #3a424f;
+  --none: #5a6472;
 }
 
 * {
@@ -559,6 +559,18 @@ tbody tr[aria-current="true"] td {
   vertical-align: -2px;
   margin-right: 9px;
   border-radius: 2px;
+}
+
+/* "Kein Urteil möglich" ist der wichtigste der vier Zustände — und der einzige,
+   den Farbe allein nicht tragen kann: ein blasser Streifen liest sich als
+   neutral, nicht als "hier fehlt die Grundlage". Deshalb eine eigene Form.
+   Sie funktioniert auch dort, wo Farbe nicht ankommt. */
+.stripe.none {
+  background: repeating-linear-gradient(
+    to bottom,
+    var(--none) 0 3px,
+    transparent 3px 6px
+  ) !important;
 }
 
 .delta {

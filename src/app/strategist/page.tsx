@@ -93,6 +93,38 @@ function fmtDelta(compared: Compared): string {
   return `${sign}${compared.changePct.toFixed(1)}%`;
 }
 
+/**
+ * In welche Richtung eine Kennzahl "besser" zeigt.
+ *
+ * Ohne diese Tabelle stand dieselbe Zahl an zwei Stellen in zwei Farben: die
+ * Tabelle drehte das CPA-Delta richtig um, das Detailraster färbte pauschal
+ * jedes Plus grün. Ein steigender Cost-per-Acquisition wurde damit der Person,
+ * die darüber entscheidet, als gute Nachricht angezeigt.
+ *
+ * `spend` ist ausdrücklich neutral: mehr Ausgabe ist weder gut noch schlecht,
+ * das hängt am Ergebnis daneben.
+ */
+const HIGHER_IS_BETTER: Readonly<Record<string, boolean | null>> = {
+  spend: null,
+  impressions: null,
+  reach: null,
+  conversions: true,
+  conversionValue: true,
+  ctr: true,
+  netNewReach: true,
+  cpa: false,
+  cpm: false,
+};
+
+/** Zustandsklasse für ein Delta — leer, wo die Richtung nichts aussagt. */
+function deltaTone(metric: string, changePct: number | null): string {
+  if (changePct === null || changePct === 0) return "";
+  const better = HIGHER_IS_BETTER[metric];
+  if (better === null || better === undefined) return "";
+  const good = changePct > 0 ? better : !better;
+  return good ? "up" : "down";
+}
+
 type View = "list" | "detail";
 
 export default function StrategistPage() {
@@ -401,7 +433,10 @@ export default function StrategistPage() {
                         }}
                       >
                         <td className="name">
-                          <i className="stripe" style={{ background: adColor(ad) }} />
+                          <i
+                            className={`stripe${adColor(ad) === "var(--none)" ? " none" : ""}`}
+                            style={{ background: adColor(ad) }}
+                          />
                           {ad.name ?? ad.metaAdId}
                         </td>
                         <td>
@@ -418,7 +453,7 @@ export default function StrategistPage() {
                         <td>
                           {fmt(ad.cpa.value)}
                           {ad.cpa.changePct !== null && (
-                            <span className={`delta ${ad.cpa.changePct > 0 ? "down" : "up"}`}>
+                            <span className={`delta ${deltaTone("cpa", ad.cpa.changePct)}`}>
                               {fmtDelta(ad.cpa)}
                             </span>
                           )}
@@ -447,7 +482,10 @@ export default function StrategistPage() {
                     onClick={() => setSelectedAdId(ad.metaAdId)}
                   >
                     <div className="t">
-                      <i className="stripe" style={{ background: adColor(ad) }} />
+                      <i
+                            className={`stripe${adColor(ad) === "var(--none)" ? " none" : ""}`}
+                            style={{ background: adColor(ad) }}
+                          />
                       {ad.name ?? ad.metaAdId}
                     </div>
                     <div className="m">
@@ -487,7 +525,7 @@ export default function StrategistPage() {
                           <div className="k">{t(`strategist.col.${key}` as never)}</div>
                           <div className="cv">{fmt(value.value, digits)}</div>
                           <div
-                            className={`cd ${value.changePct === null ? "" : value.changePct > 0 ? "up" : "down"}`}
+                            className={`cd ${deltaTone(key, value.changePct)}`}
                           >
                             {fmtDelta(value)}
                           </div>
@@ -510,13 +548,13 @@ export default function StrategistPage() {
                           <div className="signals">
                             <span>
                               {t("strategist.col.netNewReach")}{" "}
-                              <b style={{ color: adColor(selectedAd) }}>
+                              <b className={deltaTone("netNewReach", selectedAd.netNewReach.changePct)}>
                                 {fmtDelta(selectedAd.netNewReach)}
                               </b>
                             </span>
                             <span>
                               {t("strategist.col.ctr")}{" "}
-                              <b style={{ color: adColor(selectedAd) }}>{fmtDelta(selectedAd.ctr)}</b>
+                              <b className={deltaTone("ctr", selectedAd.ctr.changePct)}>{fmtDelta(selectedAd.ctr)}</b>
                             </span>
                           </div>
                         </>

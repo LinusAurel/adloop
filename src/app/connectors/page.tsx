@@ -286,7 +286,10 @@ export default function ConnectorsPage() {
                   {Object.entries(account.readiness).map(([area, readiness]) => (
                     <tr key={area}>
                       <td className="name">
-                        <i className="stripe" style={{ background: readyColor(readiness.status) }} />
+                        <i
+                          className={`stripe${readyColor(readiness.status) === "var(--none)" ? " none" : ""}`}
+                          style={{ background: readyColor(readiness.status) }}
+                        />
                         {area}
                       </td>
                       <td style={{ color: readyColor(readiness.status) }}>{readiness.status}</td>

@@ -134,7 +134,10 @@ export default function QueuePage() {
               {runs.map((r) => (
                 <tr key={r.runId}>
                   <td className="name">
-                    <i className="stripe" style={{ background: statusColor(r.status) }} />
+                    <i
+                      className={`stripe${statusColor(r.status) === "var(--none)" ? " none" : ""}`}
+                      style={{ background: statusColor(r.status) }}
+                    />
                     <span className="data">{r.runId.slice(0, 8)}…</span>
                   </td>
                   <td style={{ color: statusColor(r.status) }}>{r.status}</td>
